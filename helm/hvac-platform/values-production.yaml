@@ -1,0 +1,102 @@
+# Production overrides for hvac-platform
+# Usage: helm install hvac-platform . -f values.yaml -f values-production.yaml
+
+backend:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  env:
+    DEBUG: "false"
+    LOG_LEVEL: "warning"
+
+mcpServer:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+frontend:
+  replicas: 3
+
+celeryWorker:
+  replicas: 4
+  concurrency: 8
+
+# ---------------------------------------------------------------------------
+# Managed PostgreSQL (CloudSQL / RDS)
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: false
+  external:
+    host: "postgres.internal.example.com"
+    port: 5432
+    database: hvac_crm
+    username: hvac
+    existingSecret: hvac-db-credentials
+
+# ---------------------------------------------------------------------------
+# Managed Redis (ElastiCache / Memorystore)
+# ---------------------------------------------------------------------------
+redis:
+  enabled: false
+  external:
+    host: "redis.internal.example.com"
+    port: 6379
+
+# ---------------------------------------------------------------------------
+# Managed Object Storage (S3 / GCS)
+# ---------------------------------------------------------------------------
+minio:
+  enabled: false
+  external:
+    host: "s3.amazonaws.com"
+    port: 443
+    existingSecret: hvac-s3-credentials
+
+# ---------------------------------------------------------------------------
+# External Keycloak (optional — keep enabled if self-hosted)
+# ---------------------------------------------------------------------------
+keycloak:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# Autoscaling
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 75
+
+# ---------------------------------------------------------------------------
+# Ingress with TLS
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  host: hvac.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  tls:
+    enabled: true
+    secretName: hvac-tls-prod
+
+# ---------------------------------------------------------------------------
+# Secrets — in production use existingSecret refs, not plain values
+# ---------------------------------------------------------------------------
+secrets:
+  databasePassword: ""
+  keycloakClientSecret: ""
+  minioRootPassword: ""
+  jwtSecret: ""

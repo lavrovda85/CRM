@@ -1,0 +1,208 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Backend API (FastAPI / Django)
+# ---------------------------------------------------------------------------
+backend:
+  image:
+    repository: ghcr.io/hvac-platform/backend
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  replicas: 2
+  port: 8000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  env:
+    DEBUG: "false"
+    LOG_LEVEL: "info"
+    ALLOWED_HOSTS: "*"
+
+# ---------------------------------------------------------------------------
+# MCP Server
+# ---------------------------------------------------------------------------
+mcpServer:
+  image:
+    repository: ghcr.io/hvac-platform/mcp-server
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 8001
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Frontend (Next.js / React)
+# ---------------------------------------------------------------------------
+frontend:
+  image:
+    repository: ghcr.io/hvac-platform/frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 2
+  port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Celery Workers & Beat
+# ---------------------------------------------------------------------------
+celeryWorker:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  queues: "default,emails,reports"
+  concurrency: 4
+
+celeryBeat:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# PostgreSQL (Bitnami subchart or external)
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    username: hvac
+    password: ""
+    database: hvac_crm
+    existingSecret: ""
+  primary:
+    persistence:
+      size: 20Gi
+  external:
+    host: ""
+    port: 5432
+    database: hvac_crm
+    username: hvac
+    existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Redis (Bitnami subchart or external)
+# ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  external:
+    host: ""
+    port: 6379
+
+# ---------------------------------------------------------------------------
+# MinIO (Bitnami subchart or external)
+# ---------------------------------------------------------------------------
+minio:
+  enabled: true
+  auth:
+    rootUser: minioadmin
+    rootPassword: ""
+    existingSecret: ""
+  defaultBuckets: "documents,attachments,exports"
+  external:
+    host: ""
+    port: 9000
+    accessKey: ""
+    secretKey: ""
+    existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Keycloak (Bitnami subchart or external)
+# ---------------------------------------------------------------------------
+keycloak:
+  enabled: true
+  auth:
+    adminUser: admin
+    adminPassword: ""
+    existingSecret: ""
+  realmImport:
+    enabled: true
+    configMapName: keycloak-realm
+  external:
+    host: ""
+    port: 8080
+    realm: hvac
+    clientId: hvac-crm
+    clientSecret: ""
+    existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  host: hvac.local
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: hvac-tls
+
+# ---------------------------------------------------------------------------
+# Horizontal Pod Autoscaler
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: ""
+
+# ---------------------------------------------------------------------------
+# Secrets (only used when existingSecret is NOT set on sub-services)
+# ---------------------------------------------------------------------------
+secrets:
+  databasePassword: "changeme"
+  keycloakClientSecret: "changeme"
+  minioRootPassword: "changeme"
+  jwtSecret: "changeme"
+
+# ---------------------------------------------------------------------------
+# Service accounts & image pull secrets
+# ---------------------------------------------------------------------------
+imagePullSecrets: []
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Pod-level settings
+# ---------------------------------------------------------------------------
+podAnnotations: {}
+podSecurityContext:
+  fsGroup: 1000
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

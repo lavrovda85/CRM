@@ -1,0 +1,102 @@
+{
+  "realm": "hvac",
+  "enabled": true,
+  "displayName": "HVAC CRM/ERP",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Full system access" },
+      { "name": "manager", "description": "Project/task management, CRM, tenders" },
+      { "name": "engineer", "description": "Field work, task execution, time tracking" },
+      { "name": "warehouse_manager", "description": "Inventory management" },
+      { "name": "accountant", "description": "Analytics, salary, reports" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "hvac-backend",
+      "name": "HVAC Backend API",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "backend-secret-change-me",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "hvac-frontend",
+      "name": "HVAC Frontend PWA",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost"
+      ],
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@hvac.local",
+      "firstName": "System",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "manager",
+      "email": "manager@hvac.local",
+      "firstName": "Ivan",
+      "lastName": "Petrov",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager123",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["manager"]
+    },
+    {
+      "username": "engineer",
+      "email": "engineer@hvac.local",
+      "firstName": "Sergei",
+      "lastName": "Sidorov",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "engineer123",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["engineer"]
+    }
+  ]
+}

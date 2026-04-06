@@ -1,0 +1,203 @@
+"""Board management API endpoints.
+
+CRUD операции над Kanban/Scrum досками
+с группировкой задач по статусам.
+"""
+
+import uuid
+from collections import defaultdict
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.dependencies import PaginationParams, get_current_user, get_db
+from app.core.exceptions import NotFoundError
+from app.core.pagination import PaginatedResponse
+from app.core.security import CurrentUser
+from app.models import Board, Task
+from app.schemas.board import (
+    BoardCreate,
+    BoardDetailResponse,
+    BoardResponse,
+    BoardUpdate,
+)
+from app.schemas.task import TaskResponse
+
+router = APIRouter(prefix="/boards")
+
+
+@router.post("/", response_model=BoardResponse, status_code=201)
+async def create_board(
+    body: BoardCreate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> BoardResponse:
+    """Create a new board.
+
+    Создаёт Kanban или Scrum доску для группировки
+    и визуализации задач.
+
+    Аргументы:
+        body: Данные для создания доски.
+        db: Асинхронная сессия БД.
+        user: Текущий аутентифицированный пользователь.
+
+    Возвращает:
+        Созданную доску.
+    """
+    board = Board(
+        name=body.name,
+        description=body.description,
+        board_type=body.board_type,
+        owner_id=uuid.UUID(user.sub),
+        columns=body.columns,
+    )
+    db.add(board)
+    await db.flush()
+    await db.refresh(board)
+    return BoardResponse.model_validate(board)
+
+
+@router.get("/", response_model=PaginatedResponse[BoardResponse])
+async def list_boards(
+    pagination: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> PaginatedResponse[BoardResponse]:
+    """List all boards.
+
+    Возвращает постраничный список всех досок,
+    не включая архивированные по умолчанию.
+
+    Аргументы:
+        pagination: Параметры пагинации.
+        db: Асинхронная сессия БД.
+        user: Текущий аутентифицированный пользователь.
+
+    Возвращает:
+        Постраничный ответ со списком досок.
+    """
+    count_query = select(func.count(Board.id)).where(Board.is_archived.is_(False))
+    total = (await db.execute(count_query)).scalar() or 0
+
+    result = await db.execute(
+        select(Board)
+        .where(Board.is_archived.is_(False))
+        .order_by(Board.name)
+        .offset(pagination.offset)
+        .limit(pagination.limit)
+    )
+    boards = result.scalars().all()
+
+    return PaginatedResponse(
+        items=[BoardResponse.model_validate(b) for b in boards],
+        total=total,
+        offset=pagination.offset,
+        limit=pagination.limit,
+    )
+
+
+@router.get("/{board_id}", response_model=BoardDetailResponse)
+async def get_board(
+    board_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> BoardDetailResponse:
+    """Get board detail with tasks grouped by status.
+
+    Возвращает полную информацию о доске, включая
+    все задачи, сгруппированные по текущему статусу.
+
+    Аргументы:
+        board_id: UUID доски.
+        db: Асинхронная сессия БД.
+        user: Текущий аутентифицированный пользователь.
+
+    Возвращает:
+        Детальную информацию о доске с задачами.
+    """
+    result = await db.execute(
+        select(Board)
+        .options(selectinload(Board.tasks))
+        .where(Board.id == board_id)
+    )
+    board = result.scalar_one_or_none()
+    if not board:
+        raise NotFoundError("Board", str(board_id))
+
+    tasks_by_status: dict[str, list] = defaultdict(list)
+    for task in board.tasks:
+        tasks_by_status[task.status].append(
+            TaskResponse.model_validate(task).model_dump()
+        )
+
+    board_data = BoardResponse.model_validate(board).model_dump()
+    board_data["tasks_by_status"] = dict(tasks_by_status)
+    return BoardDetailResponse(**board_data)
+
+
+@router.patch("/{board_id}", response_model=BoardResponse)
+async def update_board(
+    board_id: uuid.UUID,
+    body: BoardUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> BoardResponse:
+    """Update board fields.
+
+    Частичное обновление полей доски (название,
+    описание, колонки, архивация).
+
+    Аргументы:
+        board_id: UUID доски.
+        body: Данные для обновления.
+        db: Асинхронная сессия БД.
+        user: Текущий аутентифицированный пользователь.
+
+    Возвращает:
+        Обновлённую доску.
+    """
+    result = await db.execute(select(Board).where(Board.id == board_id))
+    board = result.scalar_one_or_none()
+    if not board:
+        raise NotFoundError("Board", str(board_id))
+
+    update_data = body.model_dump(exclude_unset=True)
+    if update_data:
+        await db.execute(
+            update(Board).where(Board.id == board_id).values(**update_data)
+        )
+        await db.flush()
+        await db.refresh(board)
+
+    return BoardResponse.model_validate(board)
+
+
+@router.delete("/{board_id}", status_code=204)
+async def delete_board(
+    board_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> None:
+    """Delete a board.
+
+    Удаляет доску. Задачи, привязанные к доске,
+    не удаляются — обнуляется их board_id.
+
+    Аргументы:
+        board_id: UUID доски.
+        db: Асинхронная сессия БД.
+        user: Текущий аутентифицированный пользователь.
+    """
+    result = await db.execute(select(Board).where(Board.id == board_id))
+    board = result.scalar_one_or_none()
+    if not board:
+        raise NotFoundError("Board", str(board_id))
+
+    await db.execute(
+        update(Task).where(Task.board_id == board_id).values(board_id=None)
+    )
+    await db.delete(board)
+    await db.flush()

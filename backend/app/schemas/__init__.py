@@ -1,0 +1,178 @@
+"""Pydantic v2 schemas for request/response validation.
+
+Схемы валидации данных для API запросов и ответов.
+"""
+
+from app.schemas.analytics import (
+    DashboardStats,
+    PerformanceStats,
+    SalaryCalculation,
+    TenderAnalytics,
+    WarehouseAnalytics,
+)
+from app.schemas.board import (
+    BoardCreate,
+    BoardDetailResponse,
+    BoardResponse,
+    BoardUpdate,
+)
+from app.schemas.client import (
+    ClientContactCreate,
+    ClientContactResponse,
+    ClientCreate,
+    ClientResponse,
+    ClientUpdate,
+)
+from app.schemas.common import (
+    BaseResponse,
+    ErrorDetail,
+    ErrorResponse,
+    MessageResponse,
+    TimestampModel,
+    UUIDModel,
+)
+from app.schemas.deal import (
+    DealCreate,
+    DealResponse,
+    DealStageCreate,
+    DealStageResponse,
+    DealUpdate,
+)
+from app.schemas.document import (
+    DocumentDownloadResponse,
+    DocumentResponse,
+)
+from app.schemas.equipment import (
+    DepreciationRecordResponse,
+    EquipmentCreate,
+    EquipmentDetailResponse,
+    EquipmentResponse,
+    EquipmentUpdate,
+    EquipmentWriteOff,
+)
+from app.schemas.reference import (
+    ReferenceCreate,
+    ReferenceItemCreate,
+    ReferenceItemResponse,
+    ReferenceItemUpdate,
+    ReferenceResponse,
+)
+from app.schemas.task import (
+    ChecklistItemResponse,
+    ChecklistResponse,
+    CommentResponse,
+    StatusHistoryResponse,
+    TaskCreate,
+    TaskDetail,
+    TaskListResponse,
+    TaskResponse,
+    TaskStatusTransition,
+    TaskUpdate,
+    TemplateSummary,
+    UserSummary,
+)
+from app.schemas.template import (
+    InstantiateTemplate,
+    TemplateChecklistResponse,
+    TemplateCreate,
+    TemplateFieldResponse,
+    TemplateResponse,
+    TemplateStageResponse,
+    TemplateUpdate,
+)
+from app.schemas.tender import (
+    TenderCreate,
+    TenderResponse,
+    TenderUpdate,
+)
+from app.schemas.time_entry import (
+    TimeEntryCreate,
+    TimeEntryResponse,
+    TimeEntryUpdate,
+    TimerStart,
+    TimerStop,
+)
+from app.schemas.warehouse import (
+    ReservationCreate,
+    ReservationResponse,
+    WarehouseItemCreate,
+    WarehouseItemResponse,
+    WarehouseItemUpdate,
+    WarehouseMovementCreate,
+    WarehouseMovementResponse,
+)
+
+__all__ = [
+    "BaseResponse",
+    "BoardCreate",
+    "BoardDetailResponse",
+    "BoardResponse",
+    "BoardUpdate",
+    "ChecklistItemResponse",
+    "ChecklistResponse",
+    "ClientContactCreate",
+    "ClientContactResponse",
+    "ClientCreate",
+    "ClientResponse",
+    "ClientUpdate",
+    "CommentResponse",
+    "DashboardStats",
+    "DealCreate",
+    "DealResponse",
+    "DealStageCreate",
+    "DealStageResponse",
+    "DealUpdate",
+    "DepreciationRecordResponse",
+    "DocumentDownloadResponse",
+    "DocumentResponse",
+    "EquipmentCreate",
+    "EquipmentDetailResponse",
+    "EquipmentResponse",
+    "EquipmentUpdate",
+    "EquipmentWriteOff",
+    "ErrorDetail",
+    "ErrorResponse",
+    "InstantiateTemplate",
+    "MessageResponse",
+    "PerformanceStats",
+    "ReferenceCreate",
+    "ReferenceItemCreate",
+    "ReferenceItemResponse",
+    "ReferenceItemUpdate",
+    "ReferenceResponse",
+    "SalaryCalculation",
+    "StatusHistoryResponse",
+    "TaskCreate",
+    "TaskDetail",
+    "TaskListResponse",
+    "TaskResponse",
+    "TaskStatusTransition",
+    "TaskUpdate",
+    "TemplateSummary",
+    "UserSummary",
+    "TemplateChecklistResponse",
+    "TemplateCreate",
+    "TemplateFieldResponse",
+    "TemplateResponse",
+    "TemplateStageResponse",
+    "TemplateUpdate",
+    "TenderAnalytics",
+    "TenderCreate",
+    "TenderResponse",
+    "TenderUpdate",
+    "TimeEntryCreate",
+    "TimeEntryResponse",
+    "TimeEntryUpdate",
+    "TimerStart",
+    "TimerStop",
+    "TimestampModel",
+    "UUIDModel",
+    "WarehouseAnalytics",
+    "WarehouseItemCreate",
+    "WarehouseItemResponse",
+    "WarehouseItemUpdate",
+    "WarehouseMovementCreate",
+    "WarehouseMovementResponse",
+    "ReservationCreate",
+    "ReservationResponse",
+]

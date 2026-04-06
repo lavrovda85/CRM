@@ -1,0 +1,58 @@
+"""SQLAlchemy ORM models package.
+
+Импортирует все модели для регистрации в metadata
+и автоматического обнаружения Alembic.
+"""
+
+from app.models.base import BaseModel, TimestampMixin
+from app.models.user import User
+from app.models.client import Client, ClientContact
+from app.models.deal import Deal, DealStage
+from app.models.tender import Tender
+from app.models.task_template import TaskTemplate, TemplateChecklist, TemplateField, TemplateStage
+from app.models.task import Task
+from app.models.task_status import TaskStatusHistory
+from app.models.board import Board
+from app.models.checklist import Checklist, ChecklistItem
+from app.models.time_entry import TimeEntry
+from app.models.warehouse_item import WarehouseItem
+from app.models.warehouse_movement import WarehouseMovement, WarehouseReservation
+from app.models.equipment import Equipment, EquipmentUsage
+from app.models.depreciation_record import DepreciationRecord
+from app.models.document import Document, DocumentVersion
+from app.models.comment import Comment
+from app.models.notification import Notification
+from app.models.reference import Reference, ReferenceItem
+
+__all__ = [
+    "BaseModel",
+    "TimestampMixin",
+    "User",
+    "Client",
+    "ClientContact",
+    "Deal",
+    "DealStage",
+    "Tender",
+    "TaskTemplate",
+    "TemplateStage",
+    "TemplateChecklist",
+    "TemplateField",
+    "Task",
+    "TaskStatusHistory",
+    "Board",
+    "Checklist",
+    "ChecklistItem",
+    "TimeEntry",
+    "WarehouseItem",
+    "WarehouseMovement",
+    "WarehouseReservation",
+    "Equipment",
+    "EquipmentUsage",
+    "DepreciationRecord",
+    "Document",
+    "DocumentVersion",
+    "Comment",
+    "Notification",
+    "Reference",
+    "ReferenceItem",
+]

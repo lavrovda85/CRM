@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hvac-platform.fullname" . }}-config
+  labels:
+    {{- include "hvac-platform.labels" . | nindent 4 }}
+data:
+  APP_NAME: "hvac-platform"
+  APP_VERSION: {{ .Chart.AppVersion | quote }}
+
+  DATABASE_HOST: {{ include "hvac-platform.postgresHost" . | quote }}
+  DATABASE_PORT: {{ include "hvac-platform.postgresPort" . | quote }}
+  DATABASE_NAME: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.database | quote }}{{ else }}{{ .Values.postgresql.external.database | quote }}{{ end }}
+  DATABASE_USER: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.username | quote }}{{ else }}{{ .Values.postgresql.external.username | quote }}{{ end }}
+
+  REDIS_HOST: {{ include "hvac-platform.redisHost" . | quote }}
+  REDIS_PORT: {{ include "hvac-platform.redisPort" . | quote }}
+  CELERY_BROKER_URL: "redis://{{ include "hvac-platform.redisHost" . }}:{{ include "hvac-platform.redisPort" . }}/0"
+  CELERY_RESULT_BACKEND: "redis://{{ include "hvac-platform.redisHost" . }}:{{ include "hvac-platform.redisPort" . }}/1"
+
+  MINIO_ENDPOINT: "{{ include "hvac-platform.minioHost" . }}:{{ include "hvac-platform.minioPort" . }}"
+  MINIO_USE_SSL: {{ if .Values.minio.enabled }}"false"{{ else }}"true"{{ end }}
+  MINIO_DEFAULT_BUCKETS: {{ if .Values.minio.enabled }}{{ .Values.minio.defaultBuckets | quote }}{{ else }}"documents,attachments,exports"{{ end }}
+
+  KEYCLOAK_SERVER_URL: "http://{{ include "hvac-platform.keycloakHost" . }}:{{ include "hvac-platform.keycloakPort" . }}"
+  KEYCLOAK_REALM: {{ if .Values.keycloak.enabled }}"hvac"{{ else }}{{ .Values.keycloak.external.realm | quote }}{{ end }}
+  KEYCLOAK_CLIENT_ID: {{ if .Values.keycloak.enabled }}"hvac-crm"{{ else }}{{ .Values.keycloak.external.clientId | quote }}{{ end }}
