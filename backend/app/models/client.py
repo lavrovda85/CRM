@@ -10,10 +10,10 @@ from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Client(BaseModel):
+class Client(TenantMixin, BaseModel):
     """Client entity representing a customer or organization.
 
     Атрибуты:
@@ -37,7 +37,7 @@ class Client(BaseModel):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     inn: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    extra_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     contacts = relationship("ClientContact", back_populates="client", cascade="all, delete-orphan")

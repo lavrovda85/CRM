@@ -6,13 +6,13 @@
 
 from decimal import Decimal
 
-from sqlalchemy import Numeric, String, Text
+from sqlalchemy import Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class WarehouseItem(BaseModel):
+class WarehouseItem(TenantMixin, BaseModel):
     """Inventory item tracked in the warehouse.
 
     Атрибуты:
@@ -29,9 +29,10 @@ class WarehouseItem(BaseModel):
     """
 
     __tablename__ = "warehouse_items"
+    __table_args__ = (UniqueConstraint("company_id", "sku", name="uq_warehouse_items_company_sku"),)
 
     name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
-    sku: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    sku: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False, default="materials", index=True)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="pcs")
     quantity: Mapped[Decimal] = mapped_column(Numeric(15, 3), nullable=False, default=0)

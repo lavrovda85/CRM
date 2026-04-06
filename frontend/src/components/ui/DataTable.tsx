@@ -58,7 +58,7 @@ export function DataTable<T>({
   loading = false,
   rowKey,
   onRowClick,
-  emptyMessage = "No data found",
+  emptyMessage = "Нет данных",
   className,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);

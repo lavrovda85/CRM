@@ -1,16 +1,16 @@
-# MCP Server API Documentation
+# Документация MCP-сервера
 
-The HVAC CRM/ERP platform exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that allows AI agents to manage the platform programmatically — creating tasks, checking inventory, generating reports, and more.
+Платформа SPEC CRM/ERP предоставляет сервер [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), позволяющий AI-агентам программно управлять платформой — создавать задачи, проверять складские остатки, формировать отчёты и многое другое.
 
-## Architecture
+## Архитектура
 
-The MCP server is built with [FastMCP](https://github.com/jlowin/fastmcp) v3.1+ and runs as a separate container from the REST API, sharing the same Python codebase, ORM models, and business logic.
+MCP-сервер построен на [FastMCP](https://github.com/jlowin/fastmcp) v3.1+ и запускается как отдельный контейнер от REST API, разделяя общую кодовую базу Python, ORM-модели и бизнес-логику.
 
 ```
 ┌──────────────────┐         ┌──────────────────┐
-│   AI Agent       │         │   MCP Server     │
+│   AI-агент       │         │   MCP-сервер     │
 │  (Cursor, Claude │◄─MCP──►│   :8001          │
-│   Desktop, etc.) │  HTTP   │  FastMCP 3.1+    │
+│   Desktop и др.) │  HTTP   │  FastMCP 3.1+    │
 └──────────────────┘         └──────┬───────────┘
                                     │
                          ┌──────────┼──────────┐
@@ -18,20 +18,20 @@ The MCP server is built with [FastMCP](https://github.com/jlowin/fastmcp) v3.1+ 
                     PostgreSQL    Redis      MinIO
 ```
 
-**Transport:** Streamable HTTP (bidirectional, session-based)
-**Port:** 8001 (configurable via `MCP_PORT` env var)
-**Endpoint:** `http://<host>:8001/mcp`
+**Транспорт:** Streamable HTTP (двунаправленный, сессионный)
+**Порт:** 8001 (настраивается через переменную окружения `MCP_PORT`)
+**Эндпоинт:** `http://<host>:8001/mcp`
 
-## Connection Instructions
+## Инструкции по подключению
 
 ### Cursor IDE
 
-Add to your MCP server configuration (`.cursor/mcp.json` or Cursor settings):
+Добавьте в конфигурацию MCP-серверов (`.cursor/mcp.json` или настройки Cursor):
 
 ```json
 {
   "mcpServers": {
-    "hvac-crm": {
+    "spec-crm": {
       "url": "http://localhost:8001/mcp",
       "transport": "streamable-http"
     }
@@ -41,12 +41,12 @@ Add to your MCP server configuration (`.cursor/mcp.json` or Cursor settings):
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Добавьте в `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "hvac-crm": {
+    "spec-crm": {
       "url": "http://localhost:8001/mcp",
       "transport": "streamable-http"
     }
@@ -54,7 +54,7 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-### Programmatic (Python)
+### Программное подключение (Python)
 
 ```python
 from fastmcp import Client
@@ -64,11 +64,11 @@ async with Client("http://localhost:8001/mcp") as client:
     print(result)
 ```
 
-## Authentication
+## Аутентификация
 
-The MCP server validates Keycloak JWT tokens passed in the tool call metadata. AI agents must obtain a valid token from Keycloak before calling tools that require authentication.
+MCP-сервер валидирует JWT-токены Keycloak, передаваемые в метаданных вызова инструмента. AI-агенты должны получить валидный токен от Keycloak перед вызовом инструментов, требующих аутентификации.
 
-**Token retrieval:**
+**Получение токена:**
 
 ```bash
 curl -X POST http://localhost:8080/realms/hvac/protocol/openid-connect/token \
@@ -77,40 +77,40 @@ curl -X POST http://localhost:8080/realms/hvac/protocol/openid-connect/token \
   -d "client_secret=YOUR_CLIENT_SECRET"
 ```
 
-The token should be passed in tool call metadata as `authorization: Bearer <token>`.
+Токен передаётся в метаданных вызова инструмента как `authorization: Bearer <token>`.
 
 ---
 
-## Tools Reference
+## Справочник инструментов
 
-### Task Management
+### Управление задачами
 
 #### `create_task`
 
-Create a new task in the HVAC CRM/ERP system.
+Создать новую задачу в системе SPEC CRM/ERP.
 
-**Arguments:**
+**Аргументы:**
 
-| Name           | Type        | Required | Description                                              |
-|----------------|-------------|----------|----------------------------------------------------------|
-| `title`        | `str`       | Yes      | Task title                                               |
-| `template_id`  | `str\|null` | No       | UUID of task template (inherits workflow & checklists)   |
-| `client_id`    | `str\|null` | No       | UUID of the client                                       |
-| `assigned_to`  | `str\|null` | No       | UUID of the assigned engineer                            |
-| `custom_fields`| `dict\|null`| No       | Template field values `{key: value}`                     |
-| `priority`     | `str`       | No       | `low`, `medium` (default), `high`, `critical`           |
-| `due_date`     | `str\|null` | No       | ISO 8601 datetime (e.g. `2026-04-15T18:00:00Z`)         |
+| Имя            | Тип         | Обязательный | Описание                                                |
+|----------------|-------------|-------------|----------------------------------------------------------|
+| `title`        | `str`       | Да          | Название задачи                                          |
+| `template_id`  | `str\|null` | Нет         | UUID шаблона задачи (наследует воркфлоу и чек-листы)    |
+| `client_id`    | `str\|null` | Нет         | UUID клиента                                             |
+| `assigned_to`  | `str\|null` | Нет         | UUID назначенного инженера                               |
+| `custom_fields`| `dict\|null`| Нет         | Значения полей шаблона `{key: value}`                    |
+| `priority`     | `str`       | Нет         | `low`, `medium` (по умолчанию), `high`, `critical`      |
+| `due_date`     | `str\|null` | Нет         | Дата/время в формате ISO 8601 (напр. `2026-04-15T18:00:00Z`) |
 
-**Returns:** `dict` — created task with `id`, `title`, `status`, `priority`, `template_id`, `client_id`, `assigned_to`, `custom_fields`, `due_date`, `created_at`.
+**Возвращает:** `dict` — созданная задача с полями `id`, `title`, `status`, `priority`, `template_id`, `client_id`, `assigned_to`, `custom_fields`, `due_date`, `created_at`.
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "create_task",
   "arguments": {
-    "title": "AC Installation — Daikin FTXB35C",
+    "title": "Монтаж кондиционера — Daikin FTXB35C",
     "template_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "client_id": "e5f6a7b8-c9d0-1234-abcd-ef5678901234",
     "assigned_to": "c9d0e1f2-a3b4-5678-abcd-ef9012345678",
@@ -119,10 +119,10 @@ Create a new task in the HVAC CRM/ERP system.
   }
 }
 
-// Response
+// Ответ
 {
   "id": "f1234567-89ab-cdef-0123-456789abcdef",
-  "title": "AC Installation — Daikin FTXB35C",
+  "title": "Монтаж кондиционера — Daikin FTXB35C",
   "status": "new",
   "priority": "high",
   "template_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -138,21 +138,21 @@ Create a new task in the HVAC CRM/ERP system.
 
 #### `update_task`
 
-Update fields of an existing task. Cannot change status — use `transition_task` instead.
+Обновить поля существующей задачи. Нельзя изменить статус — используйте `transition_task`.
 
-**Arguments:**
+**Аргументы:**
 
-| Name      | Type   | Required | Description                                              |
-|-----------|--------|----------|----------------------------------------------------------|
-| `task_id` | `str`  | Yes      | UUID of the task to update                               |
-| `fields`  | `dict` | Yes      | Fields to update: `title`, `description`, `priority`, `assigned_to`, `due_date`, `custom_fields` |
+| Имя      | Тип    | Обязательный | Описание                                                       |
+|----------|--------|-------------|----------------------------------------------------------------|
+| `task_id`| `str`  | Да          | UUID обновляемой задачи                                        |
+| `fields` | `dict` | Да          | Обновляемые поля: `title`, `description`, `priority`, `assigned_to`, `due_date`, `custom_fields` |
 
-**Returns:** `dict` — updated task with `id`, `updated_fields`, `updated_at`, and the changed field values.
+**Возвращает:** `dict` — обновлённая задача с полями `id`, `updated_fields`, `updated_at` и значениями изменённых полей.
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "update_task",
   "arguments": {
@@ -164,7 +164,7 @@ Update fields of an existing task. Cannot change status — use `transition_task
   }
 }
 
-// Response
+// Ответ
 {
   "id": "f1234567-89ab-cdef-0123-456789abcdef",
   "updated_fields": ["priority", "assigned_to"],
@@ -178,38 +178,38 @@ Update fields of an existing task. Cannot change status — use `transition_task
 
 #### `transition_task`
 
-Transition a task to a new workflow status. Validates the transition against the template's workflow definition and checks gate checklists.
+Перевести задачу в новый статус воркфлоу. Проверяет переход на соответствие определению воркфлоу из шаблона и проверяет шлюзовые чек-листы.
 
-**Arguments:**
+**Аргументы:**
 
-| Name        | Type  | Required | Description                                               |
-|-------------|-------|----------|-----------------------------------------------------------|
-| `task_id`   | `str` | Yes      | UUID of the task                                          |
-| `to_status` | `str` | Yes      | Target status (must be a valid transition from current)   |
-| `reason`    | `str` | No       | Audit reason for the transition (default: `""`)           |
+| Имя         | Тип   | Обязательный | Описание                                                      |
+|-------------|-------|-------------|---------------------------------------------------------------|
+| `task_id`   | `str` | Да          | UUID задачи                                                   |
+| `to_status` | `str` | Да          | Целевой статус (должен быть допустимым переходом из текущего) |
+| `reason`    | `str` | Нет         | Причина перехода для аудита (по умолчанию: `""`)              |
 
-**Returns:** `dict` — `id`, `from_status`, `to_status`, `transitioned_at`, `reason`.
+**Возвращает:** `dict` — `id`, `from_status`, `to_status`, `transitioned_at`, `reason`.
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "transition_task",
   "arguments": {
     "task_id": "f1234567-89ab-cdef-0123-456789abcdef",
     "to_status": "completed",
-    "reason": "All work done, signed act uploaded"
+    "reason": "Все работы выполнены, подписанный акт загружен"
   }
 }
 
-// Response
+// Ответ
 {
   "id": "f1234567-89ab-cdef-0123-456789abcdef",
   "from_status": "review",
   "to_status": "completed",
   "transitioned_at": "2026-03-18T16:00:00Z",
-  "reason": "All work done, signed act uploaded"
+  "reason": "Все работы выполнены, подписанный акт загружен"
 }
 ```
 
@@ -217,75 +217,75 @@ Transition a task to a new workflow status. Validates the transition against the
 
 #### `list_tasks`
 
-List tasks with optional filters. Results sorted by creation date (descending).
+Получить список задач с опциональными фильтрами. Результаты отсортированы по дате создания (по убыванию).
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type        | Required | Description                        |
-|---------------|-------------|----------|------------------------------------|
-| `status`      | `str\|null` | No       | Filter by status                   |
-| `assigned_to` | `str\|null` | No       | Filter by assignee UUID            |
-| `client_id`   | `str\|null` | No       | Filter by client UUID              |
-| `limit`       | `int`       | No       | Max results (default: 50, max: 200)|
+| Имя           | Тип         | Обязательный | Описание                                |
+|---------------|-------------|-------------|------------------------------------------|
+| `status`      | `str\|null` | Нет         | Фильтр по статусу                       |
+| `assigned_to` | `str\|null` | Нет         | Фильтр по UUID исполнителя              |
+| `client_id`   | `str\|null` | Нет         | Фильтр по UUID клиента                  |
+| `limit`       | `int`       | Нет         | Макс. результатов (по умолчанию: 50, макс: 200) |
 
-**Returns:** `list[dict]` — list of tasks, each with `id`, `title`, `status`, `priority`, `assigned_to`, `client_id`, `due_date`, `created_at`.
+**Возвращает:** `list[dict]` — список задач, каждая с полями `id`, `title`, `status`, `priority`, `assigned_to`, `client_id`, `due_date`, `created_at`.
 
 ---
 
 #### `get_task_detail`
 
-Get full details of a specific task including relations (template, client, assignee, checklists, documents, status history).
+Получить полные сведения о конкретной задаче, включая связи (шаблон, клиент, исполнитель, чек-листы, документы, история статусов).
 
-**Arguments:**
+**Аргументы:**
 
-| Name      | Type  | Required | Description     |
-|-----------|-------|----------|-----------------|
-| `task_id` | `str` | Yes      | UUID of the task|
+| Имя       | Тип   | Обязательный | Описание       |
+|-----------|-------|-------------|-----------------|
+| `task_id` | `str` | Да          | UUID задачи     |
 
-**Returns:** `dict` — full task data with nested `template`, `client`, `assignee`, `checklists`, `documents`, `status_history`, `custom_fields`.
+**Возвращает:** `dict` — полные данные задачи с вложенными объектами `template`, `client`, `assignee`, `checklists`, `documents`, `status_history`, `custom_fields`.
 
 ---
 
-### Template Management
+### Управление шаблонами
 
 #### `list_templates`
 
-List available active task templates, optionally filtered by category.
+Получить список доступных активных шаблонов задач с опциональной фильтрацией по категории.
 
-**Arguments:**
+**Аргументы:**
 
-| Name       | Type        | Required | Description                                                       |
-|------------|-------------|----------|-------------------------------------------------------------------|
-| `category` | `str\|null` | No       | `installation`, `maintenance`, `repair`, `inspection`, `general`  |
+| Имя       | Тип         | Обязательный | Описание                                                          |
+|-----------|-------------|-------------|-------------------------------------------------------------------|
+| `category`| `str\|null` | Нет         | `installation`, `maintenance`, `repair`, `inspection`, `general`  |
 
-**Returns:** `list[dict]` — list of templates with `id`, `name`, `category`, `description`, `required_fields`, `sla_config`, `is_active`.
+**Возвращает:** `list[dict]` — список шаблонов с полями `id`, `name`, `category`, `description`, `required_fields`, `sla_config`, `is_active`.
 
 ---
 
 #### `create_template`
 
-Create a new task template with workflow and field definitions.
+Создать новый шаблон задачи с определениями воркфлоу и полей.
 
-**Arguments:**
+**Аргументы:**
 
-| Name                  | Type             | Required | Description                                |
-|-----------------------|------------------|----------|--------------------------------------------|
-| `name`                | `str`            | Yes      | Template name                              |
-| `category`            | `str`            | Yes      | Template category                          |
-| `workflow_definition` | `dict`           | Yes      | FSM definition (`states` + `transitions`)  |
-| `required_fields`     | `list[dict]\|null`| No      | Field definitions                          |
-| `sla_config`          | `dict\|null`     | No       | SLA parameters                             |
+| Имя                   | Тип              | Обязательный | Описание                                  |
+|-----------------------|------------------|-------------|-------------------------------------------|
+| `name`                | `str`            | Да          | Название шаблона                          |
+| `category`            | `str`            | Да          | Категория шаблона                         |
+| `workflow_definition` | `dict`           | Да          | Определение КА (`states` + `transitions`) |
+| `required_fields`     | `list[dict]\|null`| Нет        | Определения полей                         |
+| `sla_config`          | `dict\|null`     | Нет         | Параметры SLA                             |
 
-**Returns:** `dict` — created template with `id`, `name`, `category`, `workflow_definition`, `required_fields`, `sla_config`, `created_at`.
+**Возвращает:** `dict` — созданный шаблон с полями `id`, `name`, `category`, `workflow_definition`, `required_fields`, `sla_config`, `created_at`.
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "create_template",
   "arguments": {
-    "name": "AC Maintenance",
+    "name": "Техобслуживание кондиционера",
     "category": "maintenance",
     "workflow_definition": {
       "states": ["new", "scheduled", "in_progress", "completed"],
@@ -299,10 +299,10 @@ Create a new task template with workflow and field definitions.
   }
 }
 
-// Response
+// Ответ
 {
   "id": "tmpl-uuid-...",
-  "name": "AC Maintenance",
+  "name": "Техобслуживание кондиционера",
   "category": "maintenance",
   "workflow_definition": { ... },
   "required_fields": [],
@@ -316,188 +316,211 @@ Create a new task template with workflow and field definitions.
 
 #### `instantiate_template`
 
-Create a task from a template, inheriting workflow, checklists, and SLA.
+Создать задачу из шаблона с наследованием воркфлоу, чек-листов и SLA.
 
-**Arguments:**
+**Аргументы:**
 
-| Name            | Type        | Required | Description                                       |
-|-----------------|-------------|----------|---------------------------------------------------|
-| `template_id`   | `str`       | Yes      | UUID of the template                              |
-| `client_id`     | `str`       | Yes      | UUID of the client                                |
-| `title`         | `str`       | Yes      | Task title                                        |
-| `assigned_to`   | `str\|null` | No       | UUID of the assigned engineer                     |
-| `custom_fields` | `dict\|null`| No       | Template field values (e.g. `{area_sqm: 45}`)    |
+| Имя             | Тип         | Обязательный | Описание                                          |
+|-----------------|-------------|-------------|---------------------------------------------------|
+| `template_id`   | `str`       | Да          | UUID шаблона                                      |
+| `client_id`     | `str`       | Да          | UUID клиента                                      |
+| `title`         | `str`       | Да          | Название задачи                                   |
+| `assigned_to`   | `str\|null` | Нет         | UUID назначенного инженера                        |
+| `custom_fields` | `dict\|null`| Нет         | Значения полей шаблона (напр. `{area_sqm: 45}`)  |
 
-**Returns:** `dict` — created task with `id`, `title`, `status`, `template_id`, `client_id`, `assigned_to`, `custom_fields`, `checklists_created`, `sla_deadline`, `created_at`.
+**Возвращает:** `dict` — созданная задача с полями `id`, `title`, `status`, `template_id`, `client_id`, `assigned_to`, `custom_fields`, `checklists_created`, `sla_deadline`, `created_at`.
 
 ---
 
-### CRM (Clients & Deals)
+### CRM (Клиенты и сделки)
+
+Создание клиентов, поиск и сделки выполняются в PostgreSQL (как REST `/api/v1/clients`, `/api/v1/deals`). Для `create_deal` без `stage_id` берётся первая стадия воронки по полю `order`.
 
 #### `create_client`
 
-Create a new client (individual or organization).
+Создать нового клиента (физическое или юридическое лицо).
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type        | Required | Description                               |
-|---------------|-------------|----------|-------------------------------------------|
-| `name`        | `str`       | Yes      | Client / organization name                |
-| `client_type` | `str`       | No       | `individual` (default) or `organization`  |
-| `address`     | `str\|null` | No       | Address                                   |
-| `phone`       | `str\|null` | No       | Phone number                              |
-| `email`       | `str\|null` | No       | Email address                             |
+| Имя          | Тип         | Обязательный | Описание                                      |
+|--------------|-------------|-------------|-----------------------------------------------|
+| `name`       | `str`       | Да          | Имя клиента / название организации            |
+| `client_type`| `str`       | Нет         | `individual` (по умолчанию) или `organization` |
+| `address`    | `str\|null` | Нет         | Адрес                                         |
+| `phone`      | `str\|null` | Нет         | Номер телефона                                |
+| `email`      | `str\|null` | Нет         | Адрес электронной почты                       |
 
-**Returns:** `dict` — `id`, `name`, `client_type`, `address`, `phone`, `email`, `created_at`.
+**Возвращает:** `dict` — `id`, `name`, `client_type`, `address`, `phone`, `email`, `created_at`.
 
 ---
 
 #### `search_clients`
 
-Search clients by name, phone, email, or address (case-insensitive).
+Поиск клиентов по имени, телефону, email или адресу (без учёта регистра).
 
-**Arguments:**
+**Аргументы:**
 
-| Name    | Type  | Required | Description                |
-|---------|-------|----------|----------------------------|
-| `query` | `str` | Yes      | Search query string        |
-| `limit` | `int` | No       | Max results (default: 20)  |
+| Имя    | Тип   | Обязательный | Описание                   |
+|--------|-------|-------------|----------------------------|
+| `query`| `str` | Да          | Строка поискового запроса  |
+| `limit`| `int` | Нет         | Макс. результатов (по умолчанию: 20) |
 
-**Returns:** `list[dict]` — matching clients with `id`, `name`, `client_type`, `phone`, `email`, `address`.
+**Возвращает:** `list[dict]` — найденные клиенты с полями `id`, `name`, `client_type`, `phone`, `email`, `address`.
 
 ---
 
 #### `create_deal`
 
-Create a new deal in the CRM sales pipeline.
+Создать новую сделку в воронке продаж CRM.
 
-**Arguments:**
+**Аргументы:**
 
-| Name        | Type        | Required | Description                          |
-|-------------|-------------|----------|--------------------------------------|
-| `client_id` | `str`       | Yes      | UUID of the client                   |
-| `title`     | `str`       | Yes      | Deal title                           |
-| `amount`    | `float`     | No       | Deal value (default: 0.0)            |
-| `stage_id`  | `str\|null` | No       | UUID of pipeline stage (auto: first) |
+| Имя        | Тип         | Обязательный | Описание                                 |
+|------------|-------------|-------------|------------------------------------------|
+| `client_id`| `str`       | Да          | UUID клиента                             |
+| `title`    | `str`       | Да          | Название сделки                          |
+| `amount`   | `float`     | Нет         | Сумма сделки (по умолчанию: 0.0)        |
+| `stage_id` | `str\|null` | Нет         | UUID стадии воронки (авто: первая)       |
 
-**Returns:** `dict` — `id`, `client_id`, `title`, `amount`, `stage_id`, `stage_name`, `created_at`.
+**Возвращает:** `dict` — `id`, `client_id`, `title`, `amount`, `stage_id`, `stage_name`, `created_at`.
 
 ---
 
 #### `move_deal`
 
-Move a deal to a different pipeline stage.
+Переместить сделку на другую стадию воронки.
 
-**Arguments:**
+**Аргументы:**
 
-| Name       | Type  | Required | Description                  |
-|------------|-------|----------|------------------------------|
-| `deal_id`  | `str` | Yes      | UUID of the deal             |
-| `stage_id` | `str` | Yes      | UUID of the target stage     |
+| Имя       | Тип   | Обязательный | Описание                     |
+|-----------|-------|-------------|------------------------------|
+| `deal_id` | `str` | Да          | UUID сделки                  |
+| `stage_id`| `str` | Да          | UUID целевой стадии          |
 
-**Returns:** `dict` — `id`, `title`, `from_stage`, `to_stage`, `moved_at`.
+**Возвращает:** `dict` — `id`, `title`, `from_stage`, `to_stage`, `moved_at`.
 
 ---
 
-### Tender Management
+### Доски задач (boards)
+
+| Инструмент      | Описание |
+|-----------------|----------|
+| `list_boards`   | Список неархивных досок (как `GET /api/v1/boards/`) |
+| `create_board`  | Создать доску (владелец — MCP-сервисный пользователь `DEV_USER_ID`) |
+| `get_board`     | Доска и задачи, сгруппированные по статусу (`GET /api/v1/boards/{id}`) |
+
+### Чат компании
+
+| Инструмент            | Описание |
+|-----------------------|----------|
+| `list_chat_rooms`     | Комнаты; при пустой БД создаётся комната «Общий чат» / `company` |
+| `list_chat_messages`  | История сообщений по коду комнаты (вложения без presigned URL) |
+| `send_chat_message`   | Текстовое сообщение от пользователя `DEV_USER_ID` (должен быть в `users`) |
+
+### Управление тендерами
+
+Реализация опирается на те же модели БД и правила, что и REST: универсальный чеклист при создании, граф переходов `app.services.tender.tender_pipeline`, строгая проверка задач при привязке.
 
 #### `create_tender`
 
-Create a new tender/bid with initial status "search".
+Создать тендер в БД со статусом `search`, с **универсальным чеклистом** (как `POST /api/v1/tenders/`).
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type          | Required | Description                      |
-|---------------|---------------|----------|----------------------------------|
-| `title`       | `str`         | Yes      | Tender title                     |
-| `source`      | `str\|null`   | No       | Source platform or customer      |
-| `budget`      | `float\|null` | No       | Tender budget                    |
-| `deadline`    | `str\|null`   | No       | Bid submission deadline (ISO)    |
-| `assigned_to` | `str\|null`   | No       | UUID of responsible manager      |
+| Имя          | Тип           | Обязательный | Описание                         |
+|--------------|---------------|-------------|----------------------------------|
+| `title`      | `str`         | Да          | Название тендера (непустая строка) |
+| `source`     | `str\|null`   | Нет         | Площадка-источник или заказчик   |
+| `budget`     | `float\|null` | Нет         | Бюджет тендера                   |
+| `deadline`   | `str\|null`   | Нет         | `YYYY-MM-DD` или ISO 8601 (дата подачи) |
+| `assigned_to`| `str\|null`   | Нет         | UUID ответственного менеджера    |
 
-**Returns:** `dict` — `id`, `title`, `source`, `budget`, `status`, `deadline`, `assigned_to`, `created_at`.
+**Возвращает:** `dict` — полный объект тендера в формате схемы `TenderResponse` (как REST), сериализованный в JSON.
 
 ---
 
 #### `update_tender_status`
 
-Update the status of a tender through its lifecycle.
+Изменить статус тендера с проверкой **допустимых переходов** (как `POST /api/v1/tenders/{id}/transition`). Недопустимый переход — ошибка домена (код `TENDER_TRANSITION_DENIED`).
 
-**Arguments:**
+**Аргументы:**
 
-| Name        | Type  | Required | Description                                                          |
-|-------------|-------|----------|----------------------------------------------------------------------|
-| `tender_id` | `str` | Yes      | UUID of the tender                                                   |
-| `status`    | `str` | Yes      | `search`, `participation`, `won`, `lost`, `execution`, `completed`  |
+| Имя         | Тип         | Обязательный | Описание                                                             |
+|-------------|-------------|-------------|----------------------------------------------------------------------|
+| `tender_id` | `str`       | Да          | UUID тендера                                                         |
+| `status`    | `str`       | Да          | `search`, `participation`, `won`, `lost`, `execution`, `completed`   |
+| `reason`    | `str\|null` | Нет         | Причина перехода (добавляется в `notes` тендера, как у REST)         |
 
-**Returns:** `dict` — `id`, `title`, `from_status`, `to_status`, `updated_at`.
+**Возвращает:** `dict` — `id`, `title`, `from_status`, `to_status`, `updated_at`.
 
 ---
 
 #### `link_tasks_to_tender`
 
-Link existing tasks to a tender for grouping and reporting.
+Привязать задачи к тендеру (`tasks.tender_id`). **Каждый** указанный `task_id` должен существовать; иначе `VALIDATION_ERROR` (как у `POST /api/v1/tenders/{id}/link-tasks`).
 
-**Arguments:**
+**Аргументы:**
 
-| Name        | Type        | Required | Description                    |
-|-------------|-------------|----------|--------------------------------|
-| `tender_id` | `str`       | Yes      | UUID of the tender             |
-| `task_ids`  | `list[str]` | Yes      | List of task UUIDs to link     |
+| Имя         | Тип         | Обязательный | Описание                       |
+|-------------|-------------|-------------|--------------------------------|
+| `tender_id` | `str`       | Да          | UUID тендера                   |
+| `task_ids`  | `list[str]` | Да          | Список UUID привязываемых задач |
 
-**Returns:** `dict` — `tender_id`, `linked_count`, `task_ids`, `linked_at`.
+**Возвращает:** `dict` — `tender_id`, `linked_count`, `task_ids`, `linked_at`.
 
 ---
 
 #### `list_tenders`
 
-List tenders with optional status filter. Sorted by deadline (soonest first).
+Список тендеров из БД с опциональным фильтром по статусу. Сортировка: **`created_at` по убыванию** (как список в REST).
 
-**Arguments:**
+**Аргументы:**
 
-| Name     | Type        | Required | Description                         |
-|----------|-------------|----------|-------------------------------------|
-| `status` | `str\|null` | No       | Filter by tender status             |
-| `limit`  | `int`       | No       | Max results (default: 50, max: 200) |
+| Имя      | Тип         | Обязательный | Описание                                |
+|----------|-------------|-------------|------------------------------------------|
+| `status` | `str\|null` | Нет         | Фильтр по статусу тендера               |
+| `limit`  | `int`       | Нет         | Макс. результатов (по умолчанию: 50, макс: 200) |
 
-**Returns:** `list[dict]` — tenders with `id`, `title`, `source`, `budget`, `status`, `deadline`, `assigned_to`, `created_at`.
+**Возвращает:** `list[dict]` — элементы в формате `TenderResponse` (JSON).
 
 ---
 
-### Warehouse Management
+### Складской учёт
+
+Инструменты работают с реальной БД через `app.services.warehouse_operations` (те же правила, что `POST /api/v1/warehouse/movements` и резервы).
 
 #### `check_stock`
 
-Check warehouse stock levels. Query by specific item or filter by category.
+Проверить складские остатки. Запрос по конкретной позиции или фильтрация по категории.
 
-**Arguments:**
+**Аргументы:**
 
-| Name       | Type        | Required | Description                                             |
-|------------|-------------|----------|---------------------------------------------------------|
-| `item_id`  | `str\|null` | No       | UUID of a specific warehouse item                       |
-| `category` | `str\|null` | No       | `materials`, `tools`, `consumables`, `equipment`        |
+| Имя       | Тип         | Обязательный | Описание                                                |
+|-----------|-------------|-------------|----------------------------------------------------------|
+| `item_id` | `str\|null` | Нет         | UUID конкретной складской позиции                        |
+| `category`| `str\|null` | Нет         | `materials`, `tools`, `consumables`, `equipment`         |
 
-**Returns:** `list[dict]` — items with `id`, `name`, `sku`, `category`, `unit`, `quantity`, `reserved_quantity`, `available`, `min_quantity`, `price`.
+**Возвращает:** `list[dict]` — позиции с полями `id`, `name`, `sku`, `category`, `unit`, `quantity`, `reserved_quantity`, `available`, `min_quantity`, `price`.
 
 ---
 
 #### `reserve_materials`
 
-Reserve materials from warehouse for a specific task.
+Зарезервировать материалы со склада под конкретную задачу.
 
-**Arguments:**
+**Аргументы:**
 
-| Name      | Type        | Required | Description                                             |
-|-----------|-------------|----------|---------------------------------------------------------|
-| `task_id` | `str`       | Yes      | UUID of the task                                        |
-| `items`   | `list[dict]`| Yes      | Items to reserve: `[{item_id: "uuid", quantity: 5.0}]` |
+| Имя      | Тип         | Обязательный | Описание                                                    |
+|----------|-------------|-------------|--------------------------------------------------------------|
+| `task_id`| `str`       | Да          | UUID задачи                                                  |
+| `items`  | `list[dict]`| Да          | Позиции для резервирования: `[{item_id: "uuid", quantity: 5.0}]` |
 
-**Returns:** `dict` — `task_id`, `reserved_items` (list of `{item_id, quantity, status}`), `total_cost`, `reserved_at`.
+**Возвращает:** `dict` — `task_id`, `reserved_items` (список `{item_id, quantity, status}`), `total_cost`, `reserved_at`.
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "reserve_materials",
   "arguments": {
@@ -509,7 +532,7 @@ Reserve materials from warehouse for a specific task.
   }
 }
 
-// Response
+// Ответ
 {
   "task_id": "task-uuid-...",
   "reserved_items": [
@@ -525,35 +548,37 @@ Reserve materials from warehouse for a specific task.
 
 #### `record_movement`
 
-Record an inventory movement (intake, consumption, write-off, transfer, return).
+Зафиксировать складское движение (приход, расход, списание, перемещение, возврат).
 
-**Arguments:**
+**Аргументы:**
 
-| Name            | Type        | Required | Description                                                 |
-|-----------------|-------------|----------|-------------------------------------------------------------|
-| `item_id`       | `str`       | Yes      | UUID of the warehouse item                                  |
-| `movement_type` | `str`       | Yes      | `intake`, `consumption`, `write_off`, `transfer`, `return`  |
-| `quantity`      | `float`     | Yes      | Quantity (always positive)                                  |
-| `task_id`       | `str\|null` | No       | UUID of related task (for consumption)                      |
-| `reason`        | `str\|null` | No       | Comment / reason                                            |
+| Имя             | Тип         | Обязательный | Описание                                                    |
+|-----------------|-------------|-------------|--------------------------------------------------------------|
+| `item_id`       | `str`       | Да          | UUID складской позиции                                       |
+| `movement_type` | `str`       | Да          | `intake`, `consumption`, `write_off`, `transfer`, `return`   |
+| `quantity`      | `float`     | Да          | Количество (всегда положительное)                            |
+| `task_id`       | `str\|null` | Нет         | UUID связанной задачи (для расхода)                          |
+| `reason`        | `str\|null` | Нет         | Комментарий / причина                                        |
 
-**Returns:** `dict` — `id`, `item_id`, `movement_type`, `quantity`, `task_id`, `reason`, `new_quantity`, `recorded_at`.
+**Возвращает:** `dict` — `id`, `item_id`, `movement_type`, `quantity`, `task_id`, `reason`, `new_quantity`, `recorded_at`.
 
 ---
 
-### Analytics & Reporting
+### Аналитика и отчётность
+
+Агрегаты совпадают с REST `/api/v1/analytics/*` через модуль `app.services.analytics_read` (дашборд, тендеры, производительность, зарплата). Дополнительно в `get_dashboard_stats` учитываются движения склада за `period_days`.
 
 #### `get_dashboard_stats`
 
-Get aggregated dashboard statistics for the platform.
+Получить агрегированную статистику дашборда платформы.
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type  | Required | Description                      |
-|---------------|-------|----------|----------------------------------|
-| `period_days` | `int` | No       | Period in days (default: 30)     |
+| Имя           | Тип   | Обязательный | Описание                            |
+|---------------|-------|-------------|--------------------------------------|
+| `period_days` | `int` | Нет         | Период в днях (по умолчанию: 30)    |
 
-**Returns:** `dict` with sections:
+**Возвращает:** `dict` с разделами:
 - `tasks` — `{total, new, in_progress, completed, overdue}`
 - `deals` — `{total, total_amount, won_count, won_amount, conversion_rate}`
 - `tenders` — `{total, active, won, lost, win_rate}`
@@ -564,37 +589,37 @@ Get aggregated dashboard statistics for the platform.
 
 #### `get_employee_performance`
 
-Get performance metrics for a specific employee.
+Получить показатели эффективности конкретного сотрудника.
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type  | Required | Description                  |
-|---------------|-------|----------|------------------------------|
-| `user_id`     | `str` | Yes      | UUID of the employee         |
-| `period_days` | `int` | No       | Period in days (default: 30) |
+| Имя           | Тип   | Обязательный | Описание                            |
+|---------------|-------|-------------|--------------------------------------|
+| `user_id`     | `str` | Да          | UUID сотрудника                     |
+| `period_days` | `int` | Нет         | Период в днях (по умолчанию: 30)    |
 
-**Returns:** `dict` — `user_id`, `user_name`, `tasks` (assigned, completed, in_progress, overdue, avg_completion_hours, sla_compliance_rate), `time_entries` (total_hours, billable_hours), `period_days`.
+**Возвращает:** `dict` — `user_id`, `user_name`, `tasks` (assigned, completed, in_progress, overdue, avg_completion_hours, sla_compliance_rate), `time_entries` (total_hours, billable_hours), `period_days`.
 
 ---
 
 #### `calculate_salary`
 
-Calculate salary for an employee based on their `salary_config`, completed tasks, and logged hours.
+Рассчитать заработную плату сотрудника на основе `salary_config`, завершённых задач и отработанных часов.
 
-**Arguments:**
+**Аргументы:**
 
-| Name      | Type  | Required | Description                |
-|-----------|-------|----------|----------------------------|
-| `user_id` | `str` | Yes      | UUID of the employee       |
-| `year`    | `int` | Yes      | Year (e.g. 2026)           |
-| `month`   | `int` | Yes      | Month (1-12)               |
+| Имя      | Тип   | Обязательный | Описание                   |
+|----------|-------|-------------|----------------------------|
+| `user_id`| `str` | Да          | UUID сотрудника            |
+| `year`   | `int` | Да          | Год (напр. 2026)           |
+| `month`  | `int` | Да          | Месяц (1–12)               |
 
-**Returns:** `dict` — `user_id`, `user_name`, `year`, `month`, `base_salary`, `task_bonus`, `overtime_bonus`, `deductions`, `total`, `breakdown` (list of calculation components).
+**Возвращает:** `dict` — `user_id`, `user_name`, `year`, `month`, `base_salary`, `task_bonus`, `overtime_bonus`, `deductions`, `total`, `breakdown` (список компонентов расчёта).
 
-**Example:**
+**Пример:**
 
 ```json
-// Request
+// Запрос
 {
   "tool": "calculate_salary",
   "arguments": {
@@ -604,10 +629,10 @@ Calculate salary for an employee based on their `salary_config`, completed tasks
   }
 }
 
-// Response
+// Ответ
 {
   "user_id": "user-uuid-ivanov",
-  "user_name": "Ivanov Sergei",
+  "user_name": "Иванов Сергей",
   "year": 2026,
   "month": 3,
   "base_salary": 50000.0,
@@ -616,9 +641,9 @@ Calculate salary for an employee based on their `salary_config`, completed tasks
   "deductions": 0.0,
   "total": 72500.0,
   "breakdown": [
-    {"type": "base", "amount": 50000.0, "description": "Base monthly salary"},
-    {"type": "task_bonus", "amount": 18000.0, "description": "6 installations x 3000"},
-    {"type": "overtime", "amount": 4500.0, "description": "12 overtime hours x 375"}
+    {"type": "base", "amount": 50000.0, "description": "Базовый оклад"},
+    {"type": "task_bonus", "amount": 18000.0, "description": "6 монтажей × 3000"},
+    {"type": "overtime", "amount": 4500.0, "description": "12 сверхурочных часов × 375"}
   ]
 }
 ```
@@ -627,97 +652,97 @@ Calculate salary for an employee based on their `salary_config`, completed tasks
 
 #### `get_tender_analytics`
 
-Get analytics on tender participation and success rates.
+Получить аналитику по участию в тендерах и показателям успешности.
 
-**Arguments:**
+**Аргументы:**
 
-| Name          | Type  | Required | Description                  |
-|---------------|-------|----------|------------------------------|
-| `period_days` | `int` | No       | Period in days (default: 90) |
+| Имя           | Тип   | Обязательный | Описание                            |
+|---------------|-------|-------------|--------------------------------------|
+| `period_days` | `int` | Нет         | Период в днях (по умолчанию: 90)    |
 
-**Returns:** `dict` — `funnel` (search, participation, won, lost, execution, completed), `financials` (total_budget, total_won_budget, avg_margin), `by_source` (list of per-source stats), `timing` (avg_days_to_decision, avg_execution_days).
+**Возвращает:** `dict` — `funnel` (search, participation, won, lost, execution, completed), `financials` (total_budget, total_won_budget, avg_margin), `by_source` (статистика по источникам), `timing` (avg_days_to_decision, avg_execution_days).
 
 ---
 
-## Usage Scenarios
+## Сценарии использования
 
-### Scenario 1: AI Agent Creates a Task from Template
+### Сценарий 1: AI-агент создаёт задачу из шаблона
 
-An AI agent needs to create a new AC installation task for a client.
+AI-агенту необходимо создать новую задачу на монтаж кондиционера для клиента.
 
 ```
-Agent: "Create an AC installation task for client Petrov"
+Агент: "Создай задачу на монтаж кондиционера для клиента Петрова"
 
-1. Agent calls list_templates(category="installation")
-   → Gets template "AC Installation" with id "tmpl-uuid-123"
+1. Агент вызывает list_templates(category="installation")
+   → Получает шаблон "Монтаж кондиционера" с id "tmpl-uuid-123"
 
-2. Agent calls search_clients(query="Petrov")
-   → Gets client "Petrov Ivan" with id "client-uuid-456"
+2. Агент вызывает search_clients(query="Петров")
+   → Получает клиента "Петров Иван" с id "client-uuid-456"
 
-3. Agent calls instantiate_template(
+3. Агент вызывает instantiate_template(
      template_id="tmpl-uuid-123",
      client_id="client-uuid-456",
-     title="AC Installation — apt. Petrov",
+     title="Монтаж кондиционера — кв. Петров",
      assigned_to="engineer-uuid-789",
      custom_fields={"area_sqm": 45, "equipment_model": "Daikin FTXB35C"}
    )
-   → Task created with checklists, SLA deadline set, status="new"
+   → Задача создана с чек-листами, установлен дедлайн SLA, status="new"
 ```
 
-### Scenario 2: AI Agent Checks Warehouse Stock and Reserves Materials
+### Сценарий 2: AI-агент проверяет остатки и резервирует материалы
 
-Before starting installation work, an AI agent verifies stock and reserves needed materials.
+Перед началом монтажа AI-агент проверяет наличие и резервирует нужные материалы.
 
 ```
-Agent: "Check if we have enough copper tubing and brackets for the installation"
+Агент: "Проверь, достаточно ли медной трубки и кронштейнов для монтажа"
 
-1. Agent calls check_stock(category="materials")
-   → Gets all materials with quantities and available stock
+1. Агент вызывает check_stock(category="materials")
+   → Получает все материалы с количествами и доступным остатком
 
-2. Agent identifies:
-   - Copper tube 6.35mm: available=45m, needed=10m ✓
-   - Wall bracket: available=12pcs, needed=2pcs ✓
+2. Агент определяет:
+   - Медная трубка 6.35мм: доступно=45м, нужно=10м ✓
+   - Настенный кронштейн: доступно=12шт, нужно=2шт ✓
 
-3. Agent calls reserve_materials(
+3. Агент вызывает reserve_materials(
      task_id="task-uuid-...",
      items=[
        {"item_id": "copper-tube-uuid", "quantity": 10.0},
        {"item_id": "bracket-uuid", "quantity": 2.0}
      ]
    )
-   → Materials reserved, total cost calculated
+   → Материалы зарезервированы, рассчитана общая стоимость
 
-4. If insufficient stock, agent notifies the user:
-   "Not enough copper tubing — only 3m available, need 10m.
-    Should I create a purchase request?"
+4. Если остатков недостаточно, агент уведомляет пользователя:
+   "Недостаточно медной трубки — доступно только 3м, нужно 10м.
+    Создать заявку на закупку?"
 ```
 
-### Scenario 3: AI Agent Generates Salary Report
+### Сценарий 3: AI-агент формирует зарплатный отчёт
 
-An accountant asks the AI agent to prepare salary calculations for the team.
+Бухгалтер просит AI-агента подготовить расчёт зарплаты для команды.
 
 ```
-Agent: "Calculate salary for engineer Ivanov for March 2026"
+Агент: "Рассчитай зарплату инженера Иванова за март 2026"
 
-1. Agent calls calculate_salary(
+1. Агент вызывает calculate_salary(
      user_id="user-uuid-ivanov",
      year=2026,
      month=3
    )
-   → Returns breakdown: base=50000, task_bonus=18000 (6 installations),
-     overtime=4500 (12 extra hours), total=72500
+   → Возвращает: оклад=50000, бонус за задачи=18000 (6 монтажей),
+     переработка=4500 (12 доп. часов), итого=72500
 
-2. Agent calls get_employee_performance(
+2. Агент вызывает get_employee_performance(
      user_id="user-uuid-ivanov",
      period_days=31
    )
-   → Returns: 8 tasks completed, avg 4.2 hours, 95% SLA compliance
+   → Возвращает: 8 задач завершено, среднее 4.2 часа, 95% соответствие SLA
 
-3. Agent presents the report:
-   "Ivanov S. — March 2026:
-    Base salary:     50,000 ₽
-    Task bonuses:    18,000 ₽ (6 installations × 3,000 ₽)
-    Overtime:         4,500 ₽ (12 hours × 375 ₽)
-    Total:           72,500 ₽
-    Performance: 8 tasks, 95% SLA compliance"
+3. Агент представляет отчёт:
+   "Иванов С. — март 2026:
+    Базовый оклад:      50 000 ₽
+    Бонус за задачи:     18 000 ₽ (6 монтажей × 3 000 ₽)
+    Переработка:          4 500 ₽ (12 часов × 375 ₽)
+    Итого:               72 500 ₽
+    Эффективность: 8 задач, 95% соответствие SLA"
 ```

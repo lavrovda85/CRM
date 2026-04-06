@@ -1,7 +1,7 @@
 [project]
 name = "hvac-crm-backend"
 version = "0.1.0"
-description = "HVAC CRM/ERP Platform Backend"
+description = "SPEC CRM Platform Backend"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -23,6 +23,16 @@ dependencies = [
     "tenacity>=9.0.0",
     "structlog>=24.4.0",
     "orjson>=3.10.0",
+    "openpyxl>=3.1.5",
+    "openai>=1.59.0",
+    "pypdf>=5.1.0",
+    "python-docx>=1.1.2",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "duckduckgo-search>=7.0.0",
+    "py7zr>=0.22.0",
+    "rarfile>=4.2",
+    "xlrd>=2.0.1",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +55,11 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that need a live PostgreSQL (DATABASE_URL)",
+]
 
 [tool.mypy]
 python_version = "3.12"

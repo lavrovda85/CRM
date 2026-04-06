@@ -2,6 +2,9 @@
 .env
 !.env.example
 
+# Deploy secrets (generated passwords / ssh keys)
+deploy/yandex/.deploy-config.json
+
 # Python
 __pycache__/
 *.py[cod]

@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { Header } from "@/components/layout/Header";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "HVAC CRM",
-  description: "HVAC service management platform",
+  title: "SPEC CRM — Управление сервисной компанией",
+  description: "CRM/ERP платформа для управления сервисной компанией",
 };
 
 export const viewport: Viewport = {
@@ -21,11 +23,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="min-h-screen bg-surface-50 font-sans">
-        <div className="flex h-screen">
+      <body className="min-h-screen overflow-x-hidden bg-surface-50 font-sans">
+        <div className="flex h-screen max-w-full overflow-x-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
-            {children}
+          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-16 md:pb-0">
+            <AuthProvider>
+              <Header />
+              {children}
+            </AuthProvider>
           </main>
         </div>
         <MobileNav />

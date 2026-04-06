@@ -11,10 +11,10 @@ from sqlalchemy import ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class WarehouseMovement(BaseModel):
+class WarehouseMovement(TenantMixin, BaseModel):
     """Record of inventory movement (intake, consumption, write-off, transfer).
 
     Атрибуты:
@@ -50,7 +50,7 @@ class WarehouseMovement(BaseModel):
     user = relationship("User")
 
 
-class WarehouseReservation(BaseModel):
+class WarehouseReservation(TenantMixin, BaseModel):
     """Material reservation linked to a specific task.
 
     Атрибуты:

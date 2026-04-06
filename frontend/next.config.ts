@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+/**
+ * API proxy: `src/app/api/v1/[[...path]]/route.ts` forwards to BACKEND_INTERNAL_URL.
+ * Rewrites are not used so Docker/local env is applied per request on the server.
+ */
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
@@ -8,14 +13,6 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "localhost", port: "9000" },
       { protocol: "http", hostname: "minio", port: "9000" },
     ],
-  },
-  async rewrites() {
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") || "http://backend:8000"}/api/v1/:path*`,
-      },
-    ];
   },
 };
 

@@ -90,7 +90,7 @@ export function Modal({ open, onClose, title, children, footer, className }: Mod
             type="button"
             onClick={onClose}
             className="ml-auto rounded-lg p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 transition-colors"
-            aria-label="Close"
+            aria-label="Закрыть"
           >
             <X className="h-5 w-5" />
           </button>

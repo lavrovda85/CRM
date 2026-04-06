@@ -172,7 +172,7 @@ async def add_item(
         reference_id=ref.id,
         code=body.code,
         name=body.name,
-        metadata=body.metadata,
+        extra_data=body.extra_data,
         order=body.order,
         is_active=body.is_active,
     )

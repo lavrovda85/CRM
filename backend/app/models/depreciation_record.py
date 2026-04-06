@@ -11,10 +11,10 @@ from sqlalchemy import Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class DepreciationRecord(BaseModel):
+class DepreciationRecord(TenantMixin, BaseModel):
     """Monthly depreciation entry for an equipment item.
 
     Атрибуты:

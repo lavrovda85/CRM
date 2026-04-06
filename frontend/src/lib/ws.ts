@@ -1,5 +1,5 @@
 /**
- * WebSocket client for real-time updates from the HVAC CRM backend.
+ * WebSocket client for real-time updates from the SPEC CRM backend.
  *
  * Клиент WebSocket для получения real-time обновлений (задачи, уведомления,
  * статусы пользователей). Поддерживает автоматическое переподключение
@@ -8,7 +8,21 @@
 
 import type { WsMessage } from "@/types";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws";
+/**
+ * WebSocket URL for the backend `/ws` endpoint.
+ * When `NEXT_PUBLIC_WS_URL` is unset, uses the current page host so a single
+ * public tunnel (ngrok / Cloudflare) on port 80 works without extra env
+ * (nginx must proxy `/ws` to the API).
+ */
+function getWsBase(): string {
+  const env = process.env.NEXT_PUBLIC_WS_URL?.trim();
+  if (env) return env;
+  if (typeof window === "undefined") {
+    return "ws://127.0.0.1:8000/ws";
+  }
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws`;
+}
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
@@ -55,6 +69,19 @@ export class WsClient {
   }
 
   /**
+   * Clear auth token used in WS query param.
+   *
+   * This is important for debug/token-less sessions.
+   */
+  clearToken(): void {
+    this.token = null;
+    if (this.socket) {
+      this.disconnect();
+      this.connect();
+    }
+  }
+
+  /**
    * Open a WebSocket connection to the backend.
    *
    * Открывает WebSocket-соединение, передавая токен в query-параметре.
@@ -64,7 +91,8 @@ export class WsClient {
     if (typeof window === "undefined") return;
 
     this.intentionallyClosed = false;
-    const url = this.token ? `${WS_BASE}?token=${this.token}` : WS_BASE;
+    const base = getWsBase();
+    const url = this.token ? `${base}?token=${this.token}` : base;
 
     try {
       this.socket = new WebSocket(url);

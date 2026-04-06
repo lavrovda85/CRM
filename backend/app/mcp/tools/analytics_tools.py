@@ -1,74 +1,71 @@
-"""MCP tools for analytics and reporting in HVAC CRM/ERP.
-
-Инструменты для получения статистики дашборда, производительности
-сотрудников, расчёта зарплаты и аналитики тендеров.
-"""
+"""MCP analytics tools backed by real DB aggregates (``analytics_read``)."""
 
 from __future__ import annotations
 
-from datetime import datetime
+import calendar
+import uuid
+from datetime import date, datetime, timedelta, timezone
 
+from sqlalchemy import select
+
+from app.core.database import async_session_factory
+from app.core.exceptions import NotFoundError, ValidationError
 from app.mcp.server import mcp
+from app.models import User
+from app.services import analytics_read
+
+
+def _uid(raw: str, field: str = "user_id") -> uuid.UUID:
+    try:
+        return uuid.UUID(str(raw).strip())
+    except ValueError as exc:
+        raise ValidationError(field, "Must be a valid UUID") from exc
 
 
 @mcp.tool()
 async def get_dashboard_stats(period_days: int = 30) -> dict:
-    """Get aggregated dashboard statistics for the platform.
+    """Aggregated dashboard metrics (tasks, deals, tenders, warehouse highlights)."""
+    period_days = max(1, min(int(period_days), 3650))
+    since = datetime.now(timezone.utc) - timedelta(days=period_days)
 
-    Возвращает сводную статистику платформы за указанный период:
-    количество задач, сделок, тендеров, складских операций и финансовые показатели.
+    async with async_session_factory() as db:
+        d = await analytics_read.aggregate_dashboard(db)
+        ta = await analytics_read.aggregate_tender_analytics(db)
+        movements_count = await analytics_read.count_movements_since(db, since)
+        consumption_cost = await analytics_read.sum_consumption_cost_since(db, since)
 
-    Args:
-        period_days (int): Период в днях для расчёта статистики.
-            По умолчанию 30 дней.
+    tbs = d.tasks_by_status
+    completed_like = sum(tbs.get(s, 0) for s in ("completed", "done", "closed"))
 
-    Returns:
-        dict: Сводка с секциями:
-            tasks — {total, new, in_progress, completed, overdue},
-            deals — {total, total_amount, won_count, won_amount, conversion_rate},
-            tenders — {total, active, won, lost, win_rate},
-            warehouse — {low_stock_items, movements_count, total_consumption_cost},
-            period_days.
-
-    Example:
-        AI agent: "Покажи общую статистику за последний месяц"
-        >>> get_dashboard_stats(period_days=30)
-    """
-    # TODO: SELECT COUNT(*) FROM tasks grouped by status WHERE created_at >= now - period
-    # TODO: SELECT COUNT(*), SUM(amount) FROM deals WHERE created_at >= now - period
-    # TODO: SELECT COUNT(*) FROM tenders grouped by status WHERE created_at >= now - period
-    # TODO: SELECT items WHERE quantity - reserved_quantity < min_quantity (low stock)
-    # TODO: SELECT COUNT(*), SUM(quantity * unit_price) FROM warehouse_movements
-    now = datetime.utcnow().isoformat()
     return {
         "tasks": {
-            "total": 0,
-            "new": 0,
-            "in_progress": 0,
-            "completed": 0,
-            "overdue": 0,
+            "total": d.total_tasks,
+            "new": tbs.get("new", 0),
+            "in_progress": tbs.get("in_progress", 0),
+            "completed": completed_like,
+            "overdue": d.overdue_tasks,
         },
         "deals": {
-            "total": 0,
-            "total_amount": 0.0,
+            "total": d.total_deals,
+            "total_amount": float(d.deals_amount),
             "won_count": 0,
             "won_amount": 0.0,
             "conversion_rate": 0.0,
         },
         "tenders": {
-            "total": 0,
-            "active": 0,
-            "won": 0,
-            "lost": 0,
-            "win_rate": 0.0,
+            "total": ta.total_tenders,
+            "active": d.active_tenders,
+            "won": ta.tenders_by_status.get("won", 0),
+            "lost": ta.tenders_by_status.get("lost", 0),
+            "win_rate": ta.win_rate,
         },
         "warehouse": {
-            "low_stock_items": 0,
-            "movements_count": 0,
-            "total_consumption_cost": 0.0,
+            "low_stock_items": d.low_stock_items,
+            "movements_count": movements_count,
+            "total_consumption_cost": consumption_cost,
         },
         "period_days": period_days,
-        "generated_at": now,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -77,52 +74,35 @@ async def get_employee_performance(
     user_id: str,
     period_days: int = 30,
 ) -> dict:
-    """Get performance metrics for a specific employee.
+    """Performance metrics for one user over the last ``period_days``."""
+    uid = _uid(user_id)
+    days = max(1, min(int(period_days), 3650))
+    end = date.today()
+    start = end - timedelta(days=days)
 
-    Возвращает показатели производительности сотрудника за период:
-    количество задач, среднее время выполнения, соблюдение SLA.
+    async with async_session_factory() as db:
+        user_name = await db.scalar(select(User.full_name).where(User.id == uid))
+        if user_name is None:
+            raise NotFoundError("User", user_id)
+        perf = await analytics_read.aggregate_performance(db, uid, start, end)
 
-    Args:
-        user_id (str): UUID сотрудника.
-        period_days (int): Период в днях. По умолчанию 30.
-
-    Returns:
-        dict: Метрики производительности:
-            user_id, user_name,
-            tasks — {assigned, completed, in_progress, overdue,
-                     avg_completion_hours, sla_compliance_rate},
-            time_entries — {total_hours, billable_hours},
-            period_days.
-
-    Example:
-        AI agent: "Покажи показатели монтажника Иванова за последние 2 недели"
-        >>> get_employee_performance(
-        ...     user_id="user-uuid-ivanov",
-        ...     period_days=14,
-        ... )
-    """
-    # TODO: SELECT tasks WHERE assigned_to = user_id AND updated_at >= period
-    # TODO: Calculate avg completion time from started_at to completed_at
-    # TODO: Calculate SLA compliance: completed_at <= sla_deadline
-    # TODO: SELECT SUM(hours) FROM time_entries WHERE user_id AND period
-    now = datetime.utcnow().isoformat()
     return {
-        "user_id": user_id,
-        "user_name": "Placeholder User",
+        "user_id": str(uid),
+        "user_name": user_name,
         "tasks": {
-            "assigned": 0,
-            "completed": 0,
-            "in_progress": 0,
+            "assigned": perf.tasks_completed + perf.tasks_in_progress,
+            "completed": perf.tasks_completed,
+            "in_progress": perf.tasks_in_progress,
             "overdue": 0,
-            "avg_completion_hours": 0.0,
-            "sla_compliance_rate": 0.0,
+            "avg_completion_hours": perf.avg_completion_hours,
+            "sla_compliance_rate": perf.on_time_rate,
         },
         "time_entries": {
-            "total_hours": 0.0,
-            "billable_hours": 0.0,
+            "total_hours": perf.total_hours_logged,
+            "billable_hours": perf.total_hours_logged,
         },
-        "period_days": period_days,
-        "generated_at": now,
+        "period_days": days,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -132,88 +112,68 @@ async def calculate_salary(
     year: int,
     month: int,
 ) -> dict:
-    """Calculate salary for an employee for a given month.
+    """Monthly salary estimate from ``salary_config`` and logged work (same as REST)."""
+    uid = _uid(user_id)
+    if month < 1 or month > 12:
+        raise ValidationError("month", "Must be 1–12")
 
-    Рассчитывает зарплату сотрудника на основе его salary_config,
-    выполненных задач и отработанных часов за указанный месяц.
+    period_start = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    period_end = date(year, month, last_day)
 
-    Args:
-        user_id (str): UUID сотрудника.
-        year (int): Год расчёта (например, 2026).
-        month (int): Месяц расчёта (1-12).
+    async with async_session_factory() as db:
+        user_name = await db.scalar(select(User.full_name).where(User.id == uid))
+        if user_name is None:
+            raise NotFoundError("User", user_id)
+        calc = await analytics_read.aggregate_salary(db, uid, period_start, period_end)
 
-    Returns:
-        dict: Расчёт зарплаты:
-            user_id, user_name, year, month,
-            base_salary, task_bonus, overtime_bonus,
-            deductions, total, breakdown (list of components).
-
-    Example:
-        AI agent: "Рассчитай зарплату для Иванова за март 2026"
-        >>> calculate_salary(
-        ...     user_id="user-uuid-ivanov",
-        ...     year=2026,
-        ...     month=3,
-        ... )
-    """
-    # TODO: SELECT user with salary_config WHERE id = user_id
-    # TODO: SELECT completed tasks for the month
-    # TODO: SELECT time_entries for the month, calc total hours
-    # TODO: Apply salary_config formula (base + per-task bonus + overtime)
-    # TODO: Apply deductions if any
     return {
-        "user_id": user_id,
-        "user_name": "Placeholder User",
+        "user_id": str(uid),
+        "user_name": user_name,
         "year": year,
         "month": month,
-        "base_salary": 0.0,
-        "task_bonus": 0.0,
-        "overtime_bonus": 0.0,
+        "base_salary": float(calc.base_salary),
+        "task_bonus": float(
+            sum(
+                float(x.get("amount", 0))
+                for x in calc.breakdown
+                if isinstance(x, dict) and x.get("type") == "task_bonus"
+            )
+        ),
+        "overtime_bonus": float(
+            sum(
+                float(x.get("amount", 0))
+                for x in calc.breakdown
+                if isinstance(x, dict) and x.get("type") == "hourly_pay"
+            )
+        ),
         "deductions": 0.0,
-        "total": 0.0,
-        "breakdown": [],
+        "total": float(calc.total),
+        "breakdown": calc.breakdown,
     }
 
 
 @mcp.tool()
 async def get_tender_analytics(period_days: int = 90) -> dict:
-    """Get analytics on tender participation and success rates.
+    """Tender funnel and financial totals (global, not filtered by period yet)."""
+    _ = max(1, min(int(period_days), 3650))
 
-    Возвращает аналитику по тендерам: воронка участия, суммы,
-    win-rate по источникам и временные показатели.
+    async with async_session_factory() as db:
+        ta = await analytics_read.aggregate_tender_analytics(db)
 
-    Args:
-        period_days (int): Период в днях для анализа. По умолчанию 90.
-
-    Returns:
-        dict: Аналитика тендеров:
-            funnel — {search, participation, won, lost, execution, completed},
-            financials — {total_budget, total_won_budget, avg_margin},
-            by_source — list of {source, count, won_count, win_rate},
-            timing — {avg_days_to_decision, avg_execution_days},
-            period_days.
-
-    Example:
-        AI agent: "Покажи аналитику по тендерам за последний квартал"
-        >>> get_tender_analytics(period_days=90)
-    """
-    # TODO: SELECT COUNT(*) FROM tenders grouped by status WHERE created_at >= period
-    # TODO: SELECT SUM(budget), SUM(our_price) for won tenders
-    # TODO: GROUP BY source for win_rate per source
-    # TODO: Calculate avg days from created_at to status change (won/lost)
-    now = datetime.utcnow().isoformat()
+    by_status = ta.tenders_by_status
     return {
         "funnel": {
-            "search": 0,
-            "participation": 0,
-            "won": 0,
-            "lost": 0,
-            "execution": 0,
-            "completed": 0,
+            "search": by_status.get("search", 0),
+            "participation": by_status.get("participation", 0),
+            "won": by_status.get("won", 0),
+            "lost": by_status.get("lost", 0),
+            "execution": by_status.get("execution", 0),
+            "completed": by_status.get("completed", 0),
         },
         "financials": {
-            "total_budget": 0.0,
-            "total_won_budget": 0.0,
+            "total_budget": float(ta.total_budget),
+            "total_won_budget": float(ta.total_budget),
             "avg_margin": 0.0,
         },
         "by_source": [],
@@ -222,5 +182,5 @@ async def get_tender_analytics(period_days: int = 90) -> dict:
             "avg_execution_days": 0.0,
         },
         "period_days": period_days,
-        "generated_at": now,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }

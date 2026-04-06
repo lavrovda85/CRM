@@ -1,4 +1,4 @@
-"""Custom exception hierarchy for the HVAC CRM platform.
+"""Custom exception hierarchy for the SPEC CRM platform.
 
 Все доменные исключения наследуются от HVACBaseError и перехватываются
 единым обработчиком на уровне FastAPI middleware.
@@ -87,6 +87,30 @@ class WorkflowTransitionError(HVACBaseError):
         )
 
 
+class TenderTransitionError(HVACBaseError):
+    """Raised when a tender pipeline transition is not allowed.
+
+    Attributes:
+        tender_id: Tender UUID string.
+        from_status: Current tender status.
+        to_status: Requested status.
+        reason: Why the transition was rejected.
+    """
+
+    def __init__(self, tender_id: str, from_status: str, to_status: str, reason: str) -> None:
+        super().__init__(
+            message=f"Tender transition '{from_status}' -> '{to_status}' denied: {reason}",
+            code="TENDER_TRANSITION_DENIED",
+            status_code=409,
+            details={
+                "tender_id": tender_id,
+                "from_status": from_status,
+                "to_status": to_status,
+                "reason": reason,
+            },
+        )
+
+
 class AuthorizationError(HVACBaseError):
     """Raised when the current user lacks required permissions.
 
@@ -154,4 +178,16 @@ class ExternalServiceError(HVACBaseError):
             code="EXTERNAL_SERVICE_ERROR",
             status_code=502,
             details={"service": service, "operation": operation},
+        )
+
+
+class AiAssistantUnavailableError(HVACBaseError):
+    """Raised when the OpenAI-backed assistant is not configured or disabled."""
+
+    def __init__(self, message: str = "AI assistant is not configured") -> None:
+        super().__init__(
+            message=message,
+            code="AI_ASSISTANT_UNAVAILABLE",
+            status_code=503,
+            details={},
         )

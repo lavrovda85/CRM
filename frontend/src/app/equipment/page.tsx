@@ -20,18 +20,18 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 const statusConfig: Record<EquipmentStatus, { label: string; classes: string }> = {
-  active: { label: "Active", classes: "bg-green-50 text-green-700" },
-  maintenance: { label: "Maintenance", classes: "bg-amber-50 text-amber-700" },
-  written_off: { label: "Written Off", classes: "bg-surface-100 text-surface-500" },
-  lost: { label: "Lost", classes: "bg-red-50 text-red-700" },
+  active: { label: "Активно", classes: "bg-green-50 text-green-700" },
+  maintenance: { label: "На обслуживании", classes: "bg-amber-50 text-amber-700" },
+  written_off: { label: "Списано", classes: "bg-surface-100 text-surface-500" },
+  lost: { label: "Утеряно", classes: "bg-red-50 text-red-700" },
 };
 
 const categoryLabels: Record<string, string> = {
-  power_tool: "Power Tool",
-  measuring: "Measuring",
-  hand_tool: "Hand Tool",
-  safety: "Safety",
-  vehicle: "Vehicle",
+  power_tool: "Электроинструмент",
+  measuring: "Измерительное",
+  hand_tool: "Ручной инструмент",
+  safety: "Безопасность",
+  vehicle: "Транспорт",
 };
 
 export default function EquipmentPage() {
@@ -64,7 +64,7 @@ export default function EquipmentPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
-        <h1 className="text-2xl font-bold">Equipment</h1>
+        <h1 className="text-2xl font-bold">Оборудование</h1>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-48" />
@@ -78,12 +78,12 @@ export default function EquipmentPage() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Equipment</h1>
+        <h1 className="text-2xl font-bold">Оборудование</h1>
         <button
           onClick={() => setFiltersOpen((o) => !o)}
           className={`btn-ghost gap-1.5 ${filtersOpen ? "bg-surface-100" : ""}`}
         >
-          <Filter className="h-4 w-4" /> Filters
+          <Filter className="h-4 w-4" /> Фильтры
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
       </div>
@@ -96,7 +96,7 @@ export default function EquipmentPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="">All statuses</option>
+            <option value="">Все статусы</option>
             {Object.entries(statusConfig).map(([k, v]) => (
               <option key={k} value={k}>{v.label}</option>
             ))}
@@ -106,7 +106,7 @@ export default function EquipmentPage() {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
-            <option value="">All categories</option>
+            <option value="">Все категории</option>
             {Object.entries(categoryLabels).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -116,7 +116,7 @@ export default function EquipmentPage() {
               onClick={() => { setStatusFilter(""); setCategoryFilter(""); }}
               className="btn-ghost btn-sm text-red-600 gap-1"
             >
-              <X className="h-3.5 w-3.5" /> Clear
+              <X className="h-3.5 w-3.5" /> Сбросить
             </button>
           )}
         </div>
@@ -126,7 +126,7 @@ export default function EquipmentPage() {
       <div className="card p-6 text-center">
         <div className="flex items-center justify-center gap-2 text-surface-400">
           <BarChart3 className="h-8 w-8" />
-          <span className="text-sm">Depreciation chart will be displayed here</span>
+          <span className="text-sm">Здесь будет отображён график амортизации</span>
         </div>
       </div>
 
@@ -150,7 +150,7 @@ export default function EquipmentPage() {
 
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-surface-500">Category</span>
+                  <span className="text-surface-500">Категория</span>
                   <span className="badge bg-surface-100 text-surface-600">
                     {categoryLabels[eq.category] ?? eq.category}
                   </span>
@@ -158,7 +158,7 @@ export default function EquipmentPage() {
 
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-1 text-surface-500">
-                    <DollarSign className="h-3.5 w-3.5" /> Current Value
+                    <DollarSign className="h-3.5 w-3.5" /> Текущая стоимость
                   </span>
                   <span className="font-medium">₽{Number(eq.current_value).toLocaleString("ru-RU")}</span>
                 </div>
@@ -166,7 +166,7 @@ export default function EquipmentPage() {
                 {/* Depreciation Bar */}
                 <div>
                   <div className="flex items-center justify-between text-xs text-surface-400">
-                    <span>Remaining value</span>
+                    <span>Остаточная стоимость</span>
                     <span>{depreciationPct}%</span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-100">
@@ -181,7 +181,7 @@ export default function EquipmentPage() {
 
                 {eq.assigned_to && (
                   <div className="flex items-center gap-1 text-xs text-surface-500">
-                    <User className="h-3.5 w-3.5" /> Assigned
+                    <User className="h-3.5 w-3.5" /> Назначено
                   </div>
                 )}
                 {eq.location && (
@@ -191,7 +191,7 @@ export default function EquipmentPage() {
                 )}
                 <div className="flex items-center gap-1 text-xs text-surface-400">
                   <Calendar className="h-3.5 w-3.5" />
-                  Purchased: {new Date(eq.purchase_date).toLocaleDateString("ru-RU")}
+                  Приобретено: {new Date(eq.purchase_date).toLocaleDateString("ru-RU")}
                 </div>
               </div>
             </div>
@@ -199,7 +199,7 @@ export default function EquipmentPage() {
         })}
         {filtered.length === 0 && (
           <div className="col-span-full py-12 text-center text-surface-400">
-            No equipment found
+            Оборудование не найдено
           </div>
         )}
       </div>

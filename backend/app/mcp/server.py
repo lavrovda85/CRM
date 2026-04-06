@@ -1,4 +1,4 @@
-"""MCP server entry point for HVAC CRM/ERP platform.
+"""MCP server entry point for SPEC CRM platform.
 
 Инициализирует FastMCP сервер и регистрирует все инструменты
 из app.mcp.tools.* для управления платформой через AI-агентов.
@@ -14,8 +14,9 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
-    "HVAC CRM/ERP",
-    description="MCP server for HVAC CRM/ERP platform management by AI agents",
+    name="SPEC CRM",
+    instructions="MCP server for SPEC CRM platform management by AI agents. "
+    "Provides tools to manage tasks, clients, deals, tenders, warehouse, equipment, and analytics.",
 )
 
 import app.mcp.tools.task_tools  # noqa: E402, F401
@@ -24,6 +25,9 @@ import app.mcp.tools.crm_tools  # noqa: E402, F401
 import app.mcp.tools.tender_tools  # noqa: E402, F401
 import app.mcp.tools.warehouse_tools  # noqa: E402, F401
 import app.mcp.tools.analytics_tools  # noqa: E402, F401
+import app.mcp.tools.chat_tools  # noqa: E402, F401
+import app.mcp.tools.board_tools  # noqa: E402, F401
+import app.mcp.tools.user_tools  # noqa: E402, F401
 
 
 def main() -> None:

@@ -64,9 +64,9 @@ export default function ClientsPage() {
     <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Clients</h1>
+        <h1 className="text-2xl font-bold">Клиенты</h1>
         <button onClick={() => setShowCreate(true)} className="btn-primary gap-1.5">
-          <Plus className="h-4 w-4" /> Add Client
+          <Plus className="h-4 w-4" /> Добавить клиента
         </button>
       </div>
 
@@ -75,7 +75,7 @@ export default function ClientsPage() {
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
         <input
           type="text"
-          placeholder="Search clients by name, phone or email..."
+          placeholder="Поиск клиентов по имени, телефону или email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="input pl-10"
@@ -95,12 +95,12 @@ export default function ClientsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-100 text-left text-surface-500">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Type</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Phone</th>
+                  <th className="px-4 py-3 font-medium">Имя</th>
+                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Тип</th>
+                  <th className="hidden px-4 py-3 font-medium md:table-cell">Телефон</th>
                   <th className="hidden px-4 py-3 font-medium md:table-cell">Email</th>
-                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Contacts</th>
-                  <th className="px-4 py-3 font-medium">Created</th>
+                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Контакты</th>
+                  <th className="px-4 py-3 font-medium">Создан</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-50">
@@ -117,9 +117,9 @@ export default function ClientsPage() {
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <span className="badge bg-surface-100 text-surface-600 gap-1">
                         {client.client_type === "organization" ? (
-                          <><Building2 className="h-3 w-3" /> Org</>
+                          <><Building2 className="h-3 w-3" /> Организация</>
                         ) : (
-                          <><User className="h-3 w-3" /> Individual</>
+                          <><User className="h-3 w-3" /> Физ. лицо</>
                         )}
                       </span>
                     </td>
@@ -155,7 +155,7 @@ export default function ClientsPage() {
                 {clients.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
-                      {search ? "No clients match your search" : "No clients yet"}
+                      {search ? "Клиенты не найдены" : "Клиентов пока нет"}
                     </td>
                   </tr>
                 )}
@@ -164,7 +164,7 @@ export default function ClientsPage() {
           </div>
           {total > clients.length && (
             <div className="border-t border-surface-100 p-3 text-center text-sm text-surface-400">
-              Showing {clients.length} of {total}
+              Показано {clients.length} из {total}
             </div>
           )}
         </div>
@@ -178,36 +178,36 @@ export default function ClientsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">New Client</h2>
+              <h2 className="text-lg font-bold">Новый клиент</h2>
               <button onClick={() => setShowCreate(false)} className="btn-ghost p-1.5">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-surface-700">Name *</label>
+                <label className="mb-1 block text-sm font-medium text-surface-700">Имя *</label>
                 <input
                   type="text"
                   className="input"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Client name"
+                  placeholder="Имя клиента"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-surface-700">Type</label>
+                <label className="mb-1 block text-sm font-medium text-surface-700">Тип</label>
                 <select
                   className="input"
                   value={form.client_type}
                   onChange={(e) => setForm({ ...form, client_type: e.target.value })}
                 >
-                  <option value="individual">Individual</option>
-                  <option value="organization">Organization</option>
+                  <option value="individual">Физ. лицо</option>
+                  <option value="organization">Организация</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-surface-700">Phone</label>
+                  <label className="mb-1 block text-sm font-medium text-surface-700">Телефон</label>
                   <input
                     type="tel"
                     className="input"
@@ -229,9 +229,9 @@ export default function ClientsPage() {
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Отмена</button>
               <button onClick={handleCreate} disabled={creating || !form.name.trim()} className="btn-primary flex-1">
-                {creating ? "Creating..." : "Create Client"}
+                {creating ? "Создание..." : "Создать клиента"}
               </button>
             </div>
           </div>

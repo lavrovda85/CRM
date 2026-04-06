@@ -34,11 +34,28 @@ class User(BaseModel):
     phone: Mapped[str] = mapped_column(String(50), nullable=True)
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="engineer")
     position: Mapped[str] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     telegram_chat_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     salary_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assigned_to")
+    co_assigned_tasks = relationship(
+        "Task",
+        secondary="task_co_assignees",
+        back_populates="co_assignees",
+    )
+    observed_tasks = relationship(
+        "Task",
+        secondary="task_observers",
+        back_populates="observers",
+    )
     time_entries = relationship("TimeEntry", back_populates="user")
     comments = relationship("Comment", back_populates="author")
+    chat_messages = relationship("ChatMessage", back_populates="sender")
+    company_memberships = relationship(
+        "UserCompanyMembership",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

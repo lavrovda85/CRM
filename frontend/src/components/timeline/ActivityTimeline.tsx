@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
+import { ru } from "date-fns/locale";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -67,7 +68,7 @@ export function ActivityTimeline({ entries, className }: ActivityTimelineProps) 
   if (entries.length === 0) {
     return (
       <p className={cn("text-sm text-surface-400 py-6 text-center", className)}>
-        No activity yet
+        Нет активности
       </p>
     );
   }
@@ -84,7 +85,7 @@ export function ActivityTimeline({ entries, className }: ActivityTimelineProps) 
 
           let relativeTime: string;
           try {
-            relativeTime = formatDistanceToNow(parseISO(entry.timestamp), { addSuffix: true });
+            relativeTime = formatDistanceToNow(parseISO(entry.timestamp), { addSuffix: true, locale: ru });
           } catch {
             relativeTime = entry.timestamp;
           }
@@ -105,7 +106,7 @@ export function ActivityTimeline({ entries, className }: ActivityTimelineProps) 
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <p className="text-sm font-medium text-surface-800">{entry.title}</p>
                   {entry.actor && (
-                    <span className="text-xs text-surface-400">by {entry.actor}</span>
+                    <span className="text-xs text-surface-400">— {entry.actor}</span>
                   )}
                 </div>
 

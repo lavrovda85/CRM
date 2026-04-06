@@ -10,10 +10,10 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class TimeEntry(BaseModel):
+class TimeEntry(TenantMixin, BaseModel):
     """Work time record linked to a task and user.
 
     Атрибуты:

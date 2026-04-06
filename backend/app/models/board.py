@@ -10,10 +10,10 @@ from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Board(BaseModel):
+class Board(TenantMixin, BaseModel):
     """Kanban/Scrum board for grouping and visualizing tasks.
 
     Атрибуты:

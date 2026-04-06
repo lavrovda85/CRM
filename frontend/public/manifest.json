@@ -1,7 +1,7 @@
 {
-  "name": "HVAC CRM/ERP",
-  "short_name": "HVAC CRM",
-  "description": "HVAC service company management platform",
+  "name": "SPEC CRM",
+  "short_name": "SPEC CRM",
+  "description": "Платформа управления сервисной компанией",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

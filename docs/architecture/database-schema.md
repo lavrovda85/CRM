@@ -1,8 +1,8 @@
-# Database Schema
+# Схема базы данных
 
-PostgreSQL 16 is the primary data store. All tables share a common pattern: UUID primary key (`id`), `created_at`, and `updated_at` timestamps provided by the `BaseModel` mixin.
+PostgreSQL 16 является основным хранилищем данных. Все таблицы имеют общий паттерн: UUID первичный ключ (`id`), временные метки `created_at` и `updated_at`, предоставляемые миксином `BaseModel`.
 
-## Entity-Relationship Overview
+## Обзор связей между сущностями
 
 ```
 ┌────────────────┐       ┌───────────────────┐       ┌────────────────┐
@@ -34,559 +34,559 @@ PostgreSQL 16 is the primary data store. All tables share a common pattern: UUID
 Checklists TimeEntries Documents Comments WarehouseReservations
 ```
 
-## Entities
+## Сущности
 
 ### users
 
-| Column           | Type         | Nullable | Description                                    |
-|------------------|-------------|----------|------------------------------------------------|
-| `id`             | UUID PK     | No       | Auto-generated UUID                            |
-| `keycloak_id`    | VARCHAR(255)| No       | Keycloak subject ID (unique, indexed)          |
-| `email`          | VARCHAR(255)| No       | Unique, indexed                                |
-| `full_name`      | VARCHAR(255)| No       | Display name                                   |
-| `phone`          | VARCHAR(50) | Yes      | Phone number                                   |
-| `role`           | VARCHAR(50) | No       | Primary role (admin, manager, engineer, etc.)  |
-| `position`       | VARCHAR(255)| Yes      | Job title                                      |
-| `telegram_chat_id`| VARCHAR(100)| Yes     | Telegram chat ID for notifications             |
-| `salary_config`  | JSONB       | No       | Salary calculation parameters (see below)      |
-| `is_active`      | BOOLEAN     | No       | Soft-delete flag                               |
-| `notes`          | TEXT        | Yes      | Internal notes                                 |
-| `created_at`     | TIMESTAMPTZ | No       | server_default: now()                          |
-| `updated_at`     | TIMESTAMPTZ | No       | server_default: now(), onupdate: now()         |
+| Колонка           | Тип          | Nullable | Описание                                     |
+|-------------------|-------------|----------|----------------------------------------------|
+| `id`              | UUID PK     | Нет      | Автоматически сгенерированный UUID           |
+| `keycloak_id`     | VARCHAR(255)| Нет      | Идентификатор субъекта Keycloak (уникальный, индексированный) |
+| `email`           | VARCHAR(255)| Нет      | Уникальный, индексированный                  |
+| `full_name`       | VARCHAR(255)| Нет      | Отображаемое имя                             |
+| `phone`           | VARCHAR(50) | Да       | Номер телефона                               |
+| `role`            | VARCHAR(50) | Нет      | Основная роль (admin, manager, engineer и др.) |
+| `position`        | VARCHAR(255)| Да       | Должность                                    |
+| `telegram_chat_id`| VARCHAR(100)| Да       | ID чата Telegram для уведомлений             |
+| `salary_config`   | JSONB       | Нет      | Параметры расчёта заработной платы (см. ниже) |
+| `is_active`       | BOOLEAN     | Нет      | Флаг мягкого удаления                        |
+| `notes`           | TEXT        | Да       | Внутренние заметки                           |
+| `created_at`      | TIMESTAMPTZ | Нет      | server_default: now()                        |
+| `updated_at`      | TIMESTAMPTZ | Нет      | server_default: now(), onupdate: now()       |
 
-**Indexes:** `keycloak_id` (unique), `email` (unique)
+**Индексы:** `keycloak_id` (уникальный), `email` (уникальный)
 
-**Relationships:** → assigned_tasks (Task), → time_entries (TimeEntry), → comments (Comment)
+**Связи:** → assigned_tasks (Task), → time_entries (TimeEntry), → comments (Comment)
 
 ---
 
 ### clients
 
-| Column        | Type         | Nullable | Description                             |
-|---------------|-------------|----------|-----------------------------------------|
-| `id`          | UUID PK     | No       | Auto-generated UUID                     |
-| `name`        | VARCHAR(500)| No       | Client / organization name (indexed)    |
-| `client_type` | VARCHAR(50) | No       | `individual` or `organization`          |
-| `address`     | TEXT        | Yes      | Primary address                         |
-| `coordinates` | JSONB       | Yes      | GPS coordinates `{lat, lng}`            |
-| `phone`       | VARCHAR(50) | Yes      | Primary phone                           |
-| `email`       | VARCHAR(255)| Yes      | Email address                           |
-| `inn`         | VARCHAR(20) | Yes      | Tax ID (for organizations)              |
-| `metadata`    | JSONB       | No       | Extensible metadata                     |
-| `notes`       | TEXT        | Yes      | Manager notes                           |
-| `created_at`  | TIMESTAMPTZ | No       |                                         |
-| `updated_at`  | TIMESTAMPTZ | No       |                                         |
+| Колонка        | Тип          | Nullable | Описание                                 |
+|----------------|-------------|----------|------------------------------------------|
+| `id`           | UUID PK     | Нет      | Автоматически сгенерированный UUID       |
+| `name`         | VARCHAR(500)| Нет      | Имя клиента / название организации (индексировано) |
+| `client_type`  | VARCHAR(50) | Нет      | `individual` или `organization`          |
+| `address`      | TEXT        | Да       | Основной адрес                           |
+| `coordinates`  | JSONB       | Да       | GPS-координаты `{lat, lng}`              |
+| `phone`        | VARCHAR(50) | Да       | Основной телефон                         |
+| `email`        | VARCHAR(255)| Да       | Адрес электронной почты                  |
+| `inn`          | VARCHAR(20) | Да       | ИНН (для организаций)                    |
+| `metadata`     | JSONB       | Нет      | Расширяемые метаданные                   |
+| `notes`        | TEXT        | Да       | Заметки менеджера                        |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `name`
+**Индексы:** `name`
 
-**Relationships:** → contacts (ClientContact), → deals (Deal), → tasks (Task)
+**Связи:** → contacts (ClientContact), → deals (Deal), → tasks (Task)
 
 ---
 
 ### client_contacts
 
-| Column       | Type         | Nullable | Description                        |
-|-------------|-------------|----------|------------------------------------|
-| `id`         | UUID PK     | No       |                                    |
-| `client_id`  | UUID FK     | No       | → clients.id (CASCADE)            |
-| `full_name`  | VARCHAR(255)| No       | Contact person name                |
-| `position`   | VARCHAR(255)| Yes      | Job position                       |
-| `phone`      | VARCHAR(50) | Yes      |                                    |
-| `email`      | VARCHAR(255)| Yes      |                                    |
-| `is_primary` | BOOLEAN     | No       | Primary contact flag               |
-| `created_at` | TIMESTAMPTZ | No       |                                    |
-| `updated_at` | TIMESTAMPTZ | No       |                                    |
+| Колонка       | Тип          | Nullable | Описание                           |
+|--------------|-------------|----------|------------------------------------|
+| `id`          | UUID PK     | Нет      |                                    |
+| `client_id`   | UUID FK     | Нет      | → clients.id (CASCADE)            |
+| `full_name`   | VARCHAR(255)| Нет      | ФИО контактного лица               |
+| `position`    | VARCHAR(255)| Да       | Должность                          |
+| `phone`       | VARCHAR(50) | Да       |                                    |
+| `email`       | VARCHAR(255)| Да       |                                    |
+| `is_primary`  | BOOLEAN     | Нет      | Флаг основного контакта            |
+| `created_at`  | TIMESTAMPTZ | Нет      |                                    |
+| `updated_at`  | TIMESTAMPTZ | Нет      |                                    |
 
-**Indexes:** `client_id`
+**Индексы:** `client_id`
 
 ---
 
 ### deal_stages
 
-| Column    | Type         | Nullable | Description                           |
-|-----------|-------------|----------|---------------------------------------|
-| `id`      | UUID PK     | No       |                                       |
-| `name`    | VARCHAR(100)| No       | Stage name                            |
-| `order`   | INTEGER     | No       | Position in pipeline                  |
-| `color`   | VARCHAR(7)  | No       | HEX color for UI (default `#6366f1`) |
-| `is_won`  | BOOLEAN     | No       | Marks the "won" stage                 |
-| `is_lost` | BOOLEAN     | No       | Marks the "lost" stage                |
-| `created_at`| TIMESTAMPTZ| No      |                                       |
-| `updated_at`| TIMESTAMPTZ| No      |                                       |
+| Колонка     | Тип          | Nullable | Описание                              |
+|-------------|-------------|----------|---------------------------------------|
+| `id`        | UUID PK     | Нет      |                                       |
+| `name`      | VARCHAR(100)| Нет      | Название стадии                       |
+| `order`     | INTEGER     | Нет      | Позиция в воронке                     |
+| `color`     | VARCHAR(7)  | Нет      | HEX-цвет для UI (по умолчанию `#6366f1`) |
+| `is_won`    | BOOLEAN     | Нет      | Отмечает стадию «выиграно»            |
+| `is_lost`   | BOOLEAN     | Нет      | Отмечает стадию «проиграно»           |
+| `created_at`| TIMESTAMPTZ | Нет      |                                       |
+| `updated_at`| TIMESTAMPTZ | Нет      |                                       |
 
 ---
 
 ### deals
 
-| Column          | Type          | Nullable | Description                         |
-|-----------------|--------------|----------|-------------------------------------|
-| `id`            | UUID PK      | No       |                                     |
-| `client_id`     | UUID FK      | No       | → clients.id (indexed)             |
-| `title`         | VARCHAR(500) | No       | Deal title                          |
-| `description`   | TEXT         | Yes      |                                     |
-| `amount`        | NUMERIC(15,2)| No       | Deal value                          |
-| `stage_id`      | UUID FK      | No       | → deal_stages.id (indexed)         |
-| `assigned_to`   | UUID FK      | Yes      | → users.id (indexed)               |
-| `expected_close` | DATE        | Yes      | Expected close date                 |
-| `source`        | VARCHAR(100) | Yes      | Lead source                         |
-| `created_at`    | TIMESTAMPTZ  | No       |                                     |
-| `updated_at`    | TIMESTAMPTZ  | No       |                                     |
+| Колонка          | Тип          | Nullable | Описание                            |
+|------------------|-------------|----------|-------------------------------------|
+| `id`             | UUID PK     | Нет      |                                     |
+| `client_id`      | UUID FK     | Нет      | → clients.id (индексировано)       |
+| `title`          | VARCHAR(500)| Нет      | Название сделки                     |
+| `description`    | TEXT        | Да       |                                     |
+| `amount`         | NUMERIC(15,2)| Нет     | Сумма сделки                        |
+| `stage_id`       | UUID FK     | Нет      | → deal_stages.id (индексировано)   |
+| `assigned_to`    | UUID FK     | Да       | → users.id (индексировано)         |
+| `expected_close` | DATE        | Да       | Ожидаемая дата закрытия             |
+| `source`         | VARCHAR(100)| Да       | Источник лида                       |
+| `created_at`     | TIMESTAMPTZ | Нет      |                                     |
+| `updated_at`     | TIMESTAMPTZ | Нет      |                                     |
 
-**Indexes:** `client_id`, `stage_id`, `assigned_to`
+**Индексы:** `client_id`, `stage_id`, `assigned_to`
 
 ---
 
 ### tenders
 
-| Column              | Type          | Nullable | Description                              |
-|---------------------|--------------|----------|------------------------------------------|
-| `id`                | UUID PK      | No       |                                          |
-| `title`             | VARCHAR(500) | No       | Tender title (indexed)                   |
-| `description`       | TEXT         | Yes      |                                          |
-| `source`            | VARCHAR(255) | Yes      | Source platform / customer               |
-| `budget`            | NUMERIC(15,2)| Yes      | Tender budget                            |
-| `our_price`         | NUMERIC(15,2)| Yes      | Our bid amount                           |
-| `status`            | VARCHAR(50)  | No       | Lifecycle state (indexed)                |
-| `deadline`          | DATE         | Yes      | Bid submission deadline                  |
-| `execution_deadline` | DATE        | Yes      | Execution completion deadline            |
-| `assigned_to`       | UUID FK      | Yes      | → users.id (indexed)                    |
-| `requirements`      | JSONB        | No       | Tender requirements                      |
-| `documents_url`     | VARCHAR(1000)| Yes      | External docs link                       |
-| `notes`             | TEXT         | Yes      |                                          |
-| `created_at`        | TIMESTAMPTZ  | No       |                                          |
-| `updated_at`        | TIMESTAMPTZ  | No       |                                          |
+| Колонка              | Тип          | Nullable | Описание                                 |
+|----------------------|-------------|----------|------------------------------------------|
+| `id`                 | UUID PK     | Нет      |                                          |
+| `title`              | VARCHAR(500)| Нет      | Название тендера (индексировано)         |
+| `description`        | TEXT        | Да       |                                          |
+| `source`             | VARCHAR(255)| Да       | Площадка-источник / заказчик             |
+| `budget`             | NUMERIC(15,2)| Да     | Бюджет тендера                           |
+| `our_price`          | NUMERIC(15,2)| Да     | Наша ценовая заявка                      |
+| `status`             | VARCHAR(50) | Нет      | Состояние жизненного цикла (индексировано) |
+| `deadline`           | DATE        | Да       | Крайний срок подачи заявки               |
+| `execution_deadline` | DATE        | Да       | Крайний срок исполнения                  |
+| `assigned_to`        | UUID FK     | Да       | → users.id (индексировано)              |
+| `requirements`       | JSONB       | Нет      | Требования тендера                       |
+| `documents_url`      | VARCHAR(1000)| Да     | Ссылка на внешние документы              |
+| `notes`              | TEXT        | Да       |                                          |
+| `created_at`         | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`         | TIMESTAMPTZ | Нет      |                                          |
 
-**Status values:** `search`, `participation`, `won`, `lost`, `execution`, `completed`
+**Допустимые значения status:** `search`, `participation`, `won`, `lost`, `execution`, `completed`
 
-**Indexes:** `title`, `status`, `assigned_to`
+**Индексы:** `title`, `status`, `assigned_to`
 
 ---
 
 ### task_templates
 
-| Column               | Type         | Nullable | Description                                   |
-|----------------------|-------------|----------|-----------------------------------------------|
-| `id`                 | UUID PK     | No       |                                               |
-| `name`               | VARCHAR(255)| No       | Template name (indexed)                       |
-| `category`           | VARCHAR(100)| No       | Category (indexed)                            |
-| `description`        | TEXT        | Yes      |                                               |
-| `workflow_definition`| JSONB       | No       | FSM definition (see JSONB section below)      |
-| `required_fields`    | JSONB       | No       | Field definitions                             |
-| `sla_config`         | JSONB       | No       | SLA parameters                                |
-| `auto_warehouse`     | JSONB       | No       | Auto-deduction rules                          |
-| `required_documents` | JSONB       | No       | Document requirements per stage               |
-| `is_active`          | BOOLEAN     | No       | Active template flag                          |
-| `created_at`         | TIMESTAMPTZ | No       |                                               |
-| `updated_at`         | TIMESTAMPTZ | No       |                                               |
+| Колонка                | Тип          | Nullable | Описание                                        |
+|------------------------|-------------|----------|-------------------------------------------------|
+| `id`                   | UUID PK     | Нет      |                                                 |
+| `name`                 | VARCHAR(255)| Нет      | Название шаблона (индексировано)                |
+| `category`             | VARCHAR(100)| Нет      | Категория (индексировано)                       |
+| `description`          | TEXT        | Да       |                                                 |
+| `workflow_definition`  | JSONB       | Нет      | Определение конечного автомата (см. раздел JSONB ниже) |
+| `required_fields`      | JSONB       | Нет      | Определения полей                               |
+| `sla_config`           | JSONB       | Нет      | Параметры SLA                                   |
+| `auto_warehouse`       | JSONB       | Нет      | Правила автоматического списания                |
+| `required_documents`   | JSONB       | Нет      | Требования к документам по стадиям              |
+| `is_active`            | BOOLEAN     | Нет      | Флаг активности шаблона                         |
+| `created_at`           | TIMESTAMPTZ | Нет      |                                                 |
+| `updated_at`           | TIMESTAMPTZ | Нет      |                                                 |
 
-**Category values:** `installation`, `maintenance`, `repair`, `inspection`, `general`
+**Допустимые значения category:** `installation`, `maintenance`, `repair`, `inspection`, `general`
 
-**Indexes:** `name`, `category`
+**Индексы:** `name`, `category`
 
-**Relationships:** → stages (TemplateStage), → checklists (TemplateChecklist), → fields (TemplateField), → tasks (Task)
+**Связи:** → stages (TemplateStage), → checklists (TemplateChecklist), → fields (TemplateField), → tasks (Task)
 
 ---
 
 ### template_stages
 
-| Column        | Type         | Nullable | Description                       |
-|---------------|-------------|----------|-----------------------------------|
-| `id`          | UUID PK     | No       |                                   |
-| `template_id` | UUID FK     | No       | → task_templates.id (CASCADE)    |
-| `name`        | VARCHAR(255)| No       | Stage display name                |
-| `status_id`   | VARCHAR(100)| No       | Matches workflow_definition state |
-| `order`       | INTEGER     | No       | Display order                     |
-| `description` | TEXT        | Yes      |                                   |
+| Колонка        | Тип          | Nullable | Описание                              |
+|----------------|-------------|----------|---------------------------------------|
+| `id`           | UUID PK     | Нет      |                                       |
+| `template_id`  | UUID FK     | Нет      | → task_templates.id (CASCADE)        |
+| `name`         | VARCHAR(255)| Нет      | Отображаемое название стадии          |
+| `status_id`    | VARCHAR(100)| Нет      | Соответствует состоянию в workflow_definition |
+| `order`        | INTEGER     | Нет      | Порядок отображения                   |
+| `description`  | TEXT        | Да       |                                       |
 
-**Indexes:** `template_id`
+**Индексы:** `template_id`
 
 ---
 
 ### template_checklists
 
-| Column           | Type         | Nullable | Description                               |
-|------------------|-------------|----------|-------------------------------------------|
-| `id`             | UUID PK     | No       |                                           |
-| `template_id`    | UUID FK     | No       | → task_templates.id (CASCADE)            |
-| `checklist_id`   | VARCHAR(100)| No       | Unique key within template                |
-| `title`          | VARCHAR(255)| No       | Checklist display name                    |
-| `gate_transition`| VARCHAR(200)| Yes      | Blocked transition (`from->to`)           |
-| `items`          | JSONB       | No       | Array of item definitions                 |
+| Колонка           | Тип          | Nullable | Описание                                      |
+|-------------------|-------------|----------|-----------------------------------------------|
+| `id`              | UUID PK     | Нет      |                                               |
+| `template_id`     | UUID FK     | Нет      | → task_templates.id (CASCADE)                |
+| `checklist_id`    | VARCHAR(100)| Нет      | Уникальный ключ внутри шаблона               |
+| `title`           | VARCHAR(255)| Нет      | Отображаемое название чек-листа              |
+| `gate_transition` | VARCHAR(200)| Да       | Блокируемый переход (`from->to`)             |
+| `items`           | JSONB       | Нет      | Массив определений элементов                 |
 
-**Indexes:** `template_id`
+**Индексы:** `template_id`
 
 ---
 
 ### template_fields
 
-| Column         | Type         | Nullable | Description                                 |
-|----------------|-------------|----------|---------------------------------------------|
-| `id`           | UUID PK     | No       |                                             |
-| `template_id`  | UUID FK     | No       | → task_templates.id (CASCADE)              |
-| `key`          | VARCHAR(100)| No       | Machine-readable field name                 |
-| `label`        | VARCHAR(255)| No       | Human-readable label                        |
-| `field_type`   | VARCHAR(50) | No       | string, integer, decimal, enum, reference, address, date |
-| `is_required`  | BOOLEAN     | No       | Required field flag                         |
-| `options`      | JSONB       | Yes      | Options for enum type                       |
-| `ref_table`    | VARCHAR(100)| Yes      | Reference table for reference type          |
-| `default_value`| VARCHAR(500)| Yes      | Default value                               |
-| `order`        | INTEGER     | No       | Display order                               |
+| Колонка         | Тип          | Nullable | Описание                                        |
+|----------------|-------------|----------|-------------------------------------------------|
+| `id`            | UUID PK     | Нет      |                                                 |
+| `template_id`   | UUID FK     | Нет      | → task_templates.id (CASCADE)                  |
+| `key`           | VARCHAR(100)| Нет      | Машиночитаемое имя поля                        |
+| `label`         | VARCHAR(255)| Нет      | Человекочитаемая метка                         |
+| `field_type`    | VARCHAR(50) | Нет      | string, integer, decimal, enum, reference, address, date |
+| `is_required`   | BOOLEAN     | Нет      | Флаг обязательности                            |
+| `options`       | JSONB       | Да       | Варианты для типа enum                         |
+| `ref_table`     | VARCHAR(100)| Да       | Справочная таблица для типа reference          |
+| `default_value` | VARCHAR(500)| Да       | Значение по умолчанию                          |
+| `order`         | INTEGER     | Нет      | Порядок отображения                            |
 
-**Indexes:** `template_id`
+**Индексы:** `template_id`
 
 ---
 
 ### tasks
 
-| Column         | Type          | Nullable | Description                              |
-|----------------|--------------|----------|------------------------------------------|
-| `id`           | UUID PK      | No       |                                          |
-| `template_id`  | UUID FK      | Yes      | → task_templates.id (indexed)           |
-| `board_id`     | UUID FK      | Yes      | → boards.id (indexed)                   |
-| `client_id`    | UUID FK      | Yes      | → clients.id (indexed)                  |
-| `deal_id`      | UUID FK      | Yes      | → deals.id (indexed)                    |
-| `tender_id`    | UUID FK      | Yes      | → tenders.id (indexed)                  |
-| `assigned_to`  | UUID FK      | Yes      | → users.id (indexed)                    |
-| `created_by`   | UUID FK      | Yes      | → users.id                              |
-| `title`        | VARCHAR(500) | No       | Task title (indexed)                     |
-| `description`  | TEXT         | Yes      |                                          |
-| `status`       | VARCHAR(100) | No       | Current workflow state (indexed)         |
-| `priority`     | VARCHAR(20)  | No       | low, medium, high, critical (indexed)   |
-| `custom_fields`| JSONB        | No       | Template field values (see below)        |
-| `due_date`     | TIMESTAMPTZ  | Yes      | Deadline                                 |
-| `started_at`   | TIMESTAMPTZ  | Yes      | Actual start time                        |
-| `completed_at` | TIMESTAMPTZ  | Yes      | Actual completion time                   |
-| `sla_deadline` | TIMESTAMPTZ  | Yes      | SLA deadline (auto-calculated)           |
-| `created_at`   | TIMESTAMPTZ  | No       |                                          |
-| `updated_at`   | TIMESTAMPTZ  | No       |                                          |
+| Колонка         | Тип          | Nullable | Описание                                 |
+|----------------|-------------|----------|------------------------------------------|
+| `id`            | UUID PK     | Нет      |                                          |
+| `template_id`   | UUID FK     | Да       | → task_templates.id (индексировано)     |
+| `board_id`      | UUID FK     | Да       | → boards.id (индексировано)             |
+| `client_id`     | UUID FK     | Да       | → clients.id (индексировано)            |
+| `deal_id`       | UUID FK     | Да       | → deals.id (индексировано)              |
+| `tender_id`     | UUID FK     | Да       | → tenders.id (индексировано)            |
+| `assigned_to`   | UUID FK     | Да       | → users.id (индексировано)              |
+| `created_by`    | UUID FK     | Да       | → users.id                              |
+| `title`         | VARCHAR(500)| Нет      | Название задачи (индексировано)          |
+| `description`   | TEXT        | Да       |                                          |
+| `status`        | VARCHAR(100)| Нет      | Текущее состояние воркфлоу (индексировано) |
+| `priority`      | VARCHAR(20) | Нет      | low, medium, high, critical (индексировано) |
+| `custom_fields` | JSONB       | Нет      | Значения полей шаблона (см. ниже)        |
+| `due_date`      | TIMESTAMPTZ | Да       | Крайний срок                             |
+| `started_at`    | TIMESTAMPTZ | Да       | Фактическое время начала                 |
+| `completed_at`  | TIMESTAMPTZ | Да       | Фактическое время завершения             |
+| `sla_deadline`  | TIMESTAMPTZ | Да       | Крайний срок SLA (рассчитывается автоматически) |
+| `created_at`    | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`    | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `template_id`, `board_id`, `client_id`, `deal_id`, `tender_id`, `assigned_to`, `title`, `status`, `priority`
+**Индексы:** `template_id`, `board_id`, `client_id`, `deal_id`, `tender_id`, `assigned_to`, `title`, `status`, `priority`
 
-**Relationships:** → status_history, checklists, time_entries, documents, comments, reservations, equipment_usage
+**Связи:** → status_history, checklists, time_entries, documents, comments, reservations, equipment_usage
 
 ---
 
 ### task_status_history
 
-| Column           | Type         | Nullable | Description                          |
-|------------------|-------------|----------|--------------------------------------|
-| `id`             | UUID PK     | No       |                                      |
-| `task_id`        | UUID FK     | No       | → tasks.id (CASCADE, indexed)       |
-| `from_status`    | VARCHAR(100)| No       | Previous status                      |
-| `to_status`      | VARCHAR(100)| No       | New status                           |
-| `changed_by`     | UUID FK     | No       | → users.id                          |
-| `reason`         | TEXT        | Yes      | Transition comment                   |
-| `transition_data`| JSONB       | No       | Additional transition metadata       |
-| `created_at`     | TIMESTAMPTZ | No       |                                      |
-| `updated_at`     | TIMESTAMPTZ | No       |                                      |
+| Колонка           | Тип          | Nullable | Описание                                 |
+|-------------------|-------------|----------|------------------------------------------|
+| `id`              | UUID PK     | Нет      |                                          |
+| `task_id`         | UUID FK     | Нет      | → tasks.id (CASCADE, индексировано)     |
+| `from_status`     | VARCHAR(100)| Нет      | Предыдущий статус                        |
+| `to_status`       | VARCHAR(100)| Нет      | Новый статус                             |
+| `changed_by`      | UUID FK     | Нет      | → users.id                              |
+| `reason`          | TEXT        | Да       | Комментарий к переходу                   |
+| `transition_data` | JSONB       | Нет      | Дополнительные метаданные перехода       |
+| `created_at`      | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`      | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `task_id`
+**Индексы:** `task_id`
 
 ---
 
 ### boards
 
-| Column        | Type         | Nullable | Description                           |
-|---------------|-------------|----------|---------------------------------------|
-| `id`          | UUID PK     | No       |                                       |
-| `name`        | VARCHAR(255)| No       | Board name                            |
-| `description` | TEXT        | Yes      |                                       |
-| `board_type`  | VARCHAR(50) | No       | kanban, scrum, tender                 |
-| `owner_id`    | UUID FK     | Yes      | → users.id                           |
-| `columns`     | JSONB       | No       | Column definitions (status mapping)   |
-| `is_archived` | BOOLEAN     | No       | Archive flag                          |
-| `created_at`  | TIMESTAMPTZ | No       |                                       |
-| `updated_at`  | TIMESTAMPTZ | No       |                                       |
+| Колонка        | Тип          | Nullable | Описание                              |
+|----------------|-------------|----------|---------------------------------------|
+| `id`           | UUID PK     | Нет      |                                       |
+| `name`         | VARCHAR(255)| Нет      | Название доски                        |
+| `description`  | TEXT        | Да       |                                       |
+| `board_type`   | VARCHAR(50) | Нет      | kanban, scrum, tender                 |
+| `owner_id`     | UUID FK     | Да       | → users.id                           |
+| `columns`      | JSONB       | Нет      | Определения колонок (маппинг статусов) |
+| `is_archived`  | BOOLEAN     | Нет      | Флаг архивации                        |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                       |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                       |
 
 ---
 
 ### checklists
 
-| Column           | Type         | Nullable | Description                               |
-|------------------|-------------|----------|-------------------------------------------|
-| `id`             | UUID PK     | No       |                                           |
-| `task_id`        | UUID FK     | No       | → tasks.id (CASCADE, indexed)            |
-| `title`          | VARCHAR(255)| No       | Checklist name                            |
-| `gate_transition`| VARCHAR(200)| Yes      | Blocked transition key (`from->to`)       |
-| `is_completed`   | BOOLEAN     | No       | All items completed                       |
-| `created_at`     | TIMESTAMPTZ | No       |                                           |
-| `updated_at`     | TIMESTAMPTZ | No       |                                           |
+| Колонка           | Тип          | Nullable | Описание                                      |
+|-------------------|-------------|----------|-----------------------------------------------|
+| `id`              | UUID PK     | Нет      |                                               |
+| `task_id`         | UUID FK     | Нет      | → tasks.id (CASCADE, индексировано)          |
+| `title`           | VARCHAR(255)| Нет      | Название чек-листа                            |
+| `gate_transition` | VARCHAR(200)| Да       | Ключ блокируемого перехода (`from->to`)       |
+| `is_completed`    | BOOLEAN     | Нет      | Все элементы выполнены                        |
+| `created_at`      | TIMESTAMPTZ | Нет      |                                               |
+| `updated_at`      | TIMESTAMPTZ | Нет      |                                               |
 
-**Indexes:** `task_id`
+**Индексы:** `task_id`
 
 ---
 
 ### checklist_items
 
-| Column         | Type         | Nullable | Description                          |
+| Колонка         | Тип          | Nullable | Описание                             |
 |----------------|-------------|----------|--------------------------------------|
-| `id`           | UUID PK     | No       |                                      |
-| `checklist_id` | UUID FK     | No       | → checklists.id (CASCADE, indexed)  |
-| `title`        | VARCHAR(500)| No       | Item text                            |
-| `is_completed` | BOOLEAN     | No       | Completion flag                      |
-| `completed_by` | UUID FK     | Yes      | → users.id                          |
-| `completed_at` | TIMESTAMPTZ | Yes      | Completion timestamp                 |
-| `order`        | INTEGER     | No       | Display order                        |
-| `created_at`   | TIMESTAMPTZ | No       |                                      |
-| `updated_at`   | TIMESTAMPTZ | No       |                                      |
+| `id`            | UUID PK     | Нет      |                                      |
+| `checklist_id`  | UUID FK     | Нет      | → checklists.id (CASCADE, индексировано) |
+| `title`         | VARCHAR(500)| Нет      | Текст элемента                       |
+| `is_completed`  | BOOLEAN     | Нет      | Флаг выполнения                      |
+| `completed_by`  | UUID FK     | Да       | → users.id                          |
+| `completed_at`  | TIMESTAMPTZ | Да       | Временная метка выполнения           |
+| `order`         | INTEGER     | Нет      | Порядок отображения                  |
+| `created_at`    | TIMESTAMPTZ | Нет      |                                      |
+| `updated_at`    | TIMESTAMPTZ | Нет      |                                      |
 
-**Indexes:** `checklist_id`
+**Индексы:** `checklist_id`
 
 ---
 
 ### time_entries
 
-| Column            | Type         | Nullable | Description                         |
-|-------------------|-------------|----------|-------------------------------------|
-| `id`              | UUID PK     | No       |                                     |
-| `task_id`         | UUID FK     | No       | → tasks.id (CASCADE, indexed)      |
-| `user_id`         | UUID FK     | No       | → users.id (indexed)               |
-| `started_at`      | TIMESTAMPTZ | Yes      | Timer start                         |
-| `ended_at`        | TIMESTAMPTZ | Yes      | Timer end                           |
-| `duration_minutes`| INTEGER     | No       | Duration (calculated or manual)     |
-| `entry_type`      | VARCHAR(20) | No       | `timer` or `manual`                 |
-| `is_billable`     | BOOLEAN     | No       | Billable flag (default true)        |
-| `notes`           | TEXT        | Yes      |                                     |
-| `created_at`      | TIMESTAMPTZ | No       |                                     |
-| `updated_at`      | TIMESTAMPTZ | No       |                                     |
+| Колонка            | Тип          | Nullable | Описание                            |
+|--------------------|-------------|----------|-------------------------------------|
+| `id`               | UUID PK     | Нет      |                                     |
+| `task_id`          | UUID FK     | Нет      | → tasks.id (CASCADE, индексировано) |
+| `user_id`          | UUID FK     | Нет      | → users.id (индексировано)         |
+| `started_at`       | TIMESTAMPTZ | Да       | Начало таймера                      |
+| `ended_at`         | TIMESTAMPTZ | Да       | Конец таймера                       |
+| `duration_minutes` | INTEGER     | Нет      | Длительность (рассчитанная или введённая вручную) |
+| `entry_type`       | VARCHAR(20) | Нет      | `timer` или `manual`                |
+| `is_billable`      | BOOLEAN     | Нет      | Флаг оплачиваемости (по умолчанию true) |
+| `notes`            | TEXT        | Да       |                                     |
+| `created_at`       | TIMESTAMPTZ | Нет      |                                     |
+| `updated_at`       | TIMESTAMPTZ | Нет      |                                     |
 
-**Indexes:** `task_id`, `user_id`
+**Индексы:** `task_id`, `user_id`
 
 ---
 
 ### warehouse_items
 
-| Column             | Type          | Nullable | Description                          |
-|--------------------|--------------|----------|--------------------------------------|
-| `id`               | UUID PK      | No       |                                      |
-| `name`             | VARCHAR(500) | No       | Item name (indexed)                  |
-| `sku`              | VARCHAR(100) | No       | SKU code (unique, indexed)           |
-| `category`         | VARCHAR(100) | No       | materials, tools, consumables, equipment (indexed) |
-| `unit`             | VARCHAR(20)  | No       | Unit of measure (pcs, m, kg, l)      |
-| `quantity`         | NUMERIC(15,3)| No       | Current stock quantity               |
-| `reserved_quantity`| NUMERIC(15,3)| No       | Reserved for tasks                   |
-| `min_quantity`     | NUMERIC(15,3)| No       | Low-stock alert threshold            |
-| `price`            | NUMERIC(15,2)| No       | Unit price                           |
-| `description`      | TEXT         | Yes      |                                      |
-| `location`         | VARCHAR(255) | Yes      | Storage location                     |
-| `created_at`       | TIMESTAMPTZ  | No       |                                      |
-| `updated_at`       | TIMESTAMPTZ  | No       |                                      |
+| Колонка              | Тип          | Nullable | Описание                                 |
+|---------------------|-------------|----------|------------------------------------------|
+| `id`                 | UUID PK     | Нет      |                                          |
+| `name`               | VARCHAR(500)| Нет      | Название позиции (индексировано)         |
+| `sku`                | VARCHAR(100)| Нет      | Код SKU (уникальный, индексированный)    |
+| `category`           | VARCHAR(100)| Нет      | materials, tools, consumables, equipment (индексировано) |
+| `unit`               | VARCHAR(20) | Нет      | Единица измерения (шт, м, кг, л)        |
+| `quantity`           | NUMERIC(15,3)| Нет    | Текущий остаток на складе                |
+| `reserved_quantity`  | NUMERIC(15,3)| Нет    | Зарезервировано под задачи               |
+| `min_quantity`       | NUMERIC(15,3)| Нет    | Порог оповещения о низком остатке        |
+| `price`              | NUMERIC(15,2)| Нет    | Цена за единицу                          |
+| `description`        | TEXT        | Да       |                                          |
+| `location`           | VARCHAR(255)| Да       | Место хранения                           |
+| `created_at`         | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`         | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `name`, `sku` (unique), `category`
+**Индексы:** `name`, `sku` (уникальный), `category`
 
 ---
 
 ### warehouse_movements
 
-| Column         | Type          | Nullable | Description                              |
-|----------------|--------------|----------|------------------------------------------|
-| `id`           | UUID PK      | No       |                                          |
-| `item_id`      | UUID FK      | No       | → warehouse_items.id (indexed)          |
-| `task_id`      | UUID FK      | Yes      | → tasks.id (indexed)                    |
-| `user_id`      | UUID FK      | No       | → users.id                              |
-| `movement_type`| VARCHAR(50)  | No       | intake, consumption, write_off, transfer, return (indexed) |
-| `quantity`     | NUMERIC(15,3)| No       | Movement quantity (always positive)      |
-| `unit_price`   | NUMERIC(15,2)| Yes      | Price at movement time                   |
-| `reason`       | TEXT         | Yes      | Comment / reason                         |
-| `destination`  | VARCHAR(255) | Yes      | Transfer destination                     |
-| `created_at`   | TIMESTAMPTZ  | No       |                                          |
-| `updated_at`   | TIMESTAMPTZ  | No       |                                          |
+| Колонка         | Тип          | Nullable | Описание                                     |
+|----------------|-------------|----------|----------------------------------------------|
+| `id`            | UUID PK     | Нет      |                                              |
+| `item_id`       | UUID FK     | Нет      | → warehouse_items.id (индексировано)        |
+| `task_id`       | UUID FK     | Да       | → tasks.id (индексировано)                  |
+| `user_id`       | UUID FK     | Нет      | → users.id                                  |
+| `movement_type` | VARCHAR(50) | Нет      | intake, consumption, write_off, transfer, return (индексировано) |
+| `quantity`      | NUMERIC(15,3)| Нет    | Количество движения (всегда положительное)   |
+| `unit_price`    | NUMERIC(15,2)| Да     | Цена на момент движения                      |
+| `reason`        | TEXT        | Да       | Комментарий / причина                        |
+| `destination`   | VARCHAR(255)| Да       | Пункт назначения перемещения                 |
+| `created_at`    | TIMESTAMPTZ | Нет      |                                              |
+| `updated_at`    | TIMESTAMPTZ | Нет      |                                              |
 
-**Indexes:** `item_id`, `task_id`, `movement_type`
+**Индексы:** `item_id`, `task_id`, `movement_type`
 
 ---
 
 ### warehouse_reservations
 
-| Column     | Type          | Nullable | Description                               |
-|-----------|--------------|----------|-------------------------------------------|
-| `id`       | UUID PK      | No       |                                           |
-| `item_id`  | UUID FK      | No       | → warehouse_items.id (indexed)           |
-| `task_id`  | UUID FK      | No       | → tasks.id (indexed)                     |
-| `quantity` | NUMERIC(15,3)| No       | Reserved quantity                         |
-| `status`   | VARCHAR(50)  | No       | reserved, consumed, cancelled             |
-| `created_at`| TIMESTAMPTZ | No       |                                           |
-| `updated_at`| TIMESTAMPTZ | No       |                                           |
+| Колонка     | Тип          | Nullable | Описание                                  |
+|------------|-------------|----------|-------------------------------------------|
+| `id`        | UUID PK     | Нет      |                                           |
+| `item_id`   | UUID FK     | Нет      | → warehouse_items.id (индексировано)     |
+| `task_id`   | UUID FK     | Нет      | → tasks.id (индексировано)               |
+| `quantity`  | NUMERIC(15,3)| Нет    | Зарезервированное количество              |
+| `status`    | VARCHAR(50) | Нет      | reserved, consumed, cancelled             |
+| `created_at`| TIMESTAMPTZ | Нет      |                                           |
+| `updated_at`| TIMESTAMPTZ | Нет      |                                           |
 
-**Indexes:** `item_id`, `task_id`
+**Индексы:** `item_id`, `task_id`
 
 ---
 
 ### equipment
 
-| Column              | Type          | Nullable | Description                          |
-|---------------------|--------------|----------|--------------------------------------|
-| `id`                | UUID PK      | No       |                                      |
-| `name`              | VARCHAR(500) | No       | Equipment name (indexed)             |
-| `serial_number`     | VARCHAR(200) | No       | Serial number (unique, indexed)      |
-| `category`          | VARCHAR(100) | No       | power_tool, measuring, hand_tool, safety, vehicle (indexed) |
-| `purchase_price`    | NUMERIC(15,2)| No       | Original price                       |
-| `purchase_date`     | DATE         | No       |                                      |
-| `service_life_months`| INTEGER     | No       | Expected service life                |
-| `current_value`     | NUMERIC(15,2)| No       | Current book value                   |
-| `status`            | VARCHAR(50)  | No       | active, maintenance, written_off, lost (indexed) |
-| `assigned_to`       | UUID FK      | Yes      | → users.id                          |
-| `location`          | VARCHAR(255) | Yes      |                                      |
-| `notes`             | TEXT         | Yes      |                                      |
-| `created_at`        | TIMESTAMPTZ  | No       |                                      |
-| `updated_at`        | TIMESTAMPTZ  | No       |                                      |
+| Колонка               | Тип          | Nullable | Описание                                 |
+|----------------------|-------------|----------|------------------------------------------|
+| `id`                  | UUID PK     | Нет      |                                          |
+| `name`                | VARCHAR(500)| Нет      | Название оборудования (индексировано)    |
+| `serial_number`       | VARCHAR(200)| Нет      | Серийный номер (уникальный, индексированный) |
+| `category`            | VARCHAR(100)| Нет      | power_tool, measuring, hand_tool, safety, vehicle (индексировано) |
+| `purchase_price`      | NUMERIC(15,2)| Нет    | Закупочная стоимость                     |
+| `purchase_date`       | DATE        | Нет      |                                          |
+| `service_life_months` | INTEGER     | Нет      | Ожидаемый срок эксплуатации              |
+| `current_value`       | NUMERIC(15,2)| Нет    | Текущая балансовая стоимость             |
+| `status`              | VARCHAR(50) | Нет      | active, maintenance, written_off, lost (индексировано) |
+| `assigned_to`         | UUID FK     | Да       | → users.id                              |
+| `location`            | VARCHAR(255)| Да       |                                          |
+| `notes`               | TEXT        | Да       |                                          |
+| `created_at`          | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`          | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `name`, `serial_number` (unique), `category`, `status`
+**Индексы:** `name`, `serial_number` (уникальный), `category`, `status`
 
 ---
 
 ### equipment_usage
 
-| Column        | Type         | Nullable | Description                     |
+| Колонка        | Тип          | Nullable | Описание                        |
 |---------------|-------------|----------|---------------------------------|
-| `id`          | UUID PK     | No       |                                 |
-| `equipment_id`| UUID FK     | No       | → equipment.id (indexed)       |
-| `task_id`     | UUID FK     | No       | → tasks.id (indexed)           |
-| `user_id`     | UUID FK     | No       | → users.id                     |
-| `hours_used`  | NUMERIC(8,2)| No       | Usage duration in hours         |
-| `notes`       | TEXT        | Yes      |                                 |
-| `created_at`  | TIMESTAMPTZ | No       |                                 |
-| `updated_at`  | TIMESTAMPTZ | No       |                                 |
+| `id`           | UUID PK     | Нет      |                                 |
+| `equipment_id` | UUID FK     | Нет      | → equipment.id (индексировано) |
+| `task_id`      | UUID FK     | Нет      | → tasks.id (индексировано)     |
+| `user_id`      | UUID FK     | Нет      | → users.id                     |
+| `hours_used`   | NUMERIC(8,2)| Нет     | Длительность использования в часах |
+| `notes`        | TEXT        | Да       |                                 |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                 |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                 |
 
-**Indexes:** `equipment_id`, `task_id`
+**Индексы:** `equipment_id`, `task_id`
 
 ---
 
 ### depreciation_records
 
-| Column           | Type          | Nullable | Description                        |
-|------------------|--------------|----------|------------------------------------|
-| `id`             | UUID PK      | No       |                                    |
-| `equipment_id`   | UUID FK      | No       | → equipment.id (CASCADE, indexed) |
-| `period_date`    | DATE         | No       | First day of the month             |
-| `amount`         | NUMERIC(15,2)| No       | Depreciation for this period       |
-| `accumulated`    | NUMERIC(15,2)| No       | Total accumulated depreciation     |
-| `remaining_value`| NUMERIC(15,2)| No       | Book value after this period       |
-| `method`         | VARCHAR(50)  | No       | straight_line, declining_balance   |
-| `notes`          | TEXT         | Yes      |                                    |
-| `created_at`     | TIMESTAMPTZ  | No       |                                    |
-| `updated_at`     | TIMESTAMPTZ  | No       |                                    |
+| Колонка           | Тип          | Nullable | Описание                               |
+|-------------------|-------------|----------|-----------------------------------------|
+| `id`              | UUID PK     | Нет      |                                         |
+| `equipment_id`    | UUID FK     | Нет      | → equipment.id (CASCADE, индексировано) |
+| `period_date`     | DATE        | Нет      | Первый день месяца                      |
+| `amount`          | NUMERIC(15,2)| Нет    | Амортизация за период                   |
+| `accumulated`     | NUMERIC(15,2)| Нет    | Итого накопленная амортизация           |
+| `remaining_value` | NUMERIC(15,2)| Нет    | Балансовая стоимость после периода      |
+| `method`          | VARCHAR(50) | Нет      | straight_line, declining_balance        |
+| `notes`           | TEXT        | Да       |                                         |
+| `created_at`      | TIMESTAMPTZ | Нет      |                                         |
+| `updated_at`      | TIMESTAMPTZ | Нет      |                                         |
 
-**Indexes:** `equipment_id`
+**Индексы:** `equipment_id`
 
 ---
 
 ### documents
 
-| Column        | Type          | Nullable | Description                               |
-|---------------|--------------|----------|-------------------------------------------|
-| `id`          | UUID PK      | No       |                                           |
-| `task_id`     | UUID FK      | Yes      | → tasks.id (SET NULL, indexed)           |
-| `uploaded_by` | UUID FK      | No       | → users.id                               |
-| `doc_type`    | VARCHAR(50)  | No       | photo, signed_act, invoice, report, other (indexed) |
-| `label`       | VARCHAR(200) | Yes      | Semantic label (e.g. indoor_unit_installed)|
-| `filename`    | VARCHAR(500) | No       | Original filename                         |
-| `storage_path`| VARCHAR(1000)| No       | MinIO path (bucket/key)                   |
-| `mime_type`   | VARCHAR(100) | No       | MIME type                                 |
-| `file_size`   | BIGINT       | No       | Size in bytes                             |
-| `version`     | INTEGER      | No       | Current version number                    |
-| `metadata`    | JSONB        | No       | EXIF, GPS, signatures, etc.               |
-| `description` | TEXT         | Yes      |                                           |
-| `created_at`  | TIMESTAMPTZ  | No       |                                           |
-| `updated_at`  | TIMESTAMPTZ  | No       |                                           |
+| Колонка        | Тип          | Nullable | Описание                                      |
+|---------------|-------------|----------|-----------------------------------------------|
+| `id`           | UUID PK     | Нет      |                                               |
+| `task_id`      | UUID FK     | Да       | → tasks.id (SET NULL, индексировано)         |
+| `uploaded_by`  | UUID FK     | Нет      | → users.id                                   |
+| `doc_type`     | VARCHAR(50) | Нет      | photo, signed_act, invoice, report, other (индексировано) |
+| `label`        | VARCHAR(200)| Да       | Семантическая метка (напр. indoor_unit_installed) |
+| `filename`     | VARCHAR(500)| Нет      | Оригинальное имя файла                        |
+| `storage_path` | VARCHAR(1000)| Нет    | Путь в MinIO (bucket/key)                     |
+| `mime_type`    | VARCHAR(100)| Нет      | MIME-тип                                      |
+| `file_size`    | BIGINT      | Нет      | Размер в байтах                               |
+| `version`      | INTEGER     | Нет      | Номер текущей версии                          |
+| `metadata`     | JSONB       | Нет      | EXIF, GPS, подписи и пр.                      |
+| `description`  | TEXT        | Да       |                                               |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                               |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                               |
 
-**Indexes:** `task_id`, `doc_type`
+**Индексы:** `task_id`, `doc_type`
 
 ---
 
 ### document_versions
 
-| Column        | Type          | Nullable | Description                        |
-|---------------|--------------|----------|------------------------------------|
-| `id`          | UUID PK      | No       |                                    |
-| `document_id` | UUID FK      | No       | → documents.id (CASCADE, indexed) |
-| `version`     | INTEGER      | No       | Version number                     |
-| `storage_path`| VARCHAR(1000)| No       | MinIO path for this version        |
-| `file_size`   | BIGINT       | No       | Size in bytes                      |
-| `uploaded_by` | UUID FK      | No       | → users.id                        |
-| `created_at`  | TIMESTAMPTZ  | No       |                                    |
-| `updated_at`  | TIMESTAMPTZ  | No       |                                    |
+| Колонка        | Тип          | Nullable | Описание                               |
+|---------------|-------------|----------|-----------------------------------------|
+| `id`           | UUID PK     | Нет      |                                         |
+| `document_id`  | UUID FK     | Нет      | → documents.id (CASCADE, индексировано) |
+| `version`      | INTEGER     | Нет      | Номер версии                            |
+| `storage_path` | VARCHAR(1000)| Нет    | Путь в MinIO для этой версии            |
+| `file_size`    | BIGINT      | Нет      | Размер в байтах                         |
+| `uploaded_by`  | UUID FK     | Нет      | → users.id                             |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                         |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                         |
 
-**Indexes:** `document_id`
+**Индексы:** `document_id`
 
 ---
 
 ### comments
 
-| Column        | Type         | Nullable | Description                          |
-|---------------|-------------|----------|--------------------------------------|
-| `id`          | UUID PK     | No       |                                      |
-| `task_id`     | UUID FK     | No       | → tasks.id (CASCADE, indexed)       |
-| `author_id`   | UUID FK     | No       | → users.id                          |
-| `body`        | TEXT        | No       | Comment text (Markdown supported)    |
-| `mentions`    | JSONB       | No       | Array of mentioned user UUIDs        |
-| `attachments` | JSONB       | No       | Array of attached document UUIDs     |
-| `created_at`  | TIMESTAMPTZ | No       |                                      |
-| `updated_at`  | TIMESTAMPTZ | No       |                                      |
+| Колонка        | Тип          | Nullable | Описание                                 |
+|---------------|-------------|----------|------------------------------------------|
+| `id`           | UUID PK     | Нет      |                                          |
+| `task_id`      | UUID FK     | Нет      | → tasks.id (CASCADE, индексировано)     |
+| `author_id`    | UUID FK     | Нет      | → users.id                              |
+| `body`         | TEXT        | Нет      | Текст комментария (поддержка Markdown)   |
+| `mentions`     | JSONB       | Нет      | Массив UUID упомянутых пользователей     |
+| `attachments`  | JSONB       | Нет      | Массив UUID прикреплённых документов     |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `task_id`
+**Индексы:** `task_id`
 
 ---
 
 ### notifications
 
-| Column        | Type         | Nullable | Description                              |
-|---------------|-------------|----------|------------------------------------------|
-| `id`          | UUID PK     | No       |                                          |
-| `user_id`     | UUID FK     | No       | → users.id (indexed)                    |
-| `channel`     | VARCHAR(50) | No       | telegram, web_push, email                |
-| `event_type`  | VARCHAR(100)| No       | task_assigned, status_changed, etc. (indexed) |
-| `title`       | VARCHAR(500)| No       | Notification title                       |
-| `body`        | TEXT        | No       | Notification body                        |
-| `data`        | JSONB       | No       | Structured event data                    |
-| `is_read`     | BOOLEAN     | No       | Read flag                                |
-| `is_delivered` | BOOLEAN    | No       | Delivery confirmation                    |
-| `created_at`  | TIMESTAMPTZ | No       |                                          |
-| `updated_at`  | TIMESTAMPTZ | No       |                                          |
+| Колонка        | Тип          | Nullable | Описание                                     |
+|---------------|-------------|----------|----------------------------------------------|
+| `id`           | UUID PK     | Нет      |                                              |
+| `user_id`      | UUID FK     | Нет      | → users.id (индексировано)                  |
+| `channel`      | VARCHAR(50) | Нет      | telegram, web_push, email                    |
+| `event_type`   | VARCHAR(100)| Нет      | task_assigned, status_changed и др. (индексировано) |
+| `title`        | VARCHAR(500)| Нет      | Заголовок уведомления                        |
+| `body`         | TEXT        | Нет      | Тело уведомления                             |
+| `data`         | JSONB       | Нет      | Структурированные данные события             |
+| `is_read`      | BOOLEAN     | Нет      | Флаг прочтения                               |
+| `is_delivered`  | BOOLEAN    | Нет      | Подтверждение доставки                       |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                              |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                              |
 
-**Indexes:** `user_id`, `event_type`
+**Индексы:** `user_id`, `event_type`
 
 ---
 
 ### references
 
-| Column       | Type         | Nullable | Description                          |
-|-------------|-------------|----------|--------------------------------------|
-| `id`         | UUID PK     | No       |                                      |
-| `code`       | VARCHAR(100)| No       | Dictionary code (unique, indexed)    |
-| `name`       | VARCHAR(255)| No       | Display name                         |
-| `description`| VARCHAR(1000)| Yes     |                                      |
-| `is_system`  | BOOLEAN     | No       | System dictionary (non-deletable)    |
-| `created_at` | TIMESTAMPTZ | No       |                                      |
-| `updated_at` | TIMESTAMPTZ | No       |                                      |
+| Колонка       | Тип          | Nullable | Описание                                 |
+|--------------|-------------|----------|------------------------------------------|
+| `id`          | UUID PK     | Нет      |                                          |
+| `code`        | VARCHAR(100)| Нет      | Код справочника (уникальный, индексированный) |
+| `name`        | VARCHAR(255)| Нет      | Отображаемое название                    |
+| `description` | VARCHAR(1000)| Да     |                                          |
+| `is_system`   | BOOLEAN     | Нет      | Системный справочник (нельзя удалить)    |
+| `created_at`  | TIMESTAMPTZ | Нет      |                                          |
+| `updated_at`  | TIMESTAMPTZ | Нет      |                                          |
 
-**Indexes:** `code` (unique)
+**Индексы:** `code` (уникальный)
 
 ---
 
 ### reference_items
 
-| Column        | Type         | Nullable | Description                     |
-|---------------|-------------|----------|---------------------------------|
-| `id`          | UUID PK     | No       |                                 |
-| `reference_id`| UUID FK     | No       | → references.id (CASCADE, indexed) |
-| `code`        | VARCHAR(100)| No       | Item code                       |
-| `name`        | VARCHAR(500)| No       | Display name                    |
-| `metadata`    | JSONB       | No       | Extra attributes (unit, price)  |
-| `order`       | INTEGER     | No       | Sort order                      |
-| `is_active`   | BOOLEAN     | No       | Active flag                     |
-| `created_at`  | TIMESTAMPTZ | No       |                                 |
-| `updated_at`  | TIMESTAMPTZ | No       |                                 |
+| Колонка        | Тип          | Nullable | Описание                            |
+|---------------|-------------|----------|-------------------------------------|
+| `id`           | UUID PK     | Нет      |                                     |
+| `reference_id` | UUID FK     | Нет      | → references.id (CASCADE, индексировано) |
+| `code`         | VARCHAR(100)| Нет      | Код элемента                        |
+| `name`         | VARCHAR(500)| Нет      | Отображаемое название               |
+| `metadata`     | JSONB       | Нет      | Дополнительные атрибуты (ед. изм., цена) |
+| `order`        | INTEGER     | Нет      | Порядок сортировки                  |
+| `is_active`    | BOOLEAN     | Нет      | Флаг активности                     |
+| `created_at`   | TIMESTAMPTZ | Нет      |                                     |
+| `updated_at`   | TIMESTAMPTZ | Нет      |                                     |
 
-**Indexes:** `reference_id`
+**Индексы:** `reference_id`
 
 ---
 
-## JSONB Field Structures
+## Структуры JSONB-полей
 
 ### workflow_definition (task_templates)
 
-The core finite-state machine definition stored as JSONB:
+Основное определение конечного автомата, хранимое как JSONB:
 
 ```json
 {
@@ -645,30 +645,30 @@ The core finite-state machine definition stored as JSONB:
 }
 ```
 
-See [Workflow Engine Documentation](workflow-engine.md) for detailed semantics.
+Подробную семантику см. в [документации движка воркфлоу](workflow-engine.md).
 
 ### custom_fields (tasks)
 
-Template-defined fields filled at task level:
+Поля, определённые шаблоном и заполняемые на уровне задачи:
 
 ```json
 {
   "area_sqm": 45.0,
   "equipment_model": "Daikin FTXB35C",
   "floor": 7,
-  "address": "Moscow, Lenin St. 15, apt 42",
+  "address": "Москва, ул. Ленина 15, кв. 42",
   "materials_used": [
     {"item_id": "uuid-copper-tube", "quantity": 10.0},
     {"item_id": "uuid-bracket", "quantity": 2.0}
   ],
   "customer_signature": true,
-  "installation_notes": "Wall mount, east side"
+  "installation_notes": "Настенный монтаж, восточная сторона"
 }
 ```
 
 ### salary_config (users)
 
-Per-employee salary calculation parameters:
+Параметры расчёта заработной платы для каждого сотрудника:
 
 ```json
 {

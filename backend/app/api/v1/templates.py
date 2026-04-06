@@ -7,13 +7,14 @@ CRUD операции над шаблонами задач и создание
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import PaginationParams, get_current_user, get_db
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse
+from app.core.permissions import MANAGE_TEMPLATES
 from app.core.security import CurrentUser
 from app.models import (
     Checklist,
@@ -21,15 +22,51 @@ from app.models import (
     Task,
     TaskTemplate,
 )
+from app.models.task_template import TemplateChecklist
 from app.schemas.task import TaskResponse
+from app.services.task_service import TaskService
+from app.services.user_identity import resolve_users_table_id
 from app.schemas.template import (
     InstantiateTemplate,
+    TemplateChecklistCreate,
     TemplateCreate,
     TemplateResponse,
     TemplateUpdate,
 )
 
 router = APIRouter(prefix="/templates")
+
+
+def _template_load_options():
+    """ORM loader options for TaskTemplate -> TemplateResponse without async lazy loads.
+
+    Возвращает:
+        Кортеж selectinload-опций для связей stages/checklists/fields.
+    """
+    return (
+        selectinload(TaskTemplate.stages),
+        selectinload(TaskTemplate.checklists),
+        selectinload(TaskTemplate.fields),
+    )
+
+
+async def _load_template_for_api(db: AsyncSession, template_id: uuid.UUID) -> TaskTemplate:
+    """Load a template with all relations for API response.
+
+    Аргументы:
+        db: Асинхронная сессия БД.
+        template_id: UUID шаблона.
+
+    Возвращает:
+        ORM-объект TaskTemplate с подгруженными связями.
+    """
+    res = await db.execute(
+        select(TaskTemplate).options(*_template_load_options()).where(TaskTemplate.id == template_id)
+    )
+    template = res.scalar_one_or_none()
+    if not template:
+        raise NotFoundError("TaskTemplate", str(template_id))
+    return template
 
 
 @router.post("/", response_model=TemplateResponse, status_code=201)
@@ -64,8 +101,23 @@ async def create_template(
     )
     db.add(template)
     await db.flush()
-    await db.refresh(template, attribute_names=["stages", "checklists", "fields"])
-    return TemplateResponse.model_validate(template)
+
+    for idx, cl in enumerate(body.checklists):
+        items_serialized = [
+            x if isinstance(x, str) else x.get("title", "") for x in cl.items
+        ]
+        db.add(
+            TemplateChecklist(
+                template_id=template.id,
+                checklist_id=f"cl-{idx}",
+                title=cl.title,
+                gate_transition=cl.gate_transition or None,
+                items=items_serialized,
+            )
+        )
+    await db.flush()
+    template_for_api = await _load_template_for_api(db, template.id)
+    return TemplateResponse.model_validate(template_for_api)
 
 
 @router.get("/", response_model=PaginatedResponse[TemplateResponse])
@@ -91,11 +143,7 @@ async def list_templates(
     Возвращает:
         Постраничный ответ со списком шаблонов.
     """
-    query = select(TaskTemplate).options(
-        selectinload(TaskTemplate.stages),
-        selectinload(TaskTemplate.checklists),
-        selectinload(TaskTemplate.fields),
-    )
+    query = select(TaskTemplate).options(*_template_load_options())
     count_query = select(func.count(TaskTemplate.id))
 
     if category:
@@ -143,9 +191,7 @@ async def get_template(
     result = await db.execute(
         select(TaskTemplate)
         .options(
-            selectinload(TaskTemplate.stages),
-            selectinload(TaskTemplate.checklists),
-            selectinload(TaskTemplate.fields),
+            *_template_load_options(),
         )
         .where(TaskTemplate.id == template_id)
     )
@@ -183,6 +229,8 @@ async def update_template(
         raise NotFoundError("TaskTemplate", str(template_id))
 
     update_data = body.model_dump(exclude_unset=True)
+    checklists_data = update_data.pop("checklists", None)
+
     if update_data:
         await db.execute(
             update(TaskTemplate)
@@ -190,9 +238,27 @@ async def update_template(
             .values(**update_data)
         )
         await db.flush()
-        await db.refresh(template, attribute_names=["stages", "checklists", "fields"])
 
-    return TemplateResponse.model_validate(template)
+    if checklists_data is not None:
+        await db.execute(delete(TemplateChecklist).where(TemplateChecklist.template_id == template_id))
+        await db.flush()
+        for idx, cl in enumerate(checklists_data):
+            items_serialized = [
+                x if isinstance(x, str) else x.get("title", "") for x in cl["items"]
+            ]
+            db.add(
+                TemplateChecklist(
+                    template_id=template_id,
+                    checklist_id=f"cl-{idx}",
+                    title=cl["title"],
+                    gate_transition=cl.get("gate_transition") or None,
+                    items=items_serialized,
+                )
+            )
+        await db.flush()
+
+    template_for_api = await _load_template_for_api(db, template_id)
+    return TemplateResponse.model_validate(template_for_api)
 
 
 @router.post("/{template_id}/instantiate", response_model=TaskResponse, status_code=201)
@@ -228,6 +294,7 @@ async def instantiate_template(
     wf = template.workflow_definition or {}
     initial_status = wf.get("initial_state", "new")
 
+    creator_id = await resolve_users_table_id(db, user)
     task = Task(
         template_id=template_id,
         board_id=body.board_id,
@@ -235,7 +302,7 @@ async def instantiate_template(
         deal_id=body.deal_id,
         tender_id=body.tender_id,
         assigned_to=body.assigned_to,
-        created_by=uuid.UUID(user.sub),
+        created_by=creator_id,
         title=body.title or template.name,
         description=template.description,
         status=initial_status,
@@ -263,7 +330,23 @@ async def instantiate_template(
 
     await db.flush()
     await db.refresh(task)
-    return TaskResponse.model_validate(task)
+    if body.observer_ids:
+        await TaskService.set_observers(db, task.id, list(body.observer_ids))
+        await db.flush()
+
+    task_for_api = (
+        await db.execute(
+            select(Task).options(
+                selectinload(Task.assignee),
+                selectinload(Task.template),
+                selectinload(Task.creator),
+                selectinload(Task.requester_user),
+                selectinload(Task.co_assignees),
+                selectinload(Task.observers),
+            ).where(Task.id == task.id)
+        )
+    ).scalar_one()
+    return TaskResponse.model_validate(task_for_api)
 
 
 @router.delete("/{template_id}", status_code=204)

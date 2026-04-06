@@ -64,7 +64,7 @@ export default function DealsPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-[100rem] space-y-4 p-4 lg:p-6">
-        <h1 className="text-2xl font-bold">Deal Pipeline</h1>
+        <h1 className="text-2xl font-bold">Воронка сделок</h1>
         <div className="flex gap-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-64 w-64 shrink-0 lg:flex-1" />
@@ -77,9 +77,9 @@ export default function DealsPage() {
   return (
     <div className="mx-auto max-w-[100rem] space-y-4 p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Deal Pipeline</h1>
+        <h1 className="text-2xl font-bold">Воронка сделок</h1>
         <button className="btn-primary gap-1.5">
-          <Plus className="h-4 w-4" /> New Deal
+          <Plus className="h-4 w-4" /> Новая сделка
         </button>
       </div>
 
@@ -146,7 +146,7 @@ export default function DealsPage() {
                 ))}
                 {stageDeals.length === 0 && (
                   <p className="py-8 text-center text-xs text-surface-300">
-                    No deals
+                    Нет сделок
                   </p>
                 )}
               </div>
@@ -156,7 +156,7 @@ export default function DealsPage() {
 
         {stages.length === 0 && (
           <div className="flex flex-1 items-center justify-center py-20 text-surface-400">
-            No pipeline stages configured. Create stages in Settings.
+            Этапы воронки не настроены. Создайте этапы в Настройках.
           </div>
         )}
       </div>

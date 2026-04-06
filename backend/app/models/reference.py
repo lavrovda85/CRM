@@ -6,14 +6,14 @@
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Reference(BaseModel):
+class Reference(TenantMixin, BaseModel):
     """Dynamic dictionary/reference table.
 
     Атрибуты:
@@ -24,8 +24,9 @@ class Reference(BaseModel):
     """
 
     __tablename__ = "references"
+    __table_args__ = (UniqueConstraint("company_id", "code", name="uq_references_company_code"),)
 
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -34,7 +35,7 @@ class Reference(BaseModel):
                          order_by="ReferenceItem.order")
 
 
-class ReferenceItem(BaseModel):
+class ReferenceItem(TenantMixin, BaseModel):
     """Item within a dynamic reference dictionary.
 
     Атрибуты:
@@ -53,7 +54,7 @@ class ReferenceItem(BaseModel):
     )
     code: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    extra_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

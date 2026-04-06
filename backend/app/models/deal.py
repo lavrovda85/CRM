@@ -11,10 +11,10 @@ from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class DealStage(BaseModel):
+class DealStage(TenantMixin, BaseModel):
     """Pipeline stage definition for deals.
 
     Атрибуты:
@@ -36,7 +36,7 @@ class DealStage(BaseModel):
     deals = relationship("Deal", back_populates="stage")
 
 
-class Deal(BaseModel):
+class Deal(TenantMixin, BaseModel):
     """Sales deal entity in the CRM pipeline.
 
     Атрибуты:

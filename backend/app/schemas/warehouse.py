@@ -72,6 +72,10 @@ class WarehouseItemResponse(BaseModel):
         price (Decimal): Цена за единицу.
         description (str | None): Описание.
         location (str | None): Место хранения.
+    cost_total (Decimal): Стоимость позиции на складе (quantity * price).
+    depreciation_total (Decimal): Начисленная амортизация на текущую дату (упрощённо).
+    remaining_value_total (Decimal): Остаточная стоимость (cost_total - depreciation_total).
+    depreciation_pct (float): Процент амортизации (0..100) для отображения.
         created_at (datetime): Дата создания записи.
         updated_at (datetime): Дата последнего обновления.
     """
@@ -89,6 +93,10 @@ class WarehouseItemResponse(BaseModel):
     price: Decimal
     description: str | None = None
     location: str | None = None
+    cost_total: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    depreciation_total: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    remaining_value_total: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    depreciation_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     created_at: datetime
     updated_at: datetime
 
@@ -119,6 +127,7 @@ class WarehouseMovementResponse(BaseModel):
     Атрибуты:
         id (uuid.UUID): Уникальный идентификатор операции.
         item_id (uuid.UUID): ID складской позиции.
+        item_name (str | None): Название позиции (при загрузке через join).
         task_id (uuid.UUID | None): ID задачи.
         user_id (uuid.UUID): ID пользователя, выполнившего операцию.
         movement_type (str): Тип движения.
@@ -134,6 +143,7 @@ class WarehouseMovementResponse(BaseModel):
 
     id: uuid.UUID
     item_id: uuid.UUID
+    item_name: str | None = None
     task_id: uuid.UUID | None = None
     user_id: uuid.UUID
     movement_type: str
@@ -181,3 +191,23 @@ class ReservationResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class WarehouseItemsImportResponse(BaseModel):
+    """Import result for warehouse items from Excel/1C export.
+
+    Attributes:
+        created_count: Number of created items.
+        updated_count: Number of updated items.
+        skipped_count: Rows skipped due to missing required fields.
+        error_count: Number of rows with validation/conversion errors.
+        errors: Human-readable error messages (limited).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    created_count: int
+    updated_count: int
+    skipped_count: int = 0
+    error_count: int = 0
+    errors: list[str] = Field(default_factory=list)

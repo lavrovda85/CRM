@@ -99,7 +99,7 @@ export default function TimePage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl space-y-6 p-4 lg:p-6">
-        <h1 className="text-2xl font-bold">Time Tracking</h1>
+        <h1 className="text-2xl font-bold">Учёт времени</h1>
         <Skeleton className="h-40" />
         <Skeleton className="h-64" />
       </div>
@@ -108,7 +108,7 @@ export default function TimePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 lg:p-6">
-      <h1 className="text-2xl font-bold">Time Tracking</h1>
+      <h1 className="text-2xl font-bold">Учёт времени</h1>
 
       {/* Active Timer */}
       <div className="card overflow-hidden">
@@ -116,7 +116,7 @@ export default function TimePage() {
           <div className="mb-2 flex items-center justify-center gap-2">
             <Timer className="h-5 w-5" />
             <span className="text-sm font-medium">
-              {activeTimer ? "Timer Running" : "No Active Timer"}
+              {activeTimer ? "Таймер запущен" : "Нет активного таймера"}
             </span>
           </div>
           <div className="font-mono text-5xl font-bold tracking-wider lg:text-6xl">
@@ -126,13 +126,13 @@ export default function TimePage() {
           <div className="mt-4 flex items-center justify-center gap-3">
             {activeTimer ? (
               <button onClick={handleStop} className="btn bg-white text-red-600 hover:bg-red-50 gap-1.5">
-                <Square className="h-4 w-4" /> Stop Timer
+                <Square className="h-4 w-4" /> Остановить таймер
               </button>
             ) : (
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Task ID to track..."
+                  placeholder="ID задачи..."
                   className="input max-w-xs bg-white"
                   value={manualForm.task_id}
                   onChange={(e) => setManualForm({ ...manualForm, task_id: e.target.value })}
@@ -142,7 +142,7 @@ export default function TimePage() {
                   disabled={!manualForm.task_id}
                   className="btn-primary gap-1.5"
                 >
-                  <Play className="h-4 w-4" /> Start
+                  <Play className="h-4 w-4" /> Запустить
                 </button>
               </div>
             )}
@@ -154,15 +154,15 @@ export default function TimePage() {
       {summary && (
         <div className="grid grid-cols-3 gap-4">
           <div className="card p-4 text-center">
-            <p className="text-sm text-surface-500">Total Hours</p>
+            <p className="text-sm text-surface-500">Всего часов</p>
             <p className="text-2xl font-bold">{summary.total_hours}</p>
           </div>
           <div className="card p-4 text-center">
-            <p className="text-sm text-surface-500">Entries</p>
+            <p className="text-sm text-surface-500">Записи</p>
             <p className="text-2xl font-bold">{summary.entries_count}</p>
           </div>
           <div className="card p-4 text-center">
-            <p className="text-sm text-surface-500">Avg per Day</p>
+            <p className="text-sm text-surface-500">Среднее в день</p>
             <p className="text-2xl font-bold">
               {summary.entries_count > 0
                 ? (summary.total_hours / Math.max(1, 7)).toFixed(1)
@@ -176,10 +176,10 @@ export default function TimePage() {
       <div className="card">
         <div className="flex items-center justify-between border-b border-surface-100 p-4">
           <h2 className="font-semibold flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary-500" /> Recent Entries
+            <Clock className="h-4 w-4 text-primary-500" /> Последние записи
           </h2>
           <button onClick={() => setShowManual((o) => !o)} className="btn-ghost btn-sm gap-1">
-            <Plus className="h-3.5 w-3.5" /> Manual Entry
+            <Plus className="h-3.5 w-3.5" /> Ручной ввод
           </button>
         </div>
 
@@ -188,27 +188,27 @@ export default function TimePage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <input
                 type="text"
-                placeholder="Task ID"
+                placeholder="ID задачи"
                 className="input"
                 value={manualForm.task_id}
                 onChange={(e) => setManualForm({ ...manualForm, task_id: e.target.value })}
               />
               <input
                 type="number"
-                placeholder="Duration (min)"
+                placeholder="Длительность (мин)"
                 className="input"
                 value={manualForm.duration_minutes}
                 onChange={(e) => setManualForm({ ...manualForm, duration_minutes: e.target.value })}
               />
               <input
                 type="text"
-                placeholder="Notes"
+                placeholder="Заметки"
                 className="input"
                 value={manualForm.notes}
                 onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
               />
             </div>
-            <button className="btn-primary mt-3 btn-sm">Save Entry</button>
+            <button className="btn-primary mt-3 btn-sm">Сохранить запись</button>
           </div>
         )}
 
@@ -223,16 +223,16 @@ export default function TimePage() {
                       : "bg-surface-100 text-surface-600"
                   }`}>
                     {entry.entry_type === "timer" ? (
-                      <><Timer className="mr-1 h-3 w-3" /> timer</>
+                      <><Timer className="mr-1 h-3 w-3" /> таймер</>
                     ) : (
-                      <><FileText className="mr-1 h-3 w-3" /> manual</>
+                      <><FileText className="mr-1 h-3 w-3" /> ручной</>
                     )}
                   </span>
                   {entry.is_billable && (
-                    <span className="badge bg-green-50 text-green-700">billable</span>
+                    <span className="badge bg-green-50 text-green-700">оплачиваемый</span>
                   )}
                   {!entry.ended_at && (
-                    <span className="badge bg-amber-50 text-amber-700 animate-pulse">running</span>
+                    <span className="badge bg-amber-50 text-amber-700 animate-pulse">в процессе</span>
                   )}
                 </div>
                 {entry.notes && (
@@ -250,7 +250,7 @@ export default function TimePage() {
             </div>
           ))}
           {entries.length === 0 && (
-            <p className="p-8 text-center text-sm text-surface-400">No time entries yet</p>
+            <p className="p-8 text-center text-sm text-surface-400">Записей пока нет</p>
           )}
         </div>
       </div>

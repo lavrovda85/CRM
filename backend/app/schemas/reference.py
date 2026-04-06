@@ -33,14 +33,14 @@ class ReferenceItemCreate(BaseModel):
     Атрибуты:
         code (str): Машинное имя элемента.
         name (str): Отображаемое название.
-        metadata (dict): Дополнительные атрибуты.
+        extra_data (dict): Дополнительные атрибуты.
         order (int): Порядок сортировки.
         is_active (bool): Активен ли элемент.
     """
 
     code: str = Field(..., max_length=100)
     name: str = Field(..., max_length=500)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
     order: int = 0
     is_active: bool = True
 
@@ -50,13 +50,13 @@ class ReferenceItemUpdate(BaseModel):
 
     Атрибуты:
         name (str | None): Отображаемое название.
-        metadata (dict | None): Дополнительные атрибуты.
+        extra_data (dict | None): Дополнительные атрибуты.
         order (int | None): Порядок сортировки.
         is_active (bool | None): Активен ли элемент.
     """
 
     name: str | None = Field(default=None, max_length=500)
-    metadata: dict[str, Any] | None = None
+    extra_data: dict[str, Any] | None = None
     order: int | None = None
     is_active: bool | None = None
 
@@ -69,7 +69,7 @@ class ReferenceItemResponse(BaseModel):
         reference_id (uuid.UUID): ID справочника.
         code (str): Машинное имя элемента.
         name (str): Отображаемое название.
-        metadata (dict): Дополнительные атрибуты.
+        extra_data (dict): Дополнительные атрибуты.
         order (int): Порядок сортировки.
         is_active (bool): Активен ли элемент.
         created_at (datetime): Дата создания.
@@ -82,7 +82,7 @@ class ReferenceItemResponse(BaseModel):
     reference_id: uuid.UUID
     code: str
     name: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
     order: int
     is_active: bool
     created_at: datetime

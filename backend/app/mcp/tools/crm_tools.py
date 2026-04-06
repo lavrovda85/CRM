@@ -1,15 +1,28 @@
-"""MCP tools for CRM operations in HVAC CRM/ERP.
+"""MCP tools for CRM operations (clients and deals).
 
-Инструменты для управления клиентами и сделками
-через MCP-протокол.
+Uses the same persistence rules as ``/api/v1/clients`` and ``/api/v1/deals``.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from decimal import Decimal
 
+from sqlalchemy import or_, select, update
+
+from app.core.database import async_session_factory
+from app.core.exceptions import NotFoundError, ValidationError
 from app.mcp.server import mcp
+from app.models import Client, Deal, DealStage
+from app.schemas.client import ClientCreate, ClientResponse
+from app.schemas.deal import DealResponse
+
+
+def _uuid(raw: str, field: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(raw).strip())
+    except ValueError as exc:
+        raise ValidationError(field, "Must be a valid UUID") from exc
 
 
 @mcp.tool()
@@ -20,46 +33,31 @@ async def create_client(
     phone: str | None = None,
     email: str | None = None,
 ) -> dict:
-    """Create a new client in the CRM system.
-
-    Создаёт нового клиента (физическое лицо или организацию)
-    с контактными данными и адресом.
-
-    Args:
-        name (str): Имя клиента или название организации.
-        client_type (str): Тип клиента: "individual" (физлицо) или
-            "organization" (юрлицо). По умолчанию "individual".
-        address (str | None): Адрес клиента / объекта.
-        phone (str | None): Контактный телефон.
-        email (str | None): Электронная почта.
-
-    Returns:
-        dict: Созданный клиент с полями id, name, client_type,
-            address, phone, email, created_at.
-
-    Example:
-        AI agent: "Добавь нового клиента — ООО 'Комфорт Плюс'"
-        >>> create_client(
-        ...     name='ООО "Комфорт Плюс"',
-        ...     client_type="organization",
-        ...     address="г. Москва, ул. Ленина, д. 15",
-        ...     phone="+7 (495) 123-45-67",
-        ...     email="info@comfortplus.ru",
-        ... )
-    """
-    # TODO: INSERT INTO clients (name, client_type, address, phone, email)
-    # TODO: Check for DuplicateError by phone/email
-    client_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
-    return {
-        "id": client_id,
-        "name": name,
-        "client_type": client_type,
-        "address": address,
-        "phone": phone,
-        "email": email,
-        "created_at": now,
-    }
+    """Create a new client."""
+    body = ClientCreate(
+        name=name.strip(),
+        client_type=client_type,
+        address=address,
+        phone=phone,
+        email=email,
+    )
+    async with async_session_factory() as session:
+        client = Client(
+            name=body.name,
+            client_type=body.client_type,
+            address=body.address,
+            coordinates=body.coordinates,
+            phone=body.phone,
+            email=body.email,
+            inn=body.inn,
+            extra_data=body.extra_data,
+            notes=body.notes,
+        )
+        session.add(client)
+        await session.flush()
+        await session.refresh(client, attribute_names=["contacts"])
+        await session.commit()
+        return ClientResponse.model_validate(client).model_dump(mode="json")
 
 
 @mcp.tool()
@@ -67,37 +65,41 @@ async def search_clients(
     query: str,
     limit: int = 20,
 ) -> list[dict]:
-    """Search clients by name, phone, email, or address.
+    """Search clients by name, phone, or email (case-insensitive)."""
+    q = (query or "").strip()
+    if not q:
+        raise ValidationError("query", "Search query must not be empty")
+    lim = max(1, min(int(limit), 100))
+    pattern = f"%{q}%"
 
-    Выполняет полнотекстовый поиск клиентов по имени, телефону,
-    email или адресу. Результаты ранжируются по релевантности.
+    async with async_session_factory() as session:
+        stmt = (
+            select(Client)
+            .where(
+                or_(
+                    Client.name.ilike(pattern),
+                    Client.phone.ilike(pattern),
+                    Client.email.ilike(pattern),
+                )
+            )
+            .order_by(Client.name)
+            .limit(lim)
+        )
+        res = await session.execute(stmt)
+        rows = res.scalars().all()
 
-    Args:
-        query (str): Поисковый запрос (имя, телефон, email или часть адреса).
-        limit (int): Максимальное количество результатов. По умолчанию 20.
+    return [ClientResponse.model_validate(c).model_dump(mode="json") for c in rows]
 
-    Returns:
-        list[dict]: Список найденных клиентов, каждый содержит id, name,
-            client_type, phone, email, address.
 
-    Example:
-        AI agent: "Найди клиента по номеру +7 (495) 123"
-        >>> search_clients(query="+7 (495) 123", limit=5)
-    """
-    # TODO: SELECT * FROM clients WHERE name ILIKE %query%
-    #       OR phone ILIKE %query% OR email ILIKE %query%
-    #       OR address ILIKE %query%
-    # TODO: ORDER BY relevance, LIMIT min(limit, 100)
-    return [
-        {
-            "id": str(uuid.uuid4()),
-            "name": f"Placeholder for '{query}'",
-            "client_type": "individual",
-            "phone": None,
-            "email": None,
-            "address": None,
-        }
-    ]
+async def _default_deal_stage_id(session) -> uuid.UUID:
+    res = await session.execute(select(DealStage).order_by(DealStage.order.asc()).limit(1))
+    stage = res.scalar_one_or_none()
+    if stage is None:
+        raise ValidationError(
+            "pipeline",
+            "No deal stages configured; create stages via admin/REST first",
+        )
+    return stage.id
 
 
 @mcp.tool()
@@ -107,45 +109,36 @@ async def create_deal(
     amount: float = 0.0,
     stage_id: str | None = None,
 ) -> dict:
-    """Create a new deal in the CRM sales pipeline.
+    """Create a deal; uses first pipeline stage when ``stage_id`` is omitted."""
+    cid = _uuid(client_id, "client_id")
+    clean_title = (title or "").strip()
+    if not clean_title:
+        raise ValidationError("title", "Deal title must not be empty")
 
-    Создаёт новую сделку в воронке продаж, привязанную к клиенту.
-    Если stage_id не указан, сделка помещается в первую стадию воронки.
+    async with async_session_factory() as session:
+        client_row = await session.get(Client, cid)
+        if client_row is None:
+            raise NotFoundError("Client", client_id)
 
-    Args:
-        client_id (str): UUID клиента.
-        title (str): Название сделки
-            (например, "Монтаж VRF-системы — ТЦ Горизонт").
-        amount (float): Сумма сделки в рублях. По умолчанию 0.
-        stage_id (str | None): UUID стадии воронки. Если не указан —
-            используется первая стадия (по order).
+        if stage_id and str(stage_id).strip():
+            sid = _uuid(stage_id, "stage_id")
+            st = await session.get(DealStage, sid)
+            if st is None:
+                raise NotFoundError("DealStage", stage_id)
+        else:
+            sid = await _default_deal_stage_id(session)
 
-    Returns:
-        dict: Созданная сделка с полями id, client_id, title,
-            amount, stage_id, stage_name, created_at.
-
-    Example:
-        AI agent: "Создай сделку на 150 000 руб. для клиента"
-        >>> create_deal(
-        ...     client_id="client-uuid-...",
-        ...     title="Монтаж сплит-системы — кв. Иванов",
-        ...     amount=150000.0,
-        ... )
-    """
-    # TODO: Validate client_id exists
-    # TODO: If stage_id is None, SELECT first DealStage by order
-    # TODO: INSERT INTO deals (client_id, title, amount, stage_id)
-    deal_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
-    return {
-        "id": deal_id,
-        "client_id": client_id,
-        "title": title,
-        "amount": amount,
-        "stage_id": stage_id or "first-stage-placeholder",
-        "stage_name": "New",
-        "created_at": now,
-    }
+        deal = Deal(
+            client_id=cid,
+            title=clean_title,
+            amount=Decimal(str(amount)),
+            stage_id=sid,
+        )
+        session.add(deal)
+        await session.flush()
+        await session.refresh(deal)
+        await session.commit()
+        return DealResponse.model_validate(deal).model_dump(mode="json")
 
 
 @mcp.tool()
@@ -153,34 +146,30 @@ async def move_deal(
     deal_id: str,
     stage_id: str,
 ) -> dict:
-    """Move a deal to a different pipeline stage.
+    """Move a deal to another pipeline stage."""
+    did = _uuid(deal_id, "deal_id")
+    sid = _uuid(stage_id, "stage_id")
 
-    Перемещает сделку на новую стадию воронки продаж.
-    Можно перемещать как вперёд, так и назад.
+    async with async_session_factory() as session:
+        deal = await session.get(Deal, did)
+        if deal is None:
+            raise NotFoundError("Deal", deal_id)
+        stage = await session.get(DealStage, sid)
+        if stage is None:
+            raise NotFoundError("DealStage", stage_id)
 
-    Args:
-        deal_id (str): UUID сделки.
-        stage_id (str): UUID целевой стадии воронки.
+        from_stage_id = deal.stage_id
+        from_stage = await session.get(DealStage, from_stage_id)
+        await session.execute(update(Deal).where(Deal.id == did).values(stage_id=sid))
+        await session.flush()
+        await session.refresh(deal)
+        await session.commit()
 
-    Returns:
-        dict: Обновлённая сделка с полями id, title, from_stage, to_stage,
-            moved_at.
-
-    Example:
-        AI agent: "Переведи сделку на стадию 'Согласование договора'"
-        >>> move_deal(
-        ...     deal_id="deal-uuid-...",
-        ...     stage_id="stage-uuid-agreement",
-        ... )
-    """
-    # TODO: SELECT deal by deal_id, raise NotFoundError if absent
-    # TODO: SELECT target DealStage by stage_id
-    # TODO: UPDATE deals SET stage_id = stage_id WHERE id = deal_id
-    now = datetime.utcnow().isoformat()
+        to_stage = stage
     return {
-        "id": deal_id,
-        "title": "Placeholder deal",
-        "from_stage": "previous-stage-placeholder",
-        "to_stage": stage_id,
-        "moved_at": now,
+        "id": str(deal.id),
+        "title": deal.title,
+        "from_stage": from_stage.name if from_stage else str(from_stage_id),
+        "to_stage": to_stage.name,
+        "moved_at": deal.updated_at.isoformat() if deal.updated_at else None,
     }

@@ -53,7 +53,7 @@ async def create_client(
         phone=body.phone,
         email=body.email,
         inn=body.inn,
-        metadata=body.metadata,
+        extra_data=body.extra_data,
         notes=body.notes,
     )
     db.add(client)

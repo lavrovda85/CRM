@@ -10,10 +10,10 @@ from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Document(BaseModel):
+class Document(TenantMixin, BaseModel):
     """File attachment linked to a task.
 
     Атрибуты:
@@ -32,7 +32,16 @@ class Document(BaseModel):
     __tablename__ = "documents"
 
     task_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tender_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     uploaded_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
@@ -44,10 +53,11 @@ class Document(BaseModel):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    extra_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     task = relationship("Task", back_populates="documents")
+    tender = relationship("Tender", back_populates="documents")
     uploader = relationship("User", foreign_keys=[uploaded_by])
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan",
                             order_by="DocumentVersion.version")

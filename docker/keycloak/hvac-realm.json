@@ -1,23 +1,23 @@
 {
   "realm": "hvac",
   "enabled": true,
-  "displayName": "HVAC CRM/ERP",
+  "displayName": "SPEC CRM/ERP — Управление сервисной компанией",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "roles": {
     "realm": [
-      { "name": "admin", "description": "Full system access" },
-      { "name": "manager", "description": "Project/task management, CRM, tenders" },
-      { "name": "engineer", "description": "Field work, task execution, time tracking" },
-      { "name": "warehouse_manager", "description": "Inventory management" },
-      { "name": "accountant", "description": "Analytics, salary, reports" }
+      { "name": "admin", "description": "Полный доступ к системе" },
+      { "name": "manager", "description": "Управление проектами/задачами, CRM, тендеры" },
+      { "name": "engineer", "description": "Выездные работы, выполнение задач, учёт времени" },
+      { "name": "warehouse_manager", "description": "Складской учёт" },
+      { "name": "accountant", "description": "Аналитика, зарплата, отчёты" }
     ]
   },
   "clients": [
     {
       "clientId": "hvac-backend",
-      "name": "HVAC Backend API",
+      "name": "SPEC Backend API",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "backend-secret-change-me",
@@ -30,18 +30,21 @@
     },
     {
       "clientId": "hvac-frontend",
-      "name": "HVAC Frontend PWA",
+      "name": "SPEC Frontend PWA",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/*",
-        "http://localhost/*"
+        "http://localhost:3500/*",
+        "http://localhost/*",
+        "https://*.ngrok-free.app/*",
+        "https://*.ngrok.io/*",
+        "https://*.trycloudflare.com/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost"
+        "+"
       ],
       "protocol": "openid-connect",
       "defaultClientScopes": [
@@ -54,8 +57,8 @@
   ],
   "users": [
     {
-      "username": "admin",
-      "email": "admin@hvac.local",
+      "username": "admin@spec.local",
+      "email": "admin@spec.local",
       "firstName": "System",
       "lastName": "Admin",
       "enabled": true,
@@ -63,13 +66,13 @@
         {
           "type": "password",
           "value": "admin123",
-          "temporary": true
+          "temporary": false
         }
       ],
       "realmRoles": ["admin"]
     },
     {
-      "username": "manager",
+      "username": "manager@hvac.local",
       "email": "manager@hvac.local",
       "firstName": "Ivan",
       "lastName": "Petrov",
@@ -84,7 +87,7 @@
       "realmRoles": ["manager"]
     },
     {
-      "username": "engineer",
+      "username": "engineer@hvac.local",
       "email": "engineer@hvac.local",
       "firstName": "Sergei",
       "lastName": "Sidorov",
@@ -97,6 +100,18 @@
         }
       ],
       "realmRoles": ["engineer"]
+    },
+    {
+      "username": "service-account-hvac-backend",
+      "enabled": true,
+      "serviceAccountClientId": "hvac-backend",
+      "clientRoles": {
+        "realm-management": [
+          "query-users",
+          "view-users",
+          "manage-users"
+        ]
+      }
     }
   ]
 }

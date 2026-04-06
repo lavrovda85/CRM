@@ -11,6 +11,20 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class TemplateChecklistCreate(BaseModel):
+    """Schema for a checklist item when creating/updating a template.
+
+    Атрибуты:
+        title: Название чек-листа.
+        gate_transition: Блокируемый переход (например in_progress->testing).
+        items: Список пунктов (строки или объекты с title).
+    """
+
+    title: str = Field(..., max_length=255)
+    gate_transition: str | None = Field(default=None, max_length=200)
+    items: list[str | dict[str, Any]] = Field(default_factory=list)
+
+
 class TemplateCreate(BaseModel):
     """Schema for creating a task template.
 
@@ -24,6 +38,7 @@ class TemplateCreate(BaseModel):
         auto_warehouse (list): JSON правила автоматического списания.
         required_documents (dict): JSON правила обязательных документов.
         is_active (bool): Активен ли шаблон.
+        checklists (list): Чек-листы шаблона.
     """
 
     name: str = Field(..., max_length=255)
@@ -35,6 +50,7 @@ class TemplateCreate(BaseModel):
     auto_warehouse: list[Any] = Field(default_factory=list)
     required_documents: dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
+    checklists: list[TemplateChecklistCreate] = Field(default_factory=list)
 
 
 class TemplateUpdate(BaseModel):
@@ -47,6 +63,7 @@ class TemplateUpdate(BaseModel):
         workflow_definition (dict | None): Определение workflow.
         sla_config (dict | None): Конфигурация SLA.
         is_active (bool | None): Активен ли шаблон.
+        checklists (list | None): Чек-листы (при передаче заменяют текущие).
     """
 
     name: str | None = Field(default=None, max_length=255)
@@ -55,6 +72,7 @@ class TemplateUpdate(BaseModel):
     workflow_definition: dict[str, Any] | None = None
     sla_config: dict[str, Any] | None = None
     is_active: bool | None = None
+    checklists: list[TemplateChecklistCreate] | None = None
 
 
 class TemplateStageResponse(BaseModel):
@@ -174,6 +192,7 @@ class InstantiateTemplate(BaseModel):
         assigned_to (uuid.UUID | None): ID исполнителя.
         title (str | None): Переопределение заголовка задачи.
         custom_fields (dict): Начальные значения кастомных полей.
+        observer_ids (list[uuid.UUID]): Наблюдатели для инстанцированной задачи.
     """
 
     client_id: uuid.UUID | None = None
@@ -183,3 +202,59 @@ class InstantiateTemplate(BaseModel):
     assigned_to: uuid.UUID | None = None
     title: str | None = Field(default=None, max_length=500)
     custom_fields: dict[str, Any] = Field(default_factory=dict)
+    observer_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+# ------------------------------------------------------------------
+# Workflow definition (typed) — used by WorkflowEngine
+# ------------------------------------------------------------------
+
+
+class WorkflowRequiredDocument(BaseModel):
+    """Required document rule for a workflow transition.
+
+    Атрибуты:
+        type: Тип документа (например, "photo", "signed_act").
+        min_count: Минимальное количество документов этого типа.
+    """
+
+    type: str = Field(..., min_length=1, max_length=50)
+    min_count: int = Field(default=1, ge=1, le=100)
+
+
+class WorkflowTransition(BaseModel):
+    """Typed workflow transition entry.
+
+    Атрибуты:
+        from_state: Исходный статус (в JSON хранится как ключ \"from\").
+        to: Целевой статус (ключ \"to\").
+        required_roles: Список ролей, которые могут выполнить переход.
+        required_fields: Список полей, которые должны быть заполнены.
+        required_checklists: Список чек-листов/гейтов, которые должны быть завершены.
+        required_documents: Требуемые документы по типам и количеству.
+        auto_actions: Автоматические действия (произвольные объекты).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_state: str = Field(..., alias="from", min_length=1, max_length=100)
+    to: str = Field(..., min_length=1, max_length=100)
+    required_roles: list[str] = Field(default_factory=list)
+    required_fields: list[str] = Field(default_factory=list)
+    required_checklists: list[str] = Field(default_factory=list)
+    required_documents: list[WorkflowRequiredDocument] = Field(default_factory=list)
+    auto_actions: list[Any] = Field(default_factory=list)
+
+
+class WorkflowDefinition(BaseModel):
+    """Typed workflow definition stored in TaskTemplate.workflow_definition.
+
+    Атрибуты:
+        initial_state: Начальный статус (опционально).
+        states: Упорядоченный список статусов.
+        transitions: Список допустимых переходов.
+    """
+
+    initial_state: str | None = None
+    states: list[str] = Field(default_factory=list)
+    transitions: list[WorkflowTransition] = Field(default_factory=list)

@@ -18,6 +18,8 @@ class DashboardStats(BaseModel):
     Атрибуты:
         total_tasks (int): Общее количество задач.
         tasks_by_status (dict): Количество задач по статусам.
+        active_tasks (int): Количество активных задач (не в финальных статусах).
+        completed_today (int): Количество завершённых задач за текущий день.
         overdue_tasks (int): Просроченные задачи.
         total_deals (int): Общее количество сделок.
         deals_amount (Decimal): Общая сумма сделок.
@@ -27,6 +29,8 @@ class DashboardStats(BaseModel):
 
     total_tasks: int = 0
     tasks_by_status: dict[str, int] = Field(default_factory=dict)
+    active_tasks: int = 0
+    completed_today: int = 0
     overdue_tasks: int = 0
     total_deals: int = 0
     deals_amount: Decimal = Decimal("0")

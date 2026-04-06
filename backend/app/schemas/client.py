@@ -22,7 +22,7 @@ class ClientCreate(BaseModel):
         email (str | None): Email адрес.
         inn (str | None): ИНН (для организаций).
         coordinates (dict | None): GPS координаты {lat, lng}.
-        metadata (dict): Произвольные дополнительные данные.
+        extra_data (dict): Произвольные дополнительные данные.
         notes (str | None): Заметки менеджера.
     """
 
@@ -33,7 +33,7 @@ class ClientCreate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     inn: str | None = Field(default=None, max_length=20)
     coordinates: dict[str, Any] | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
 
 
@@ -47,7 +47,7 @@ class ClientUpdate(BaseModel):
         email (str | None): Email адрес.
         inn (str | None): ИНН.
         coordinates (dict | None): GPS координаты {lat, lng}.
-        metadata (dict | None): Произвольные дополнительные данные.
+        extra_data (dict | None): Произвольные дополнительные данные.
         notes (str | None): Заметки менеджера.
     """
 
@@ -57,7 +57,7 @@ class ClientUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     inn: str | None = Field(default=None, max_length=20)
     coordinates: dict[str, Any] | None = None
-    metadata: dict[str, Any] | None = None
+    extra_data: dict[str, Any] | None = None
     notes: str | None = None
 
 
@@ -119,7 +119,7 @@ class ClientResponse(BaseModel):
         email (str | None): Email адрес.
         inn (str | None): ИНН.
         coordinates (dict | None): GPS координаты {lat, lng}.
-        metadata (dict): Дополнительные данные.
+        extra_data (dict): Дополнительные данные.
         notes (str | None): Заметки менеджера.
         contacts (list[ClientContactResponse]): Контактные лица.
         created_at (datetime): Дата создания записи.
@@ -136,7 +136,7 @@ class ClientResponse(BaseModel):
     email: str | None = None
     inn: str | None = None
     coordinates: dict[str, Any] | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
     contacts: list[ClientContactResponse] = Field(default_factory=list)
     created_at: datetime

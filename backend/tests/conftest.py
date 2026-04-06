@@ -1,0 +1,14 @@
+"""Pytest configuration: minimal env so ``app`` modules can be imported."""
+
+from __future__ import annotations
+
+import os
+
+# ``Settings`` requires ``database_url``; unit tests do not connect unless marked.
+os.environ.setdefault(
+    "DATABASE_URL",
+    os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/hvac_crm",
+    ),
+)

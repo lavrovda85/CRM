@@ -4,13 +4,13 @@
 и регистрирует периодические задачи.
 """
 
-import os
-
 from celery import Celery
 from celery.schedules import crontab
+from app.core.config import get_settings
 
-broker_url = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/1")
-result_backend = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
+settings = get_settings()
+broker_url = settings.celery_broker_url
+result_backend = settings.celery_result_backend
 
 celery_app = Celery(
     "hvac_crm",
@@ -19,8 +19,12 @@ celery_app = Celery(
     include=[
         "app.workers.notifications",
         "app.workers.sla_monitor",
+        "app.workers.task_notifications",
         "app.workers.reports",
         "app.workers.depreciation_calc",
+        "app.workers.scheduled_tasks",
+        "app.workers.tender_analysis",
+        "app.workers.tender_smeta",
     ],
 )
 
@@ -38,18 +42,34 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "check-sla-violations": {
         "task": "app.workers.sla_monitor.check_sla_violations",
-        "schedule": crontab(minute="*/15"),
+        "schedule": crontab(minute=f"*/{settings.celery_sla_check_every_minutes}"),
     },
     "calculate-monthly-depreciation": {
         "task": "app.workers.depreciation_calc.calculate_monthly_depreciation",
-        "schedule": crontab(day_of_month="1", hour="2", minute="0"),
+        "schedule": crontab(
+            day_of_month=str(settings.celery_monthly_depreciation_day_of_month),
+            hour=str(settings.celery_monthly_depreciation_hour),
+            minute=str(settings.celery_monthly_depreciation_minute),
+        ),
     },
     "send-daily-summary": {
         "task": "app.workers.reports.send_daily_summary",
-        "schedule": crontab(hour="20", minute="0"),
+        "schedule": crontab(
+            hour=str(settings.celery_daily_summary_hour),
+            minute=str(settings.celery_daily_summary_minute),
+        ),
     },
     "check-overdue-tasks": {
         "task": "app.workers.sla_monitor.check_overdue_tasks",
-        "schedule": crontab(minute="*/30"),
+        "schedule": crontab(minute=f"*/{settings.celery_overdue_check_every_minutes}"),
     },
+    "scan-task-deadline-notifications": {
+        "task": "app.workers.task_notifications.scan_task_deadlines",
+        "schedule": crontab(minute=f"*/{settings.celery_task_notifications_scan_every_minutes}"),
+    },
+}
+
+celery_app.conf.beat_schedule["create-env-scheduled-task"] = {
+    "task": "app.workers.scheduled_tasks.create_env_scheduled_task",
+    "schedule": crontab(minute="*"),
 }

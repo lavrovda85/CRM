@@ -18,10 +18,13 @@ import {
   MoreHorizontal,
   TrendingUp,
   FileText,
+  FileStack,
   Package,
   Wrench,
   BarChart3,
   Settings,
+  MessageSquareText,
+  Sparkles,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -35,23 +38,26 @@ interface MobileNavItem {
 }
 
 const PRIMARY_ITEMS: MobileNavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
-  { label: "Time", href: "/time", icon: Clock },
-  { label: "Clients", href: "/clients", icon: Users },
+  { label: "Главная", href: "/", icon: LayoutDashboard },
+  { label: "Задачи", href: "/tasks", icon: CheckSquare },
+  { label: "Время", href: "/time", icon: Clock },
+  { label: "Клиенты", href: "/clients", icon: Users },
 ];
 
 const ALL_ITEMS: MobileNavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
-  { label: "Clients", href: "/clients", icon: Users },
-  { label: "Deals", href: "/deals", icon: TrendingUp },
-  { label: "Tenders", href: "/tenders", icon: FileText },
-  { label: "Time", href: "/time", icon: Clock },
-  { label: "Warehouse", href: "/warehouse", icon: Package },
-  { label: "Equipment", href: "/equipment", icon: Wrench },
-  { label: "Analytics", href: "/analytics", icon: BarChart3 },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Главная", href: "/", icon: LayoutDashboard },
+  { label: "Задачи", href: "/tasks", icon: CheckSquare },
+  { label: "Шаблоны", href: "/templates", icon: FileStack },
+  { label: "Клиенты", href: "/clients", icon: Users },
+  { label: "Сделки", href: "/deals", icon: TrendingUp },
+  { label: "Тендеры", href: "/tenders", icon: FileText },
+  { label: "Время", href: "/time", icon: Clock },
+  { label: "Склад", href: "/warehouse", icon: Package },
+  { label: "Оборудование", href: "/equipment", icon: Wrench },
+  { label: "Аналитика", href: "/analytics", icon: BarChart3 },
+  { label: "Чат", href: "/chat", icon: MessageSquareText },
+  { label: "AI", href: "/assistant", icon: Sparkles },
+  { label: "Настройки", href: "/settings", icon: Settings },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -97,7 +103,7 @@ export function MobileNav() {
           )}
         >
           <MoreHorizontal className="h-5 w-5" />
-          <span>More</span>
+          <span>Ещё</span>
         </button>
       </nav>
 
@@ -106,7 +112,7 @@ export function MobileNav() {
         <div className="fixed inset-0 z-50 flex flex-col bg-white md:hidden">
           <div className="flex items-center justify-between border-b border-surface-100 px-4 py-3">
             <span className="text-base font-semibold text-surface-900">
-              Menu
+              Меню
             </span>
             <button
               onClick={() => setMenuOpen(false)}

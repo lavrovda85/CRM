@@ -5,6 +5,7 @@
  * управление модальными окнами и мобильным меню.
  */
 
+import type { ReactNode } from "react";
 import { create } from "zustand";
 
 interface ModalState {
@@ -19,6 +20,8 @@ interface UiState {
   activePage: string;
   activeModal: ModalState | null;
   searchOpen: boolean;
+  /** Optional center area in `Header` (e.g. tasks toolbar). Cleared on route leave. */
+  headerToolbar: ReactNode | null;
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -30,6 +33,7 @@ interface UiState {
   closeModal: () => void;
   toggleSearch: () => void;
   setSearchOpen: (open: boolean) => void;
+  setHeaderToolbar: (node: ReactNode | null) => void;
 }
 
 const SIDEBAR_KEY = "hvac_sidebar_collapsed";
@@ -51,6 +55,7 @@ export const useUiStore = create<UiState>((set) => ({
   activePage: "dashboard",
   activeModal: null,
   searchOpen: false,
+  headerToolbar: null,
 
   toggleSidebar: () =>
     set((state) => {
@@ -84,4 +89,6 @@ export const useUiStore = create<UiState>((set) => ({
   toggleSearch: () => set((state) => ({ searchOpen: !state.searchOpen })),
 
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  setHeaderToolbar: (node) => set({ headerToolbar: node }),
 }));

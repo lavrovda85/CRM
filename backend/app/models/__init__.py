@@ -4,11 +4,11 @@
 и автоматического обнаружения Alembic.
 """
 
-from app.models.base import BaseModel, TimestampMixin
+from app.models.base import BaseModel, TenantMixin, TimestampMixin
+from app.models.company import Company, UserCompanyMembership
 from app.models.user import User
 from app.models.client import Client, ClientContact
 from app.models.deal import Deal, DealStage
-from app.models.tender import Tender
 from app.models.task_template import TaskTemplate, TemplateChecklist, TemplateField, TemplateStage
 from app.models.task import Task
 from app.models.task_status import TaskStatusHistory
@@ -23,10 +23,17 @@ from app.models.document import Document, DocumentVersion
 from app.models.comment import Comment
 from app.models.notification import Notification
 from app.models.reference import Reference, ReferenceItem
+from app.models.chat import ChatAttachment, ChatMessage, ChatRoom
+from app.models.tender import Tender, TenderChecklist, TenderChecklistItem, TenderComment
+from app.models.ai_assistant_chat import AiAssistantMessage, AiAssistantSession
+from app.models.system_setting import SystemSetting
 
 __all__ = [
     "BaseModel",
+    "TenantMixin",
     "TimestampMixin",
+    "Company",
+    "UserCompanyMembership",
     "User",
     "Client",
     "ClientContact",
@@ -51,8 +58,17 @@ __all__ = [
     "DepreciationRecord",
     "Document",
     "DocumentVersion",
+    "TenderChecklist",
+    "TenderChecklistItem",
     "Comment",
     "Notification",
+    "ChatMessage",
+    "ChatAttachment",
+    "ChatRoom",
+    "TenderComment",
     "Reference",
     "ReferenceItem",
+    "AiAssistantMessage",
+    "AiAssistantSession",
+    "SystemSetting",
 ]

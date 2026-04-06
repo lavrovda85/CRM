@@ -6,6 +6,11 @@
   :root {
     --color-primary: 99 102 241;
   }
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-surface-50 text-surface-900 antialiased;
   }

@@ -10,10 +10,10 @@ from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Notification(BaseModel):
+class Notification(TenantMixin, BaseModel):
     """Notification delivery record.
 
     Атрибуты:

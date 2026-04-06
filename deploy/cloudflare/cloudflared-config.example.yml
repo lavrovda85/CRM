@@ -1,0 +1,15 @@
+# Copy to cloudflared-config.yml and fill tunnel UUID / credentials-file after:
+#   cloudflared tunnel login
+#   cloudflared tunnel create crm-demo
+#
+# Run: cloudflared tunnel --config cloudflared-config.yml run
+#
+# Ingress: point to the host port where nginx listens (80 if docker maps 80:80).
+
+tunnel: <YOUR_TUNNEL_ID>
+credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
+
+ingress:
+  - hostname: crm-demo.example.com
+    service: http://127.0.0.1:80
+  - service: http_status:404

@@ -6,20 +6,28 @@
 
 import uuid
 
-import structlog
+import logging
+
+try:
+    import structlog  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    structlog = None  # type: ignore
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.config import Settings, get_settings
 from app.core.dependencies import PaginationParams, get_current_user, get_db
 from app.core.exceptions import ExternalServiceError, NotFoundError
 from app.core.pagination import PaginatedResponse
 from app.core.security import CurrentUser
-from app.models import Document, User
+from app.models import Document, Task, Tender, User
 from app.schemas.document import DocumentDownloadResponse, DocumentResponse
+from app.services.tender.tender_analysis_queue import schedule_tender_analysis
+from app.services.user_identity import resolve_users_table_id
 
-logger = structlog.get_logger()
+logger = structlog.get_logger() if structlog is not None else logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents")
 
@@ -48,15 +56,35 @@ def _get_s3_client(settings: Settings):
     )
 
 
+def _get_presign_s3_client(settings: Settings):
+    """Build an S3 client for presigned URL generation.
+
+    This client must use an endpoint reachable from the user's browser.
+    """
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "s3",
+        endpoint_url=settings.minio_public_endpoint,
+        aws_access_key_id=settings.minio_access_key,
+        aws_secret_access_key=settings.minio_secret_key,
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",
+    )
+
+
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
     file: UploadFile = File(...),
     task_id: uuid.UUID | None = Form(default=None),
+    tender_id: uuid.UUID | None = Form(default=None),
     doc_type: str = Form(default="other"),
     label: str | None = Form(default=None),
     description: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
     settings: Settings = Depends(get_settings),
 ) -> DocumentResponse:
     """Upload a file to MinIO storage.
@@ -67,6 +95,7 @@ async def upload_document(
     Аргументы:
         file: Загружаемый файл.
         task_id: ID задачи для привязки.
+        tender_id: ID тендера для привязки.
         doc_type: Тип документа — photo, signed_act, invoice, report, other.
         label: Метка документа.
         description: Описание файла.
@@ -77,10 +106,8 @@ async def upload_document(
     Возвращает:
         Метаданные загруженного документа.
     """
-    user_result = await db.execute(
-        select(User).where(User.keycloak_id == user.sub)
-    )
-    db_user = user_result.scalar_one_or_none()
+    uid = await resolve_users_table_id(db, user)
+    db_user = await db.get(User, uid)
     if not db_user:
         raise NotFoundError("User", user.sub)
 
@@ -88,6 +115,22 @@ async def upload_document(
     file_size = len(file_content)
     filename = file.filename or "unnamed"
     content_type = file.content_type or "application/octet-stream"
+
+    company_id = ctx.company_id
+    if tender_id is not None:
+        tr = await db.get(Tender, tender_id)
+        if tr is None:
+            raise NotFoundError("Tender", str(tender_id))
+        if tr.company_id != ctx.company_id:
+            raise NotFoundError("Tender", str(tender_id))
+        company_id = tr.company_id
+    elif task_id is not None:
+        tk = await db.get(Task, task_id)
+        if tk is None:
+            raise NotFoundError("Task", str(task_id))
+        if tk.company_id != ctx.company_id:
+            raise NotFoundError("Task", str(task_id))
+        company_id = tk.company_id
 
     doc_id = uuid.uuid4()
     storage_key = f"documents/{doc_id}/{filename}"
@@ -110,7 +153,9 @@ async def upload_document(
 
     document = Document(
         id=doc_id,
+        company_id=company_id,
         task_id=task_id,
+        tender_id=tender_id,
         uploaded_by=db_user.id,
         doc_type=doc_type,
         label=label,
@@ -119,18 +164,22 @@ async def upload_document(
         mime_type=content_type,
         file_size=file_size,
         version=1,
-        metadata={},
+        extra_data={},
         description=description,
     )
     db.add(document)
     await db.flush()
     await db.refresh(document)
+    await db.commit()
+    if tender_id:
+        schedule_tender_analysis(tender_id)
     return DocumentResponse.model_validate(document)
 
 
 @router.get("/", response_model=PaginatedResponse[DocumentResponse])
 async def list_documents(
     task_id: uuid.UUID | None = Query(default=None, description="Filter by task"),
+    tender_id: uuid.UUID | None = Query(default=None, description="Filter by tender"),
     doc_type: str | None = Query(default=None, description="Filter by document type"),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -143,6 +192,7 @@ async def list_documents(
 
     Аргументы:
         task_id: Фильтр по ID задачи.
+        tender_id: Фильтр по ID тендера.
         doc_type: Фильтр по типу документа.
         pagination: Параметры пагинации.
         db: Асинхронная сессия БД.
@@ -152,11 +202,14 @@ async def list_documents(
         Постраничный ответ со списком документов.
     """
     query = select(Document)
-    count_query = select(func.count(Document.id))
+    count_query = select(func.count(Document.id))  # pylint: disable=not-callable
 
     if task_id:
         query = query.where(Document.task_id == task_id)
         count_query = count_query.where(Document.task_id == task_id)
+    if tender_id:
+        query = query.where(Document.tender_id == tender_id)
+        count_query = count_query.where(Document.tender_id == tender_id)
     if doc_type:
         query = query.where(Document.doc_type == doc_type)
         count_query = count_query.where(Document.doc_type == doc_type)
@@ -229,7 +282,7 @@ async def download_document(
         raise NotFoundError("Document", str(document_id))
 
     try:
-        s3 = _get_s3_client(settings)
+        s3 = _get_presign_s3_client(settings)
         url = s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": settings.minio_bucket, "Key": document.storage_path},

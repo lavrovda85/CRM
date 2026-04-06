@@ -84,7 +84,7 @@ export function DynamicForm({
   fields,
   initialValues = {},
   onSubmit,
-  submitLabel = "Save",
+  submitLabel = "Сохранить",
   loading = false,
   className,
 }: DynamicFormProps) {
@@ -124,7 +124,7 @@ export function DynamicForm({
     for (const f of fields) {
       const v = values[f.key];
       if (f.is_required && (v === "" || v === null || v === undefined)) {
-        errs[f.key] = `${f.label} is required`;
+        errs[f.key] = `${f.label} — обязательное поле`;
       }
     }
     setErrors(errs);
@@ -230,7 +230,7 @@ export function DynamicForm({
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setValue(field.key, e.target.value)}
             className={cn(inputCls, hasError && errorCls)}
           >
-            <option value="">{field.placeholder ?? "Select..."}</option>
+            <option value="">{field.placeholder ?? "Выберите..."}</option>
             {field.options?.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -245,7 +245,7 @@ export function DynamicForm({
           <div className="relative">
             <input
               type="text"
-              placeholder={field.placeholder ?? "Search..."}
+              placeholder={field.placeholder ?? "Поиск..."}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 const q = sanitize(e.target.value);
                 handleRefSearch(field, q);
@@ -272,7 +272,7 @@ export function DynamicForm({
             )}
             {val != null && (
               <p className="mt-1 text-xs text-surface-400">
-                Selected: {String(val) as string}
+                Выбрано: {String(val) as string}
               </p>
             )}
           </div>
@@ -310,7 +310,7 @@ export function DynamicForm({
           "disabled:opacity-50 disabled:cursor-not-allowed",
         )}
       >
-        {loading ? "Saving..." : submitLabel}
+        {loading ? "Сохранение..." : submitLabel}
       </button>
     </form>
   );

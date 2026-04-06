@@ -75,7 +75,7 @@ export function StatsCard({
             {isPositive ? "+" : ""}
             {trend}%
           </span>
-          <span className="text-sm text-surface-400">vs last period</span>
+          <span className="text-sm text-surface-400">к пред. периоду</span>
         </div>
       )}
     </div>

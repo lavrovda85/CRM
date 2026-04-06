@@ -17,9 +17,10 @@ from sqlalchemy.orm import joinedload
 
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.checklist import Checklist, ChecklistItem
-from app.models.task import Task
+from app.models.task import ALLOWED_TASK_VISIBILITIES, TASK_VISIBILITY_COMPANY, Task
 from app.models.task_status import TaskStatusHistory
 from app.models.task_template import TaskTemplate, TemplateChecklist
+from app.services.task_service import TaskService
 
 
 class TemplateService:
@@ -151,7 +152,8 @@ class TemplateService:
             template_id (uuid.UUID): UUID шаблона для инстанцирования.
             params (dict[str, Any]): Параметры задачи:
                 client_id (UUID), title (str),
-                assigned_to (UUID, optional), custom_fields (dict, optional),
+                assigned_to (UUID, optional), requested_by (UUID, optional),
+                co_assignee_ids (list[UUID], optional), custom_fields (dict, optional),
                 priority (str, optional), due_date (datetime, optional).
             user (dict[str, Any]): Текущий пользователь с ключом "id".
 
@@ -182,18 +184,24 @@ class TemplateService:
 
         sla_deadline = TemplateService._calculate_sla_deadline(template)
 
+        vis = params.get("visibility", TASK_VISIBILITY_COMPANY)
+        if vis not in ALLOWED_TASK_VISIBILITIES:
+            raise ValidationError("visibility", "Invalid visibility value")
         task = Task(
             id=uuid.uuid4(),
             template_id=template.id,
             client_id=params.get("client_id"),
             assigned_to=params.get("assigned_to"),
             created_by=user["id"],
+            requested_by=params.get("requested_by"),
             title=params["title"],
+            description=params.get("description"),
             status=initial_status,
             priority=params.get("priority", "medium"),
             custom_fields=custom_fields,
             due_date=params.get("due_date"),
             sla_deadline=sla_deadline,
+            visibility=vis,
         )
         db.add(task)
 
@@ -233,6 +241,15 @@ class TemplateService:
                 db.add(checklist_item)
 
         await db.flush()
+        co_raw = params.get("co_assignee_ids") or []
+        if co_raw:
+            uids = [uuid.UUID(str(x)) for x in co_raw]
+            await TaskService.set_co_assignees(db, task.id, uids)
+
+        obs_raw = params.get("observer_ids") or []
+        if obs_raw:
+            uids = [uuid.UUID(str(x)) for x in obs_raw]
+            await TaskService.set_observers(db, task.id, uids)
         await db.refresh(task)
         return task
 
@@ -257,6 +274,28 @@ class TemplateService:
                     f"Required field '{field.label}' is missing",
                 )
 
+        for key in TemplateService._json_schema_required_keys(template):
+            val = custom_fields.get(key)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                raise ValidationError(
+                    key,
+                    f"Required field '{key}' is missing (from template.required_fields)",
+                )
+
+    @staticmethod
+    def _json_schema_required_keys(template: TaskTemplate) -> list[str]:
+        """Keys declared required on ``TaskTemplate.required_fields`` JSON (strings or dicts)."""
+        raw = template.required_fields or []
+        keys: list[str] = []
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                keys.append(item.strip())
+            elif isinstance(item, dict):
+                k = item.get("key")
+                if isinstance(k, str) and k.strip() and item.get("required", True):
+                    keys.append(k.strip())
+        return keys
+
     @staticmethod
     def _get_initial_status(template: TaskTemplate) -> str:
         """Extract initial status from template workflow definition.
@@ -265,9 +304,12 @@ class TemplateService:
             template: Шаблон с workflow_definition.
 
         Returns:
-            str: Начальный статус из workflow. По умолчанию "new".
+            str: ``initial_state`` if set, else first entry in ``states``, else ``new``.
         """
         workflow = template.workflow_definition or {}
+        explicit = workflow.get("initial_state")
+        if isinstance(explicit, str) and explicit.strip():
+            return explicit.strip()
         states = workflow.get("states", [])
         return states[0] if states else "new"
 

@@ -65,7 +65,7 @@ export function ChecklistPanel({
             {/* Header */}
             <div className="flex items-center gap-2 mb-3">
               {cl.gatesTransition && (
-                <Lock className="h-4 w-4 text-amber-500 shrink-0" aria-label="Gates transition" />
+                <Lock className="h-4 w-4 text-amber-500 shrink-0" aria-label="Блокирует переход" />
               )}
               <h4 className="text-sm font-semibold text-surface-800">{cl.title}</h4>
               <span className="ml-auto text-xs text-surface-400">

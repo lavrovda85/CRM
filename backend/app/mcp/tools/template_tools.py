@@ -1,4 +1,4 @@
-"""MCP tools for task template management in HVAC CRM/ERP.
+"""MCP tools for task template management in SPEC CRM/ERP.
 
 Инструменты для просмотра, создания шаблонов задач
 и инстанцирования задач из шаблонов через MCP-протокол.
@@ -8,8 +8,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from app.mcp.server import mcp
+from app.mcp.actor_context import actor_dict_for_service
+from app.core.database import async_session_factory
+from app.models.task_template import TemplateChecklist
+from app.schemas.template import TemplateResponse
+from app.services.template_service import TemplateService
 
 
 @mcp.tool()
@@ -32,20 +38,21 @@ async def list_templates(category: str | None = None) -> list[dict]:
         AI agent: "Какие шаблоны есть для монтажных работ?"
         >>> list_templates(category="installation")
     """
-    # TODO: SELECT * FROM task_templates WHERE is_active = true
-    # TODO: Apply category filter if provided
-    # TODO: JOIN template_fields, template_stages for summary
-    return [
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Placeholder template",
-            "category": category or "general",
-            "description": None,
-            "required_fields": [],
-            "sla_config": {},
-            "is_active": True,
-        }
-    ]
+    async with async_session_factory() as db:
+        templates = await TemplateService.list_templates(db, category=category, active_only=True)
+        # Возвращаем компактный список (без стадий/полей) — MCP-агенту обычно хватает.
+        return [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "category": t.category,
+                "description": t.description,
+                "required_fields": t.required_fields or [],
+                "sla_config": t.sla_config or {},
+                "is_active": bool(t.is_active),
+            }
+            for t in templates
+        ]
 
 
 @mcp.tool()
@@ -55,6 +62,7 @@ async def create_template(
     workflow_definition: dict,
     required_fields: list[dict] | None = None,
     sla_config: dict | None = None,
+    checklists: list[dict] | None = None,
 ) -> dict:
     """Create a new task template with workflow and field definitions.
 
@@ -94,30 +102,137 @@ async def create_template(
         ...     sla_config={"max_duration_hours": 24, "warning_at_percent": 75},
         ... )
     """
-    # TODO: INSERT INTO task_templates (name, category, workflow_definition, ...)
-    # TODO: INSERT INTO template_fields for each required_fields entry
-    # TODO: Validate workflow_definition structure (states + transitions)
-    template_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
-    return {
-        "id": template_id,
+    data: dict[str, Any] = {
         "name": name,
         "category": category,
         "workflow_definition": workflow_definition,
         "required_fields": required_fields or [],
         "sla_config": sla_config or {},
-        "is_active": True,
-        "created_at": now,
     }
+
+    async with async_session_factory() as db:
+        tpl = await TemplateService.create_template(db, data)
+
+        # Чек-листы храним как TemplateChecklist (через DB), т.к. service-layer
+        # пока не включает CRUD чек-листов шаблона.
+        checklists = checklists or []
+        for idx, cl in enumerate(checklists):
+            items_raw = cl.get("items") or []
+            items_serialized = [
+                x if isinstance(x, str) else x.get("title", "") for x in items_raw
+            ]
+            db.add(
+                TemplateChecklist(
+                    template_id=tpl.id,
+                    checklist_id=cl.get("checklist_id") or f"cl-{idx}",
+                    title=cl.get("title") or f"Чек-лист {idx + 1}",
+                    gate_transition=cl.get("gate_transition") or None,
+                    items=items_serialized,
+                )
+            )
+        await db.flush()
+        await db.commit()
+
+        full = await TemplateService.get_template(db, tpl.id)
+        return TemplateResponse.model_validate(full).model_dump(mode="json")
+
+
+@mcp.tool()
+async def get_template(template_id: str) -> dict:
+    """Get a task template by ID, including checklists, stages and fields.
+
+    Аргументы:
+        template_id: UUID шаблона.
+
+    Возвращает:
+        Полный TemplateResponse.
+    """
+    async with async_session_factory() as db:
+        tpl = await TemplateService.get_template(db, uuid.UUID(template_id))
+        return TemplateResponse.model_validate(tpl).model_dump(mode="json")
+
+
+@mcp.tool()
+async def update_template(template_id: str, fields: dict) -> dict:
+    """Update a task template by ID.
+
+    Поддерживает обновление основных полей и замену чек-листов, если
+    передано `checklists` (полностью заменяет текущие).
+
+    Аргументы:
+        template_id: UUID шаблона.
+        fields: Поля для обновления. Опционально включает `checklists`.
+    """
+    tid = uuid.UUID(template_id)
+    async with async_session_factory() as db:
+        tpl = await TemplateService.get_template(db, tid)
+
+        # простое setattr для известных полей
+        for key in (
+            "name",
+            "category",
+            "description",
+            "workflow_definition",
+            "required_fields",
+            "sla_config",
+            "auto_warehouse",
+            "required_documents",
+            "is_active",
+        ):
+            if key in fields:
+                setattr(tpl, key, fields[key])
+
+        if "checklists" in fields:
+            new_checklists = fields.get("checklists") or []
+            # replace all
+            from sqlalchemy import delete as sa_delete
+
+            await db.execute(sa_delete(TemplateChecklist).where(TemplateChecklist.template_id == tid))
+            await db.flush()
+            for idx, cl in enumerate(new_checklists):
+                items_raw = cl.get("items") or []
+                items_serialized = [
+                    x if isinstance(x, str) else x.get("title", "") for x in items_raw
+                ]
+                db.add(
+                    TemplateChecklist(
+                        template_id=tid,
+                        checklist_id=cl.get("checklist_id") or f"cl-{idx}",
+                        title=cl.get("title") or f"Чек-лист {idx + 1}",
+                        gate_transition=cl.get("gate_transition") or None,
+                        items=items_serialized,
+                    )
+                )
+            await db.flush()
+
+        await db.flush()
+        await db.commit()
+
+        full = await TemplateService.get_template(db, tid)
+        return TemplateResponse.model_validate(full).model_dump(mode="json")
+
+
+@mcp.tool()
+async def delete_template(template_id: str) -> dict:
+    """Delete a task template by ID (hard delete)."""
+    tid = uuid.UUID(template_id)
+    async with async_session_factory() as db:
+        tpl = await TemplateService.get_template(db, tid)
+        await db.delete(tpl)
+        await db.flush()
+        await db.commit()
+        return {"deleted": True, "id": template_id}
 
 
 @mcp.tool()
 async def instantiate_template(
     template_id: str,
-    client_id: str,
     title: str,
+    client_id: str | None = None,
     assigned_to: str | None = None,
     custom_fields: dict | None = None,
+    due_date: str | None = None,
+    priority: str = "medium",
 ) -> dict:
     """Create a task from a template, inheriting workflow and checklists.
 
@@ -126,11 +241,13 @@ async def instantiate_template(
 
     Args:
         template_id (str): UUID шаблона задачи для инстанцирования.
-        client_id (str): UUID клиента, к которому привязывается задача.
         title (str): Заголовок задачи (может отличаться от шаблона).
+        client_id (str | None): UUID клиента (опционально для задач без привязки к карточке клиента).
         assigned_to (str | None): UUID исполнителя.
         custom_fields (dict | None): Значения кастомных полей шаблона
             (например, {"area_sqm": 45, "equipment_model": "Daikin FTXB35C"}).
+        due_date (str | None): ISO 8601 срок выполнения.
+        priority (str): low | medium | high | critical.
 
     Returns:
         dict: Созданная задача с полями id, title, status, template_id,
@@ -146,23 +263,31 @@ async def instantiate_template(
         ...     custom_fields={"area_sqm": 45, "floor": 7},
         ... )
     """
-    # TODO: SELECT template with checklists, fields, stages
-    # TODO: Validate required custom_fields against template.required_fields
-    # TODO: INSERT task with status = first state from workflow_definition
-    # TODO: Calculate sla_deadline from sla_config.max_duration_hours
-    # TODO: INSERT checklists from template_checklists with items
-    # TODO: INSERT checklist_items from template_checklists.items JSON
-    task_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
-    return {
-        "id": task_id,
+    tid = uuid.UUID(template_id)
+    params: dict[str, Any] = {
+        "client_id": uuid.UUID(client_id) if client_id else None,
         "title": title,
-        "status": "new",
-        "template_id": template_id,
-        "client_id": client_id,
-        "assigned_to": assigned_to,
+        "assigned_to": uuid.UUID(assigned_to) if assigned_to else None,
         "custom_fields": custom_fields or {},
-        "checklists_created": 0,
-        "sla_deadline": None,
-        "created_at": now,
+        "priority": priority,
     }
+    if due_date:
+        params["due_date"] = datetime.fromisoformat(due_date.replace("Z", "+00:00"))
+
+    actor = actor_dict_for_service()
+
+    async with async_session_factory() as db:
+        task = await TemplateService.instantiate_template(db, tid, params, actor)
+        await db.commit()
+        # Возвращаем краткое представление (для MCP достаточно).
+        return {
+            "id": str(task.id),
+            "title": task.title,
+            "status": task.status,
+            "template_id": str(task.template_id) if task.template_id else None,
+            "client_id": str(task.client_id) if task.client_id else None,
+            "assigned_to": str(task.assigned_to) if task.assigned_to else None,
+            "custom_fields": task.custom_fields or {},
+            "sla_deadline": task.sla_deadline.isoformat() if task.sla_deadline else None,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+        }

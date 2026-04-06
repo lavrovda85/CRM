@@ -19,14 +19,14 @@ interface StatusMeta {
 }
 
 const STATUS_MAP: Record<StatusId, StatusMeta> = {
-  new: { label: "New", variant: "default", dotColor: "bg-surface-400" },
-  dispatched: { label: "Dispatched", variant: "info", dotColor: "bg-blue-500" },
-  in_progress: { label: "In Progress", variant: "info", dotColor: "bg-indigo-500" },
-  testing: { label: "Testing", variant: "warning", dotColor: "bg-amber-500" },
-  photo_report: { label: "Photo Report", variant: "default", dotColor: "bg-purple-500" },
-  act_signing: { label: "Act Signing", variant: "warning", dotColor: "bg-orange-500" },
-  done: { label: "Done", variant: "success", dotColor: "bg-emerald-500" },
-  cancelled: { label: "Cancelled", variant: "danger", dotColor: "bg-red-500" },
+  new: { label: "Новая", variant: "default", dotColor: "bg-surface-400" },
+  dispatched: { label: "Назначена", variant: "info", dotColor: "bg-blue-500" },
+  in_progress: { label: "В работе", variant: "info", dotColor: "bg-indigo-500" },
+  testing: { label: "Тестирование", variant: "warning", dotColor: "bg-amber-500" },
+  photo_report: { label: "Фотоотчёт", variant: "default", dotColor: "bg-purple-500" },
+  act_signing: { label: "Подписание акта", variant: "warning", dotColor: "bg-orange-500" },
+  done: { label: "Завершена", variant: "success", dotColor: "bg-emerald-500" },
+  cancelled: { label: "Отменена", variant: "danger", dotColor: "bg-red-500" },
 };
 
 export interface StatusBadgeProps {

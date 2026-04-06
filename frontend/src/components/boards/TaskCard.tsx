@@ -38,10 +38,10 @@ const PRIORITY_COLORS: Record<Priority, string> = {
 };
 
 const PRIORITY_LABELS: Record<Priority, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  critical: "Critical",
+  low: "Низкий",
+  medium: "Средний",
+  high: "Высокий",
+  critical: "Критический",
 };
 
 /* ------------------------------------------------------------------ */

@@ -1,25 +1,25 @@
-# Workflow Engine
+# Движок рабочих процессов
 
-The workflow engine is a finite-state machine (FSM) that controls task lifecycle transitions. It is implemented in `backend/app/services/workflow_engine.py` as the `WorkflowEngine` class and is the core business logic layer of the platform.
+Движок рабочих процессов представляет собой конечный автомат (КА, FSM), управляющий переходами жизненного цикла задач. Он реализован в `backend/app/services/workflow_engine.py` как класс `WorkflowEngine` и является ядром слоя бизнес-логики платформы.
 
-## Overview
+## Обзор
 
-Every task can be associated with a `TaskTemplate` that defines a `workflow_definition` — a JSONB field describing the states a task can pass through, the allowed transitions between them, and conditions that must be met before each transition is permitted.
+Каждая задача может быть связана с `TaskTemplate`, который определяет `workflow_definition` — JSONB-поле, описывающее состояния, через которые проходит задача, допустимые переходы между ними и условия, которые должны быть выполнены перед каждым переходом.
 
 ```
-┌─────────┐   transition   ┌─────────────┐   transition   ┌───────────┐
+┌─────────┐   переход      ┌─────────────┐   переход      ┌───────────┐
 │  new     │──────────────►│ in_progress  │──────────────►│ completed  │
-│ (initial)│               │(intermediate)│               │  (final)   │
+│(начальный)│              │(промежуточный)│              │ (конечный) │
 └─────────┘               └─────────────┘               └───────────┘
       │                                                       ▲
-      │              transition                               │
+      │              переход                                  │
       └───────────────────────────────────────────────────────┘
-                    (if no intermediate steps)
+                    (если нет промежуточных шагов)
 ```
 
-## Workflow Definition (JSON Structure)
+## Определение воркфлоу (JSON-структура)
 
-The `workflow_definition` is stored as JSONB on the `task_templates` table. It has two top-level keys: `states` and `transitions`, plus an `initial_state` indicator.
+`workflow_definition` хранится как JSONB в таблице `task_templates`. Содержит два ключа верхнего уровня: `states` и `transitions`, а также индикатор `initial_state`.
 
 ```json
 {
@@ -46,28 +46,28 @@ The `workflow_definition` is stored as JSONB on the `task_templates` table. It h
 }
 ```
 
-### Pydantic Validation
+### Валидация через Pydantic
 
-The JSON structure is parsed and validated at runtime by the `WorkflowDefinition` and `WorkflowTransition` Pydantic models (see `backend/app/schemas/template.py`).
+JSON-структура парсится и валидируется во время выполнения моделями Pydantic `WorkflowDefinition` и `WorkflowTransition` (см. `backend/app/schemas/template.py`).
 
-## State Types
+## Типы состояний
 
-| Type           | Semantics                                                             |
-|----------------|-----------------------------------------------------------------------|
-| `initial`      | The entry point. Tasks start in this state when created from template. Only one initial state per workflow. The engine reads `initial_state` to determine which state to assign on task creation. |
-| `intermediate` | A working state. Tasks spend time here while actions are being performed (site survey, installation, review, etc.). |
-| `final`        | Successful completion. When a task reaches a final state, `completed_at` is set. No further transitions are expected. |
-| `terminal`     | Dead end without successful completion (cancelled, rejected). `completed_at` is NOT set. No further transitions. |
+| Тип            | Семантика                                                                    |
+|----------------|-----------------------------------------------------------------------------|
+| `initial`      | Точка входа. Задачи начинаются в этом состоянии при создании из шаблона. В воркфлоу допускается только одно начальное состояние. Движок читает `initial_state` для определения начального статуса при создании задачи. |
+| `intermediate` | Рабочее состояние. Задачи находятся здесь, пока выполняются действия (осмотр, монтаж, проверка и т.д.). |
+| `final`        | Успешное завершение. Когда задача достигает конечного состояния, устанавливается `completed_at`. Дальнейшие переходы не предполагаются. |
+| `terminal`     | Тупиковое состояние без успешного завершения (отменена, отклонена). `completed_at` НЕ устанавливается. Дальнейшие переходы невозможны. |
 
-The engine sets lifecycle timestamps automatically:
-- `started_at` is set on the first transition out of `initial` (unless the target is also `cancelled`)
-- `completed_at` is set when entering a `final` state (`completed`, `done`, `closed`)
+Движок автоматически устанавливает временные метки жизненного цикла:
+- `started_at` устанавливается при первом переходе из `initial` (если целевое состояние не `cancelled`)
+- `completed_at` устанавливается при входе в `final`-состояние (`completed`, `done`, `closed`)
 
-## Transition Conditions
+## Условия перехода
 
-Each transition can specify zero or more conditions. All conditions must be satisfied for the transition to proceed. If any condition fails, a `WorkflowTransitionError` (HTTP 409) is raised with details about which conditions were not met.
+Каждый переход может содержать ноль или более условий. Все условия должны быть выполнены для разрешения перехода. Если хотя бы одно условие не выполнено, возбуждается `WorkflowTransitionError` (HTTP 409) с подробностями о невыполненных условиях.
 
-### Required Roles
+### Обязательные роли
 
 ```json
 {
@@ -77,9 +77,9 @@ Each transition can specify zero or more conditions. All conditions must be sati
 }
 ```
 
-The user performing the transition must have **at least one** of the listed roles (extracted from the Keycloak JWT `realm_access.roles`). If the list is empty, any authenticated user can perform the transition.
+Пользователь, выполняющий переход, должен иметь **хотя бы одну** из перечисленных ролей (извлекаются из JWT Keycloak `realm_access.roles`). Если список пуст, переход может выполнить любой аутентифицированный пользователь.
 
-### Required Fields
+### Обязательные поля
 
 ```json
 {
@@ -89,9 +89,9 @@ The user performing the transition must have **at least one** of the listed role
 }
 ```
 
-The engine checks that all listed fields have non-empty values. It first checks the task's standard ORM columns, then falls back to `custom_fields` JSONB. A field is considered empty if it is `null`, an empty string, or missing from both sources.
+Движок проверяет, что все перечисленные поля имеют непустые значения. Сначала проверяются стандартные ORM-колонки задачи, затем `custom_fields` JSONB. Поле считается пустым, если оно равно `null`, является пустой строкой или отсутствует в обоих источниках.
 
-### Required Checklists
+### Обязательные чек-листы
 
 ```json
 {
@@ -101,11 +101,11 @@ The engine checks that all listed fields have non-empty values. It first checks 
 }
 ```
 
-The engine looks up `Checklist` rows attached to the task where `title` or `gate_transition` matches. The gate_transition format is `"from->to"` (e.g. `"in_progress->review"`). All items in matching checklists must be marked `is_completed = true`.
+Движок находит строки `Checklist`, прикреплённые к задаче, где `title` или `gate_transition` совпадает. Формат gate_transition — `"from->to"` (напр. `"in_progress->review"`). Все элементы совпадающих чек-листов должны быть отмечены как `is_completed = true`.
 
-Checklists are created automatically when a task is instantiated from a template (copied from `TemplateChecklist` rows). Each checklist item maps to a `ChecklistItem` row that individual users can toggle.
+Чек-листы создаются автоматически при инстанцировании задачи из шаблона (копируются из строк `TemplateChecklist`). Каждый элемент чек-листа соответствует строке `ChecklistItem`, которую отдельные пользователи могут переключать.
 
-### Required Documents
+### Обязательные документы
 
 ```json
 {
@@ -118,15 +118,15 @@ Checklists are created automatically when a task is instantiated from a template
 }
 ```
 
-The engine counts `Document` rows attached to the task grouped by `doc_type`. Each requirement specifies a document type and the minimum number of uploads needed. The transition is blocked until all minimums are met.
+Движок подсчитывает строки `Document`, прикреплённые к задаче, группируя по `doc_type`. Каждое требование указывает тип документа и минимальное количество загрузок. Переход блокируется до выполнения всех минимумов.
 
-## Auto-Actions
+## Авто-действия
 
-Transitions can trigger automatic side effects after the status change is committed. These are defined in the `auto_actions` array of each transition.
+Переходы могут запускать автоматические побочные эффекты после фиксации изменения статуса. Они определяются в массиве `auto_actions` каждого перехода.
 
 ### `deduct_warehouse`
 
-Automatically deducts materials from warehouse stock based on the task's `custom_fields`.
+Автоматическое списание материалов со склада на основе `custom_fields` задачи.
 
 ```json
 {
@@ -135,19 +135,19 @@ Automatically deducts materials from warehouse stock based on the task's `custom
 }
 ```
 
-**Behavior:**
+**Поведение:**
 
-1. Read `task.custom_fields[from_field]` (defaults to `"materials_used"`)
-2. Expect an array of `{"item_id": "uuid", "quantity": N}`
-3. For each item:
-   - Verify `available = quantity - reserved_quantity >= requested`
-   - Subtract from `WarehouseItem.quantity`
-   - Create a `WarehouseMovement` record with `movement_type = "consumption"`
-4. If stock is insufficient, raise `WarehouseInsufficientStockError` (rolls back the transition)
+1. Читает `task.custom_fields[from_field]` (по умолчанию `"materials_used"`)
+2. Ожидает массив `{"item_id": "uuid", "quantity": N}`
+3. Для каждой позиции:
+   - Проверяет `available = quantity - reserved_quantity >= requested`
+   - Вычитает из `WarehouseItem.quantity`
+   - Создаёт запись `WarehouseMovement` с `movement_type = "consumption"`
+4. При недостаточном остатке возбуждает `WarehouseInsufficientStockError` (откатывает переход)
 
 ### `complete_time_entry`
 
-Closes all open (running) time entries for the task.
+Закрывает все открытые (запущенные) записи учёта времени по задаче.
 
 ```json
 {
@@ -155,17 +155,17 @@ Closes all open (running) time entries for the task.
 }
 ```
 
-**Behavior:**
+**Поведение:**
 
-1. Find all `TimeEntry` rows where `task_id` matches and `ended_at IS NULL`
-2. Set `ended_at = now()`
-3. Calculate `duration_minutes = (ended_at - started_at) / 60`
+1. Находит все строки `TimeEntry`, где `task_id` совпадает и `ended_at IS NULL`
+2. Устанавливает `ended_at = now()`
+3. Рассчитывает `duration_minutes = (ended_at - started_at) / 60`
 
-This is typically used on transitions to `review` or `completed` to ensure no timers are left running.
+Обычно используется при переходе в `review` или `completed`, чтобы не оставлять запущенные таймеры.
 
 ### `notify`
 
-Creates notification records and dispatches them via Celery.
+Создаёт записи уведомлений и отправляет их через Celery.
 
 ```json
 {
@@ -175,19 +175,19 @@ Creates notification records and dispatches them via Celery.
 }
 ```
 
-**Behavior:**
+**Поведение:**
 
-1. Determine recipients: task assignee + task creator (if different)
-2. Create `Notification` row for each recipient with `channel`, `event_type`, title, and body
-3. Dispatch `send_task_notification` Celery task for async delivery
+1. Определяет получателей: исполнитель задачи + создатель задачи (если отличается)
+2. Создаёт строку `Notification` для каждого получателя с `channel`, `event_type`, заголовком и телом
+3. Отправляет Celery-задачу `send_task_notification` для асинхронной доставки
 
-**Channels:** `telegram`, `web_push`, `email`
+**Каналы:** `telegram`, `web_push`, `email`
 
-## How to Create Custom Workflow Templates
+## Создание пользовательских шаблонов воркфлоу
 
-### Step 1: Define States
+### Шаг 1: Определить состояния
 
-List all meaningful states your workflow will have. Include at least one `initial` and one `final` state.
+Перечислите все значимые состояния вашего воркфлоу. Включите как минимум одно `initial` и одно `final` состояние.
 
 ```json
 {
@@ -204,9 +204,9 @@ List all meaningful states your workflow will have. Include at least one `initia
 }
 ```
 
-### Step 2: Define Transitions
+### Шаг 2: Определить переходы
 
-For each pair of states that should be connected, create a transition object specifying the conditions and auto-actions.
+Для каждой пары состояний, которые должны быть связаны, создайте объект перехода с условиями и авто-действиями.
 
 ```json
 {
@@ -235,39 +235,39 @@ For each pair of states that should be connected, create a transition object spe
 }
 ```
 
-### Step 3: Create Checklists
+### Шаг 3: Создать чек-листы
 
-Add `TemplateChecklist` rows to the template, each with a `gate_transition` matching the transition it should block:
+Добавьте строки `TemplateChecklist` к шаблону, каждую с `gate_transition`, соответствующим блокируемому переходу:
 
 ```json
 {
   "checklist_id": "diagnostics_checklist",
-  "title": "Diagnostics Checklist",
+  "title": "Чек-лист диагностики",
   "gate_transition": "diagnostics->awaiting_parts",
   "items": [
-    "Check power supply",
-    "Measure refrigerant pressure",
-    "Inspect compressor",
-    "Check condensate drain",
-    "Test thermostat"
+    "Проверить электропитание",
+    "Измерить давление хладагента",
+    "Осмотреть компрессор",
+    "Проверить конденсатоотвод",
+    "Протестировать термостат"
   ]
 }
 ```
 
-### Step 4: Define Custom Fields
+### Шаг 4: Определить пользовательские поля
 
-Add `TemplateField` rows for data that engineers must fill in:
+Добавьте строки `TemplateField` для данных, которые инженеры должны заполнить:
 
-| key                | label             | field_type | is_required |
-|--------------------|-------------------|------------|-------------|
-| `defect_description`| Defect Description| string     | true        |
-| `parts_needed`     | Parts Needed      | string     | false       |
-| `equipment_model`  | Equipment Model   | reference  | true        |
-| `repair_cost`      | Estimated Cost    | decimal    | false       |
+| key                 | label               | field_type | is_required |
+|---------------------|---------------------|------------|-------------|
+| `defect_description`| Описание дефекта    | string     | true        |
+| `parts_needed`      | Необходимые запчасти| string     | false       |
+| `equipment_model`   | Модель оборудования | reference  | true        |
+| `repair_cost`       | Ориентировочная стоимость | decimal | false     |
 
-### Step 5: Configure SLA
+### Шаг 5: Настроить SLA
 
-Set SLA deadlines and warning thresholds:
+Задайте дедлайны SLA и пороги предупреждений:
 
 ```json
 {
@@ -276,130 +276,130 @@ Set SLA deadlines and warning thresholds:
 }
 ```
 
-The Celery Beat SLA monitor (`sla_monitor.py`) periodically checks tasks against their `sla_deadline` and sends warnings when the threshold is reached.
+Celery Beat SLA-монитор (`sla_monitor.py`) периодически проверяет задачи на соответствие `sla_deadline` и отправляет предупреждения при достижении порога.
 
 ---
 
-## Example: AC Installation Workflow (Step-by-Step)
+## Пример: воркфлоу монтажа кондиционера (пошагово)
 
-This example traces a complete AC installation task through its workflow.
+Этот пример прослеживает полный путь задачи на монтаж кондиционера через воркфлоу.
 
-### Template Definition
+### Определение шаблона
 
-**Template name:** AC Installation
-**Category:** installation
+**Название шаблона:** Монтаж кондиционера
+**Категория:** installation
 
-**States:**
+**Состояния:**
 
-| State        | Type          | Description                                    |
-|-------------|---------------|------------------------------------------------|
-| `new`        | initial       | Task created, not yet started                  |
-| `site_survey`| intermediate  | Engineer visits site to assess conditions       |
-| `in_progress`| intermediate  | Active installation work                        |
-| `review`     | intermediate  | Manager reviews work and documents              |
-| `completed`  | final         | Installation accepted by customer               |
-| `cancelled`  | terminal      | Task cancelled                                  |
+| Состояние    | Тип            | Описание                                         |
+|-------------|----------------|--------------------------------------------------|
+| `new`        | initial        | Задача создана, работа ещё не начата              |
+| `site_survey`| intermediate   | Инженер выезжает на объект для оценки условий     |
+| `in_progress`| intermediate   | Активные монтажные работы                         |
+| `review`     | intermediate   | Менеджер проверяет работу и документы             |
+| `completed`  | final          | Монтаж принят заказчиком                          |
+| `cancelled`  | terminal       | Задача отменена                                   |
 
-### Walkthrough
+### Пошаговый проход
 
-#### 1. Task Creation
+#### 1. Создание задачи
 
-A manager creates a task from the "AC Installation" template for client Petrov:
+Менеджер создаёт задачу из шаблона «Монтаж кондиционера» для клиента Петрова:
 
 ```
 POST /api/v1/templates/{template_id}/instantiate
 {
   "client_id": "client-uuid",
-  "title": "AC Install — apt. Petrov",
+  "title": "Монтаж кондиционера — кв. Петров",
   "assigned_to": "engineer-uuid",
   "custom_fields": {"equipment_model": "Daikin FTXB35C", "floor": 7}
 }
 ```
 
-**Result:**
-- Task created with `status = "new"`
-- 3 checklists created from template (Site Survey, Installation, Final Review)
-- `sla_deadline` calculated from `sla_config.max_duration_hours`
+**Результат:**
+- Задача создана с `status = "new"`
+- Созданы 3 чек-листа из шаблона (Осмотр объекта, Монтаж, Итоговая проверка)
+- Рассчитан `sla_deadline` из `sla_config.max_duration_hours`
 
-#### 2. Start Site Survey (`new` → `site_survey`)
+#### 2. Начало осмотра объекта (`new` → `site_survey`)
 
-The engineer starts work:
+Инженер начинает работу:
 
 ```
 POST /api/v1/tasks/{task_id}/transition
 {"to_status": "site_survey"}
 ```
 
-**Conditions checked:**
-- ✅ Required roles: `["engineer", "manager"]` — engineer has the role
-- No required fields, checklists, or documents
+**Проверяемые условия:**
+- ✅ Обязательные роли: `["engineer", "manager"]` — у инженера есть роль
+- Нет обязательных полей, чек-листов или документов
 
-**Side effects:**
-- `task.started_at` is set (first transition from initial state)
-- `TaskStatusHistory` entry recorded
+**Побочные эффекты:**
+- Устанавливается `task.started_at` (первый переход из начального состояния)
+- Записана запись в `TaskStatusHistory`
 
-#### 3. Complete Survey (`site_survey` → `in_progress`)
+#### 3. Завершение осмотра (`site_survey` → `in_progress`)
 
-After visiting the site, the engineer fills in the site survey checklist and required fields:
+После осмотра объекта инженер заполняет чек-лист и обязательные поля:
 
 ```
 POST /api/v1/tasks/{task_id}/transition
 {"to_status": "in_progress"}
 ```
 
-**Conditions checked:**
-- ✅ Required roles: `["engineer"]`
-- ✅ Required fields: `area_sqm`, `equipment_model` — both filled in custom_fields
-- ✅ Required checklists: `"site_survey_checklist"` — all items checked
-- ✅ Required documents: 2 photos uploaded (`doc_type = "photo"`)
+**Проверяемые условия:**
+- ✅ Обязательные роли: `["engineer"]`
+- ✅ Обязательные поля: `area_sqm`, `equipment_model` — заполнены в custom_fields
+- ✅ Обязательные чек-листы: `"site_survey_checklist"` — все пункты отмечены
+- ✅ Обязательные документы: 2 фотографии загружены (`doc_type = "photo"`)
 
-#### 4. Complete Installation (`in_progress` → `review`)
+#### 4. Завершение монтажа (`in_progress` → `review`)
 
-The engineer finishes the installation and fills in the installation checklist:
+Инженер завершает монтаж и заполняет монтажный чек-лист:
 
 ```
 POST /api/v1/tasks/{task_id}/transition
 {"to_status": "review"}
 ```
 
-**Conditions checked:**
-- ✅ Required checklists: `"installation_checklist"` — all items checked
+**Проверяемые условия:**
+- ✅ Обязательные чек-листы: `"installation_checklist"` — все пункты отмечены
 
-**Auto-actions executed:**
-1. **`deduct_warehouse`** — reads `custom_fields.materials_used`:
-   - Deducts 10m copper tubing from stock
-   - Deducts 2 wall brackets from stock
-   - Creates `WarehouseMovement` records
-2. **`complete_time_entry`** — closes the engineer's running timer
+**Выполненные авто-действия:**
+1. **`deduct_warehouse`** — читает `custom_fields.materials_used`:
+   - Списывает 10м медной трубки со склада
+   - Списывает 2 настенных кронштейна со склада
+   - Создаёт записи `WarehouseMovement`
+2. **`complete_time_entry`** — закрывает запущенный таймер инженера
 
-#### 5. Manager Approval (`review` → `completed`)
+#### 5. Утверждение менеджером (`review` → `completed`)
 
-The manager reviews the work, confirms the signed acceptance act is uploaded:
+Менеджер проверяет работу и подтверждает загрузку подписанного акта приёмки:
 
 ```
 POST /api/v1/tasks/{task_id}/transition
-{"to_status": "completed", "reason": "Customer signed acceptance act"}
+{"to_status": "completed", "reason": "Заказчик подписал акт приёмки"}
 ```
 
-**Conditions checked:**
-- ✅ Required roles: `["manager"]`
-- ✅ Required documents: 1 `signed_act` uploaded
+**Проверяемые условия:**
+- ✅ Обязательные роли: `["manager"]`
+- ✅ Обязательные документы: 1 `signed_act` загружен
 
-**Auto-actions executed:**
-1. **`notify`** — sends Telegram notification to the engineer and the manager:
-   > "Task 'AC Install — apt. Petrov' completed"
+**Выполненные авто-действия:**
+1. **`notify`** — отправляет Telegram-уведомление инженеру и менеджеру:
+   > «Задача "Монтаж кондиционера — кв. Петров" завершена»
 
-**Side effects:**
-- `task.completed_at` is set
-- `TaskStatusHistory` entry with reason recorded
-- Task appears as "completed" on the Kanban board
+**Побочные эффекты:**
+- Устанавливается `task.completed_at`
+- Запись в `TaskStatusHistory` с указанием причины
+- Задача отображается как «завершена» на Kanban-доске
 
-### State Diagram
+### Диаграмма состояний
 
 ```
                     ┌──────────┐
                     │   new    │
-                    │ (initial)│
+                    │(начальный)│
                     └────┬─────┘
                          │ required_roles: [engineer, manager]
                          ▼
@@ -425,8 +425,8 @@ POST /api/v1/tasks/{task_id}/transition
                          ▼
                     ┌──────────┐
                     │completed │
-                    │ (final)  │
+                    │(конечный)│
                     └──────────┘
 
-   Any state ──────► cancelled (terminal)
+   Любое состояние ──────► cancelled (терминальный)
 ```

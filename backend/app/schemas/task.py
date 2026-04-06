@@ -7,8 +7,9 @@
 import uuid
 from datetime import datetime
 from typing import Any
+from typing_extensions import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import BaseResponse
 
@@ -28,11 +29,15 @@ class TaskCreate(BaseModel):
         custom_fields: Значения кастомных полей.
         due_date: Крайний срок выполнения.
         board_id: ID доски для отображения.
+        requested_by: ID постановщика (если не задан — считается создатель записи).
+        co_assignee_ids: Соисполнители (дополнительно к основному исполнителю).
+        observer_ids: Наблюдатели (получают уведомления о событиях по задаче).
+        visibility: Уровень видимости внутри компании (company — всем; participants — только участникам).
     """
 
     model_config = ConfigDict(from_attributes=True)
 
-    template_id: uuid.UUID
+    template_id: uuid.UUID | None = None
     client_id: uuid.UUID | None = None
     deal_id: uuid.UUID | None = None
     tender_id: uuid.UUID | None = None
@@ -42,7 +47,18 @@ class TaskCreate(BaseModel):
     priority: str = Field(default="medium", pattern=r"^(low|medium|high|critical)$")
     custom_fields: dict[str, Any] | None = Field(default=None)
     due_date: datetime | None = None
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     board_id: uuid.UUID | None = None
+    requested_by: uuid.UUID | None = None
+    co_assignee_ids: list[uuid.UUID] = Field(default_factory=list)
+    observer_ids: list[uuid.UUID] = Field(default_factory=list)
+    visibility: str = Field(
+        default="company",
+        pattern=r"^(company|participants)$",
+        description="company: all company members; participants: assignee, co-assignees, observers, creator, requester",
+    )
 
 
 class TaskUpdate(BaseModel):
@@ -55,7 +71,15 @@ class TaskUpdate(BaseModel):
         assigned_to: Новый исполнитель.
         custom_fields: Обновлённые кастомные поля (merge с существующими).
         due_date: Новый крайний срок.
+        started_at: Фактическое время начала работы.
+        completed_at: Время завершения.
+        sla_deadline: Дедлайн SLA.
         board_id: Новая доска.
+        template_id: Новый шаблон задачи.
+        requested_by: Постановщик задачи.
+        co_assignee_ids: Полная замена списка соисполнителей (пустой список снимает всех).
+        observer_ids: Полная замена списка наблюдателей (пустой список снимает всех).
+        visibility: Уровень видимости (company или participants).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -66,7 +90,21 @@ class TaskUpdate(BaseModel):
     assigned_to: uuid.UUID | None = None
     custom_fields: dict[str, Any] | None = None
     due_date: datetime | None = None
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    sla_deadline: datetime | None = None
     board_id: uuid.UUID | None = None
+    template_id: uuid.UUID | None = None
+    requested_by: uuid.UUID | None = None
+    co_assignee_ids: list[uuid.UUID] | None = None
+    observer_ids: list[uuid.UUID] | None = None
+    visibility: str | None = Field(
+        default=None,
+        pattern=r"^(company|participants)$",
+    )
 
 
 class TaskStatusTransition(BaseModel):
@@ -100,6 +138,7 @@ class UserSummary(BaseModel):
     full_name: str
     email: str
     role: str
+    avatar_url: str | None = None
 
 
 class TemplateSummary(BaseModel):
@@ -139,7 +178,14 @@ class TaskResponse(BaseResponse):
         completed_at: Время завершения.
         sla_deadline: Дедлайн SLA.
         assignee: Краткая информация об исполнителе.
+        creator: Кто создал запись в системе (аудит).
+        requester: Постановщик (requested_by или создатель).
+        co_assignees: Соисполнители.
+        observers: Наблюдатели (получают уведомления о наблюдаемой задаче).
         template: Краткая информация о шаблоне.
+        deleted_at: Время мягкого удаления (если задача в корзине).
+        deleted_by: Кто пометил задачу удалённой.
+        visibility: company (вся компания) или participants (только участники задачи).
     """
 
     template_id: uuid.UUID | None = None
@@ -149,17 +195,52 @@ class TaskResponse(BaseResponse):
     tender_id: uuid.UUID | None = None
     assigned_to: uuid.UUID | None = None
     created_by: uuid.UUID | None = None
+    requested_by: uuid.UUID | None = None
     title: str
     description: str | None = None
     status: str
     priority: str
     custom_fields: dict[str, Any] = Field(default_factory=dict)
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     due_date: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     sla_deadline: datetime | None = None
     assignee: UserSummary | None = None
+    creator: UserSummary | None = None
+    requester: UserSummary | None = Field(
+        default=None,
+        validation_alias=AliasChoices("requester_user"),
+    )
+    co_assignees: list[UserSummary] = Field(default_factory=list)
+    observers: list[UserSummary] = Field(default_factory=list)
     template: TemplateSummary | None = None
+    deleted_at: datetime | None = None
+    deleted_by: uuid.UUID | None = None
+    visibility: str = "company"
+
+    @model_validator(mode="after")
+    def _default_requester_from_creator(self) -> Self:
+        """If no explicit requester row, expose creator as постановщик."""
+        update: dict[str, Any] = {}
+        if self.requester is None and self.creator is not None:
+            update["requester"] = self.creator
+        geo = self.custom_fields or {}
+        if self.address is None and isinstance(geo.get("address"), str):
+            update["address"] = geo["address"]
+        if self.latitude is None and geo.get("latitude") is not None:
+            try:
+                update["latitude"] = float(geo["latitude"])
+            except (TypeError, ValueError):
+                pass
+        if self.longitude is None and geo.get("longitude") is not None:
+            try:
+                update["longitude"] = float(geo["longitude"])
+            except (TypeError, ValueError):
+                pass
+        return self.model_copy(update=update) if update else self
 
 
 class TaskListResponse(BaseModel):
@@ -176,6 +257,7 @@ class TaskListResponse(BaseModel):
         created_at: Дата создания.
         template_name: Название шаблона.
         client_id: ID клиента.
+        visibility: Уровень видимости задачи.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -190,6 +272,21 @@ class TaskListResponse(BaseModel):
     created_at: datetime
     template_name: str | None = None
     client_id: uuid.UUID | None = None
+    visibility: str = "company"
+
+
+class CommentCreate(BaseModel):
+    """Schema for adding a comment to a task.
+
+    Атрибуты:
+        body: Текст комментария.
+        mentions: Список UUID упомянутых пользователей.
+        attachment_doc_ids: Документы (вложение), которые должны быть привязаны к комментарию.
+    """
+
+    body: str = Field("", min_length=0, max_length=10000)
+    mentions: list[uuid.UUID] = Field(default_factory=list)
+    attachment_doc_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class ChecklistItemResponse(BaseModel):

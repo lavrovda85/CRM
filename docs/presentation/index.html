@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SPEC CRM — презентация продукта</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #e2e8f0;
+      --surface: #f8fafc;
+      --accent: #5b21b6;
+      --accent-soft: #ede9fe;
+      --accent-glow: #7c3aed;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope", system-ui, sans-serif;
+      color: var(--ink);
+      background: #fff;
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .deck { max-width: 1200px; margin: 0 auto; padding: 0; }
+    .slide {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3rem 2.5rem 4rem;
+      page-break-after: always;
+      break-after: page;
+    }
+    .slide:last-child { page-break-after: auto; }
+    .slide--cover {
+      background:
+        radial-gradient(120% 80% at 100% 0%, rgba(124, 58, 237, 0.12), transparent 50%),
+        radial-gradient(80% 60% at 0% 100%, rgba(91, 33, 182, 0.08), transparent 45%),
+        linear-gradient(165deg, #faf5ff 0%, #fff 40%, #f8fafc 100%);
+      text-align: left;
+      padding-left: 3.5rem;
+      padding-right: 3.5rem;
+    }
+    .slide--cover .brand { display: inline-flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem; }
+    .slide--cover .brand-mark {
+      width: 3rem; height: 3rem; border-radius: 0.75rem;
+      background: linear-gradient(135deg, var(--accent-glow), var(--accent));
+      box-shadow: 0 12px 40px rgba(91, 33, 182, 0.35);
+    }
+    .slide--cover h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(2.4rem, 5vw, 3.25rem);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      margin: 0 0 1rem;
+      max-width: 18ch;
+    }
+    .slide--cover .tagline { font-size: 1.2rem; color: var(--muted); max-width: 36ch; margin: 0 0 2rem; }
+    .slide--cover .pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .pill {
+      display: inline-block;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid rgba(91, 33, 182, 0.15);
+    }
+    .slide--split {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 2rem;
+      align-items: center;
+      padding-top: 2rem;
+      padding-bottom: 2rem;
+    }
+    @media (max-width: 900px) { .slide--split { grid-template-columns: 1fr; } }
+    .slide__text h2 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 0 0 0.75rem;
+      color: var(--ink);
+    }
+    .slide__text .lead { font-size: 1.05rem; color: var(--muted); margin: 0 0 1rem; }
+    .slide__text ul { margin: 0; padding-left: 1.15rem; }
+    .slide__text li { margin-bottom: 0.45rem; }
+    .slide__text li::marker { color: var(--accent-glow); }
+    figure {
+      margin: 0;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 20px 50px -12px rgba(15, 23, 42, 0.12);
+      background: #fff;
+      line-height: 0;
+    }
+    figure svg { width: 100%; height: auto; display: block; }
+    .caption {
+      margin-top: 0.65rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+    }
+    .slide--text-only {
+      background: var(--surface);
+      border-left: 4px solid var(--accent);
+    }
+    .slide--text-only .slide__text { max-width: 52rem; margin: 0 auto; }
+    .slide--closing {
+      background: linear-gradient(180deg, #faf5ff 0%, #fff 100%);
+      text-align: center;
+    }
+    .slide--closing h2 { font-family: "Fraunces", Georgia, serif; font-size: 2rem; margin-bottom: 1rem; }
+    .slide--closing .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      max-width: 900px;
+      margin: 2rem auto 0;
+      text-align: left;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.35rem;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    .card h3 { margin: 0 0 0.5rem; font-size: 1rem; color: var(--accent); }
+    .card p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+    footer.screen-only { text-align: center; padding: 2rem; font-size: 0.8rem; color: var(--muted); }
+    @media print {
+      .screen-only { display: none !important; }
+      .slide { min-height: auto; padding: 1.2cm 1.4cm; }
+      .slide--cover { padding: 1.5cm 1.6cm; }
+      figure { break-inside: avoid; }
+    }
+    @page { size: A4 landscape; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <section class="slide slide--cover">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <span style="font-weight:700;font-size:1.1rem;letter-spacing:0.06em;">SPEC CRM</span>
+      </div>
+      <h1>CRM для специалистов,<br />а не для бумажной волокиты</h1>
+      <p class="tagline">
+        Единая среда для задач, клиентов, сделок и склада — с автономным ИИ-ассистентом
+        и глубокой интеграцией под ваш бизнес-процесс.
+      </p>
+      <div class="pill-row">
+        <span class="pill">ИИ-агент и сценарии</span>
+        <span class="pill">Интеграция «под ключ»</span>
+        <span class="pill">Без лишнего обучения</span>
+      </div>
+    </section>
+
+    <section class="slide slide--text-only">
+      <div class="slide__text">
+        <h2>Зачем SPEC CRM</h2>
+        <p class="lead">
+          Продукт ориентирован на экспертов в своём деле: монтаж, сервис, проектные офисы, торговля —
+          там, где нет времени разбираться в «учётных монстрах» и заполнять лишние формы.
+        </p>
+        <ul>
+          <li><strong>Автономное управление через ИИ</strong> — создание и разбор задач из текста, голоса и документов (ТЗ, сметы, сканы).</li>
+          <li><strong>Детальная интеграция</strong> — календарь, канбан, таймлайн, склад, сделки и уведомления в одном контуре.</li>
+          <li><strong>Минимум трения</strong> — быстрые действия на доске, мобильный доступ, понятный интерфейс без лишних экранов.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SVG illustrations: self-contained, print-friendly -->
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Панель управления</h2>
+        <p class="lead">Сводка активных задач, выручки и тендеров; быстрый переход к просроченным и к созданию задачи.</p>
+        <ul>
+          <li>Один взгляд — и видно, что требует внимания.</li>
+          <li>Связь дашборда с задачами и фильтрами.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет панели управления">
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#5b21b6"/></linearGradient></defs>
+            <rect width="480" height="260" fill="#f1f5f9"/>
+            <rect x="0" y="0" width="56" height="260" fill="#1e293b"/>
+            <rect x="12" y="20" width="32" height="8" rx="2" fill="#475569"/>
+            <rect x="68" y="16" width="180" height="14" rx="3" fill="#cbd5e1"/>
+            <rect x="68" y="40" width="120" height="10" rx="2" fill="#e2e8f0"/>
+            <g transform="translate(68,64)">
+              <rect width="100" height="56" rx="6" fill="#fff" stroke="#e2e8f0"/><text x="10" y="22" font-size="9" fill="#64748b" font-family="Manrope,sans-serif">Активные</text><text x="10" y="40" font-size="18" font-weight="700" fill="#5b21b6" font-family="Manrope,sans-serif">158</text>
+              <rect x="112" width="100" height="56" rx="6" fill="#fff" stroke="#e2e8f0"/><text x="122" y="22" font-size="9" fill="#64748b">Сегодня</text><text x="122" y="40" font-size="18" font-weight="700" fill="#059669">12</text>
+              <rect x="224" width="100" height="56" rx="6" fill="#fff" stroke="#e2e8f0"/><text x="234" y="22" font-size="9" fill="#64748b">Тендеры</text><text x="234" y="40" font-size="18" font-weight="700" fill="#d97706">2</text>
+              <rect x="336" width="76" height="56" rx="6" fill="#fff" stroke="#e2e8f0"/><text x="346" y="22" font-size="9" fill="#64748b">Выручка</text><text x="346" y="38" font-size="14" font-weight="700" fill="#0f172a">₽</text>
+            </g>
+            <rect x="68" y="136" width="344" height="108" rx="8" fill="#fff" stroke="#e2e8f0"/>
+            <text x="82" y="156" font-size="10" font-weight="600" fill="#334155" font-family="Manrope,sans-serif">Последние задачи</text>
+            <g fill="#f8fafc" stroke="#e2e8f0"><rect x="82" y="166" width="316" height="22" rx="4"/><rect x="82" y="194" width="316" height="22" rx="4"/><rect x="82" y="222" width="316" height="22" rx="4"/></g>
+            <circle cx="94" cy="177" r="4" fill="#7c3aed"/><rect x="104" y="173" width="100" height="8" rx="2" fill="#cbd5e1"/>
+            <rect x="380" y="12" width="88" height="28" rx="6" fill="url(#g1)"/>
+          </svg>
+        </figure>
+        <p class="caption">Главная панель: метрики и последние задачи</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Планировщик и автоматизация</h2>
+        <p class="lead">Правила по расписанию (в духе cron): повторяющиеся контрольные задачи без ручного ввода.</p>
+        <ul>
+          <li>Порядок правил, включение/выключение, приоритеты и роли.</li>
+          <li>Запуск по требованию — «Run now» для проверки сценария.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет планировщика">
+            <rect width="480" height="260" fill="#f8fafc"/>
+            <rect x="16" y="16" width="448" height="36" rx="6" fill="#fff" stroke="#e2e8f0"/>
+            <text x="28" y="38" font-size="11" font-weight="600" fill="#334155" font-family="Manrope,sans-serif">Планировщик задач</text>
+            <rect x="360" y="24" width="90" height="22" rx="4" fill="#7c3aed"/><text x="378" y="39" font-size="9" fill="#fff" font-family="Manrope,sans-serif">Run now</text>
+            <rect x="16" y="64" width="448" height="72" rx="8" fill="#fff" stroke="#e2e8f0"/>
+            <text x="28" y="84" font-size="9" fill="#64748b" font-family="Manrope,sans-serif">Cron</text>
+            <g transform="translate(28,92)">
+              <rect width="36" height="24" rx="3" fill="#ede9fe" stroke="#c4b5fd"/><rect x="44" width="36" height="24" rx="3" fill="#ede9fe" stroke="#c4b5fd"/>
+              <rect x="88" width="52" height="24" rx="3" fill="#ede9fe" stroke="#c4b5fd"/><rect x="148" width="36" height="24" rx="3" fill="#ede9fe" stroke="#c4b5fd"/>
+              <rect x="192" width="36" height="24" rx="3" fill="#ede9fe" stroke="#c4b5fd"/>
+            </g>
+            <text x="28" y="130" font-size="10" fill="#0f172a" font-family="Manrope,sans-serif">Daily control task</text>
+            <rect x="28" y="138" width="200" height="8" rx="2" fill="#e2e8f0"/>
+            <rect x="380" y="118" width="68" height="20" rx="4" fill="#ecfdf5" stroke="#6ee7b7"/><text x="392" y="132" font-size="8" fill="#047857">Включено</text>
+            <rect x="16" y="148" width="448" height="88" rx="8" fill="#fff" stroke="#e2e8f0"/>
+            <text x="28" y="172" font-size="9" font-weight="600" fill="#64748b" font-family="Manrope,sans-serif">Порядок правил (drag &amp; drop)</text>
+            <rect x="28" y="182" width="420" height="28" rx="4" fill="#f1f5f9"/><text x="40" y="200" font-size="10" fill="#334155" font-family="Manrope,sans-serif">1. Default</text>
+          </svg>
+        </figure>
+        <p class="caption">Автономные сценарии вместо рутины</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Календарь и дневной таймлайн</h2>
+        <p class="lead">Колонки по исполнителям, почасовая сетка, перенос задач — наглядная загрузка дня.</p>
+        <ul>
+          <li>Согласование работ в команде без отдельных таблиц.</li>
+          <li>Быстрое завершение и переход к карточке задачи.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет таймлайна">
+            <rect width="480" height="260" fill="#fff"/>
+            <line x1="48" y1="0" x2="48" y2="260" stroke="#e2e8f0"/>
+            <g font-size="8" fill="#94a3b8" font-family="Manrope,sans-serif"><text x="8" y="48">08</text><text x="8" y="88">10</text><text x="8" y="128">12</text><text x="8" y="168">14</text></g>
+            <line x1="48" y1="40" x2="480" y2="40" stroke="#f1f5f9"/><line x1="48" y1="80" x2="480" y2="80" stroke="#f1f5f9"/>
+            <line x1="48" y1="120" x2="480" y2="120" stroke="#f1f5f9"/><line x1="48" y1="160" x2="480" y2="160" stroke="#f1f5f9"/>
+            <rect x="56" y="12" width="96" height="236" fill="#fafafa" stroke="#e2e8f0"/>
+            <rect x="160" y="12" width="96" height="236" fill="#fafafa" stroke="#e2e8f0"/>
+            <rect x="264" y="12" width="96" height="236" fill="#fafafa" stroke="#e2e8f0"/>
+            <rect x="368" y="12" width="96" height="236" fill="#fafafa" stroke="#e2e8f0"/>
+            <text x="64" y="28" font-size="7" fill="#64748b" font-family="Manrope,sans-serif">Исп. A</text>
+            <rect x="60" y="52" width="88" height="36" rx="4" fill="#fff" stroke="#7c3aed" stroke-width="2"/><rect x="64" y="58" width="48" height="4" rx="1" fill="#cbd5e1"/>
+            <rect x="168" y="72" width="88" height="28" rx="4" fill="#fff" stroke="#38bdf8"/><rect x="276" y="100" width="88" height="32" rx="4" fill="#fff" stroke="#fbbf24"/>
+            <circle cx="72" cy="64" r="3" fill="#7c3aed"/>
+          </svg>
+        </figure>
+        <p class="caption">Планировщик по людям и часам</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>ИИ-ассистент внутри CRM</h2>
+        <p class="lead">Текст, голос и вложения: PDF, Word, Excel, CSV и изображения сканов — модель разбирает суть и создаёт задачи в системе.</p>
+        <ul>
+          <li>Естественный язык: «создай задачу на завтра исполнителю …».</li>
+          <li>История диалога на сервере до выхода из сессии.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет чата с ИИ">
+            <rect width="480" height="260" fill="#f8fafc"/>
+            <rect x="16" y="16" width="448" height="32" rx="6" fill="#fff" stroke="#e2e8f0"/>
+            <text x="28" y="36" font-size="10" fill="#64748b" font-family="Manrope,sans-serif">Диалог · gpt-4o-mini</text>
+            <rect x="180" y="60" width="268" height="52" rx="10" fill="#7c3aed"/>
+            <text x="196" y="82" font-size="9" fill="#fff" font-family="Manrope,sans-serif">Создай задачу на завтра…</text>
+            <text x="196" y="98" font-size="8" fill="#e9d5ff" font-family="Manrope,sans-serif">пользователь</text>
+            <rect x="16" y="124" width="320" height="64" rx="10" fill="#fff" stroke="#e2e8f0"/>
+            <text x="28" y="148" font-size="9" fill="#334155" font-family="Manrope,sans-serif">Задача создана для исполнителя,</text>
+            <text x="28" y="164" font-size="9" fill="#334155" font-family="Manrope,sans-serif">срок — завтра.</text>
+            <text x="28" y="182" font-size="8" fill="#94a3b8">ассистент</text>
+            <rect x="16" y="204" width="400" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/>
+            <circle cx="432" cy="222" r="16" fill="#5b21b6"/>
+          </svg>
+        </figure>
+        <p class="caption">Автономное управление задачами через диалог</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Месячный обзор</h2>
+        <p class="lead">Календарь на месяц с индикаторами загрузки по дням; переключение «задачи / люди».</p>
+        <ul>
+          <li>Удобно для обзора проектов и дедлайнов.</li>
+          <li>Сочетается с дневным и недельным планированием.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет месячного календаря">
+            <rect width="480" height="260" fill="#fff"/>
+            <rect x="16" y="12" width="448" height="28" rx="4" fill="#f1f5f9"/>
+            <text x="180" y="30" font-size="11" font-weight="600" fill="#334155" font-family="Manrope,sans-serif">Март 2026</text>
+            <g font-size="8" fill="#94a3b8" font-family="Manrope,sans-serif"><text x="40" y="56">ПН</text><text x="96" y="56">ВТ</text><text x="152" y="56">СР</text><text x="208" y="56">ЧТ</text><text x="264" y="56">ПТ</text><text x="320" y="56">СБ</text><text x="376" y="56">ВС</text></g>
+            <g fill="none" stroke="#e2e8f0">
+              <rect x="24" y="64" width="432" height="180"/>
+              <line x1="24" y1="94" x2="456" y2="94"/><line x1="24" y1="124" x2="456" y2="124"/><line x1="24" y1="154" x2="456" y2="154"/><line x1="24" y1="184" x2="456" y2="184"/>
+              <line x1="87" y1="64" x2="87" y2="244"/><line x1="150" y1="64" x2="150" y2="244"/><line x1="213" y1="64" x2="213" y2="244"/>
+              <line x1="276" y1="64" x2="276" y2="244"/><line x1="339" y1="64" x2="339" y2="244"/><line x1="402" y1="64" x2="402" y2="244"/>
+            </g>
+            <rect x="320" y="154" width="50" height="26" rx="4" fill="#ede9fe" stroke="#7c3aed"/>
+            <circle cx="335" cy="166" r="3" fill="#7c3aed"/><circle cx="345" cy="166" r="3" fill="#f59e0b"/>
+            <text x="332" y="172" font-size="10" font-weight="700" fill="#5b21b6" font-family="Manrope,sans-serif">28</text>
+          </svg>
+        </figure>
+        <p class="caption">Месячная сетка и навигация по периодам</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Мобильный доступ</h2>
+        <p class="lead">Те же задачи в дороге: канбан, фильтры, календарные виды — без потери контекста.</p>
+        <ul>
+          <li>Быстрое завершение задачи с карточки.</li>
+          <li>Нижняя навигация по ключевым разделам.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет мобильного экрана">
+            <rect width="480" height="260" fill="#e2e8f0"/>
+            <rect x="150" y="8" width="180" height="244" rx="24" fill="#1e293b"/>
+            <rect x="158" y="20" width="164" height="220" rx="16" fill="#fff"/>
+            <rect x="168" y="32" width="144" height="24" rx="4" fill="#f1f5f9"/>
+            <rect x="168" y="64" width="144" height="100" rx="8" fill="#fafafa" stroke="#e2e8f0"/>
+            <rect x="176" y="76" width="120" height="10" rx="2" fill="#cbd5e1"/>
+            <rect x="176" y="92" width="88" height="22" rx="4" fill="#d1fae5" stroke="#6ee7b7"/>
+            <text x="188" y="107" font-size="8" fill="#047857" font-family="Manrope,sans-serif">Завершить</text>
+            <rect x="168" y="172" width="144" height="36" rx="8" fill="#f8fafc"/>
+            <circle cx="188" cy="190" r="6" fill="#cbd5e1"/><circle cx="220" cy="190" r="6" fill="#7c3aed"/><circle cx="252" cy="190" r="6" fill="#cbd5e1"/>
+            <circle cx="284" cy="190" r="6" fill="#cbd5e1"/><circle cx="316" cy="190" r="6" fill="#cbd5e1"/>
+          </svg>
+        </figure>
+        <p class="caption">Работа с задачами с телефона</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Канбан и команда</h2>
+        <p class="lead">Статусы, приоритеты, исполнители и наблюдатели — привычная доска без перегруза полями.</p>
+        <ul>
+          <li>Масштаб от «новой» до «закрыто» с прозрачными переходами.</li>
+          <li>Единый стиль карточек на десктопе и в мобильной версии.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет канбана">
+            <rect width="480" height="260" fill="#f8fafc"/>
+            <g>
+              <rect x="12" y="16" width="108" height="228" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+              <text x="24" y="36" font-size="9" font-weight="700" fill="#334155" font-family="Manrope,sans-serif">Новая · 128</text>
+              <rect x="20" y="48" width="92" height="56" rx="6" fill="#fff" stroke="#e2e8f0"/>
+              <rect x="26" y="56" width="60" height="6" rx="2" fill="#cbd5e1"/>
+              <rect x="26" y="68" width="72" height="18" rx="4" fill="#d1fae5" stroke="#6ee7b7"/>
+              <rect x="128" y="16" width="108" height="228" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+              <text x="140" y="36" font-size="9" font-weight="700" fill="#334155" font-family="Manrope,sans-serif">Назначена</text>
+              <rect x="136" y="48" width="92" height="48" rx="6" fill="#fff" stroke="#e2e8f0"/>
+              <rect x="244" y="16" width="108" height="228" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+              <text x="252" y="36" font-size="9" font-weight="700" fill="#334155" font-family="Manrope,sans-serif">В работе</text>
+              <rect x="360" y="16" width="108" height="228" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+              <text x="368" y="36" font-size="9" font-weight="700" fill="#334155" font-family="Manrope,sans-serif">Тест</text>
+            </g>
+          </svg>
+        </figure>
+        <p class="caption">Доска задач по статусам</p>
+      </div>
+    </section>
+
+    <section class="slide slide--split">
+      <div class="slide__text">
+        <h2>Карточка задачи</h2>
+        <p class="lead">Срок, приоритет, исполнитель — и завершение в один тап, без лишних шагов.</p>
+        <ul>
+          <li>Фокус на действии, а не на заполнении форм.</li>
+        </ul>
+      </div>
+      <div>
+        <figure>
+          <svg viewBox="0 0 480 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Макет карточки задачи">
+            <rect width="480" height="260" fill="#f1f5f9"/>
+            <rect x="96" y="44" width="280" height="180" rx="12" fill="#cbd5e1" opacity="0.35"/>
+            <rect x="100" y="40" width="280" height="180" rx="12" fill="#fff" stroke="#e2e8f0"/>
+            <text x="120" y="68" font-size="12" font-weight="700" fill="#0f172a" font-family="Manrope,sans-serif">Задача</text>
+            <rect x="120" y="80" width="180" height="8" rx="2" fill="#e2e8f0"/>
+            <rect x="120" y="104" width="240" height="28" rx="6" fill="#ecfdf5" stroke="#6ee7b7"/>
+            <text x="168" y="122" font-size="10" font-weight="600" fill="#047857" font-family="Manrope,sans-serif">✓ Завершить</text>
+            <text x="120" y="152" font-size="9" fill="#64748b" font-family="Manrope,sans-serif">Исполнитель · приоритет · срок</text>
+            <rect x="120" y="160" width="80" height="14" rx="3" fill="#fef9c3"/><rect x="208" y="160" width="64" height="14" rx="3" fill="#f1f5f9"/>
+          </svg>
+        </figure>
+        <p class="caption">Пример карточки в колонке «Новая»</p>
+      </div>
+    </section>
+
+    <section class="slide slide--closing">
+      <h2>Итог</h2>
+      <p class="lead" style="max-width:40rem;margin:0 auto;color:var(--muted);">
+        SPEC CRM объединяет операционку и ИИ: меньше ручного ввода, больше прозрачности и контроля — там, где ваши люди создают ценность, а не отчёты.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>ИИ-агент</h3>
+          <p>Создание и разбор задач из диалога и документов, сценарии автоматизации по расписанию.</p>
+        </div>
+        <div class="card">
+          <h3>Интеграция в бизнес</h3>
+          <p>Задачи, клиенты, сделки, склад, время и уведомления — связанный контур под ваш процесс.</p>
+        </div>
+        <div class="card">
+          <h3>Для специалистов</h3>
+          <p>Интерфейс без перегруза: быстрые действия, мобильность, минимум обучения.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="screen-only">Печать в PDF: Chrome → Ctrl+P → Сохранить как PDF → фоновая графика включена.</footer>
+</body>
+</html>

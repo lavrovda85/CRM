@@ -17,8 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import ExternalServiceError
+from app.core.exceptions import ExternalServiceError, NotFoundError, ValidationError
 from app.models.document import Document, DocumentVersion
+from app.models.task import Task
+from app.models.tender.tender import Tender
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ class DocumentService:
         """
         settings = get_settings()
         self._bucket = settings.minio_bucket
+        # Internal client for put/delete operations inside Docker network.
         self._client = boto3.client(
             "s3",
             endpoint_url=settings.minio_endpoint,
@@ -48,7 +51,34 @@ class DocumentService:
             config=BotoConfig(signature_version="s3v4"),
             region_name="us-east-1",
         )
+        # Public client for presigned URLs returned to the browser.
+        self._presign_client = boto3.client(
+            "s3",
+            endpoint_url=settings.minio_public_endpoint,
+            aws_access_key_id=settings.minio_access_key,
+            aws_secret_access_key=settings.minio_secret_key,
+            config=BotoConfig(signature_version="s3v4"),
+            region_name="us-east-1",
+        )
         self._ensure_bucket()
+
+    def get_object_bytes(self, storage_path: str) -> bytes:
+        """Read object body from MinIO (internal use for processing pipelines).
+
+        Args:
+            storage_path: S3 key under the configured bucket.
+
+        Returns:
+            Raw file bytes.
+
+        Raises:
+            ExternalServiceError: If the object is missing or access fails.
+        """
+        try:
+            resp = self._client.get_object(Bucket=self._bucket, Key=storage_path)
+            return resp["Body"].read()
+        except ClientError as exc:
+            raise ExternalServiceError("MinIO", "get_object", str(exc)) from exc
 
     def _ensure_bucket(self) -> None:
         """Create the storage bucket if it does not exist.
@@ -77,6 +107,9 @@ class DocumentService:
         *,
         filename: str = "",
         mime_type: str = "application/octet-stream",
+        tender_id: uuid.UUID | None = None,
+        extra_data: dict[str, Any] | None = None,
+        company_id: uuid.UUID | None = None,
     ) -> Document:
         """Upload a file to MinIO and create a Document record.
 
@@ -90,6 +123,8 @@ class DocumentService:
             user (dict[str, Any]): Текущий пользователь с ключом "id".
             filename (str): Исходное имя файла.
             mime_type (str): MIME-тип файла.
+            tender_id (uuid.UUID | None): Optional tender link (CRM тендеры).
+            extra_data (dict | None): Optional JSON metadata (e.g. source URL for imports).
 
         Returns:
             Document: Созданный объект документа.
@@ -98,10 +133,27 @@ class DocumentService:
             ExternalServiceError: При ошибке загрузки в MinIO.
         """
         doc_id = uuid.uuid4()
-        storage_path = self._build_storage_path(task_id, doc_id, filename)
+        storage_path = self._build_storage_path(task_id, tender_id, doc_id, filename)
 
         file_data = file.read()
         file_size = len(file_data)
+
+        resolved_company_id = company_id
+        if resolved_company_id is None and tender_id is not None:
+            tr = await db.get(Tender, tender_id)
+            if tr is None:
+                raise NotFoundError("Tender", str(tender_id))
+            resolved_company_id = tr.company_id
+        if resolved_company_id is None and task_id is not None:
+            tk = await db.get(Task, task_id)
+            if tk is None:
+                raise NotFoundError("Task", str(task_id))
+            resolved_company_id = tk.company_id
+        if resolved_company_id is None:
+            raise ValidationError(
+                "tender_id",
+                "Provide tender_id or task_id (or company_id) so the document is tenant-scoped",
+            )
 
         try:
             self._client.put_object(
@@ -117,7 +169,9 @@ class DocumentService:
 
         document = Document(
             id=doc_id,
+            company_id=resolved_company_id,
             task_id=task_id,
+            tender_id=tender_id,
             uploaded_by=user["id"],
             doc_type=doc_type,
             label=label,
@@ -126,7 +180,7 @@ class DocumentService:
             mime_type=mime_type,
             file_size=file_size,
             version=1,
-            metadata={},
+            extra_data=dict(extra_data) if extra_data else {},
         )
         db.add(document)
 
@@ -159,7 +213,7 @@ class DocumentService:
             ExternalServiceError: При ошибке генерации URL.
         """
         try:
-            return self._client.generate_presigned_url(
+            return self._presign_client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self._bucket, "Key": storage_path},
                 ExpiresIn=self.PRESIGNED_URL_EXPIRY,
@@ -200,6 +254,7 @@ class DocumentService:
     @staticmethod
     def _build_storage_path(
         task_id: uuid.UUID | None,
+        tender_id: uuid.UUID | None,
         doc_id: uuid.UUID,
         filename: str,
     ) -> str:
@@ -207,6 +262,7 @@ class DocumentService:
 
         Args:
             task_id: UUID задачи (используется как префикс пути).
+            tender_id: UUID тендера (если файл привязан к тендеру без задачи).
             doc_id: UUID документа.
             filename: Исходное имя файла.
 
@@ -217,4 +273,6 @@ class DocumentService:
         safe_filename = filename.replace("/", "_").replace("\\", "_") or "file"
         if task_id:
             return f"tasks/{task_id}/{doc_id}/{safe_filename}"
+        if tender_id:
+            return f"tenders/{tender_id}/{doc_id}/{safe_filename}"
         return f"unlinked/{doc_id}/{safe_filename}"

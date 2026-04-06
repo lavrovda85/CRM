@@ -7,14 +7,14 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, TenantMixin
 
 
-class Equipment(BaseModel):
+class Equipment(TenantMixin, BaseModel):
     """Equipment/tool asset with depreciation tracking.
 
     Атрибуты:
@@ -32,9 +32,10 @@ class Equipment(BaseModel):
     """
 
     __tablename__ = "equipment"
+    __table_args__ = (UniqueConstraint("company_id", "serial_number", name="uq_equipment_company_serial"),)
 
     name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
-    serial_number: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    serial_number: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False, default="hand_tool", index=True)
     purchase_price: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     purchase_date: Mapped[str] = mapped_column(Date, nullable=False)
@@ -53,7 +54,7 @@ class Equipment(BaseModel):
     usage_records = relationship("EquipmentUsage", back_populates="equipment")
 
 
-class EquipmentUsage(BaseModel):
+class EquipmentUsage(TenantMixin, BaseModel):
     """Record of equipment usage on a specific task.
 
     Атрибуты:

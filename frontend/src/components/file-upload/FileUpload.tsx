@@ -156,10 +156,10 @@ export function FileUpload({
           )}
         />
         <p className="text-sm text-surface-500">
-          <span className="font-medium text-primary-600">Click to upload</span> or drag and drop
+          <span className="font-medium text-primary-600">Нажмите для загрузки</span> или перетащите файлы сюда
         </p>
         <p className="text-xs text-surface-400">
-          Max {maxFiles} files, up to {Math.round(maxSizeBytes / (1024 * 1024))}MB each
+          Макс. {maxFiles} файлов, до {Math.round(maxSizeBytes / (1024 * 1024))} МБ каждый
         </p>
       </div>
 
@@ -188,7 +188,7 @@ export function FileUpload({
         className="sm:hidden flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-sm text-surface-600 hover:bg-surface-50 transition-colors w-full justify-center"
       >
         <Camera className="h-4 w-4" />
-        Take photo
+        Сделать фото
       </button>
 
       {/* Preview list */}
@@ -241,7 +241,7 @@ export function FileUpload({
                   }}
                   className="rounded-md border border-surface-200 bg-white px-2 py-1 text-xs text-surface-600 focus:outline-none focus:ring-1 focus:ring-primary-400"
                 >
-                  <option value="">Select label</option>
+                  <option value="">Выберите метку</option>
                   {labels.map((l) => (
                     <option key={l} value={l}>
                       {l}
@@ -255,7 +255,7 @@ export function FileUpload({
                 type="button"
                 onClick={() => removeFile(entry.id)}
                 className="rounded-lg p-1 text-surface-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                aria-label="Remove file"
+                aria-label="Удалить файл"
               >
                 <X className="h-4 w-4" />
               </button>

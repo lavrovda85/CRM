@@ -24,7 +24,7 @@ class DocumentResponse(BaseModel):
         mime_type (str): MIME-тип файла.
         file_size (int): Размер файла в байтах.
         version (int): Текущая версия.
-        metadata (dict): Дополнительные данные.
+        extra_data (dict): Дополнительные данные.
         description (str | None): Описание.
         created_at (datetime): Дата создания.
         updated_at (datetime): Дата обновления.
@@ -34,6 +34,7 @@ class DocumentResponse(BaseModel):
 
     id: uuid.UUID
     task_id: uuid.UUID | None = None
+    tender_id: uuid.UUID | None = None
     uploaded_by: uuid.UUID
     doc_type: str
     label: str | None = None
@@ -42,7 +43,7 @@ class DocumentResponse(BaseModel):
     mime_type: str
     file_size: int
     version: int
-    metadata: dict = Field(default_factory=dict)
+    extra_data: dict = Field(default_factory=dict)
     description: str | None = None
     created_at: datetime
     updated_at: datetime

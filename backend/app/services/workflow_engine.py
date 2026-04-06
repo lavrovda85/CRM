@@ -558,11 +558,25 @@ class WorkflowEngine:
         channel = action.channel or "web_push"
         template_name = action.template or "status_changed"
 
+        from app.models.task import task_co_assignees
+
         recipients: list[uuid.UUID] = []
-        if task.assigned_to:
-            recipients.append(task.assigned_to)
-        if task.created_by and task.created_by != task.assigned_to:
-            recipients.append(task.created_by)
+        seen: set[uuid.UUID] = set()
+
+        def _add_recipient(uid: uuid.UUID | None) -> None:
+            if uid is None or uid in seen:
+                return
+            seen.add(uid)
+            recipients.append(uid)
+
+        _add_recipient(task.assigned_to)
+        _add_recipient(task.requested_by)
+        _add_recipient(task.created_by)
+        co_res = await db.execute(
+            select(task_co_assignees.c.user_id).where(task_co_assignees.c.task_id == task.id)
+        )
+        for row in co_res.all():
+            _add_recipient(row[0])
 
         for recipient_id in recipients:
             notification = Notification(

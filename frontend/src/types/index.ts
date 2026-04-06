@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript type definitions for the HVAC CRM frontend.
+ * Shared TypeScript type definitions for the SPEC CRM frontend.
  *
  * Все интерфейсы синхронизированы с Pydantic-схемами бэкенда.
  * Используются как единственный источник правды для типизации
@@ -49,6 +49,31 @@ export interface AuthTokens {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Companies (multi-tenant)                                         */
+/* ------------------------------------------------------------------ */
+
+export interface CompanyResponse {
+  id: string;
+  name: string;
+  slug?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyMembershipItem {
+  company: CompanyResponse;
+  is_default: boolean;
+}
+
+/** Public tenant list for the login page (`GET /companies/login-options`). */
+export interface CompanyLoginOption {
+  id: string;
+  name: string;
+  slug?: string | null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Notifications                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -73,6 +98,18 @@ export interface Notification {
   created_at: string;
 }
 
+/** Backend in-app inbox row (`GET /notifications`). */
+export interface InboxNotificationItem {
+  id: string;
+  event_type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /* ------------------------------------------------------------------ */
 /*  WebSocket Events                                                   */
 /* ------------------------------------------------------------------ */
@@ -92,6 +129,7 @@ export interface UserSummary {
   full_name: string;
   email: string;
   role: string;
+  avatar_url?: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,16 +164,24 @@ export interface TaskResponse {
   tender_id: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  requested_by: string | null;
   title: string;
   description: string | null;
   status: string;
   priority: Priority;
   custom_fields: Record<string, unknown>;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   due_date: string | null;
   started_at: string | null;
   completed_at: string | null;
   sla_deadline: string | null;
   assignee: UserSummary | null;
+  creator: UserSummary | null;
+  requester: UserSummary | null;
+  co_assignees: UserSummary[];
+  observers: UserSummary[];
   template: TemplateSummary | null;
   created_at: string;
   updated_at: string;
@@ -170,6 +216,8 @@ export interface CommentResponse {
 
 export interface DocumentResponse {
   id: string;
+  task_id?: string | null;
+  tender_id?: string | null;
   doc_type: string;
   label: string | null;
   filename: string;
@@ -282,9 +330,79 @@ export type TenderStatus =
   | "completed"
   | "lost";
 
+/** Per-file text extraction stats for tender analysis (debug / transparency). */
+export interface TenderDocumentExtractionRow {
+  document_id: string;
+  filename: string;
+  mime_type?: string;
+  chars_extracted: number;
+  included_in_llm_input?: boolean;
+  skip_note?: string | null;
+}
+
+/** Indicative estimate / bid floor (not a legal ФГИС binding calculation unless integrated). */
+export interface TenderSmetaCalculationState {
+  status?: string;
+  stage_label?: string;
+  disclaimer_ru?: string;
+  methodology_note_ru?: string;
+  fgis_context_used_ru?: string;
+  estimated_direct_cost_rub?: number | null;
+  suggested_overhead_rub?: number | null;
+  estimated_total_cost_rub?: number | null;
+  suggested_minimum_bid_rub?: number | null;
+  suggested_target_margin_pct?: number | null;
+  profitability_summary_ru?: string;
+  trade_negotiation_floor_ru?: string;
+  row_estimates?: Array<Record<string, unknown>>;
+  fgis_diagnostics?: Record<string, unknown>;
+  error?: string;
+  updated_at?: string;
+  completed_at?: string;
+}
+
+/** AI / pipeline output stored in ``tender_analysis`` (JSON). */
+export interface TenderAnalysisState {
+  status?: string;
+  stage?: number;
+  stage_label?: string;
+  pitfalls_and_risks?: string;
+  profitability_assessment?: string;
+  participation_recommendation?: string;
+  bill_of_works?: Array<{
+    position?: string;
+    name?: string;
+    unit?: string;
+    quantity?: string;
+    remarks?: string;
+  }>;
+  bill_of_works_notes?: string;
+  /** Set when the user saved edits in the UI. */
+  bill_of_works_manual_edit_at?: string;
+  bill_of_works_confidence?: string;
+  /** Indicative smeta from bill (optional FGIS context + LLM). */
+  smeta_calculation?: TenderSmetaCalculationState;
+  error?: string;
+  updated_at?: string;
+  completed_at?: string;
+  text_chars_used?: number;
+  documents_total?: number;
+  documents_with_extracted_text?: number;
+  document_extraction_report?: TenderDocumentExtractionRow[];
+  max_text_per_document?: number;
+}
+
 export interface TenderResponse {
   id: string;
   title: string;
+  tender_link: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  guarantee_amount: number | null;
+  max_price: number | null;
+  min_price: number | null;
+  trade_start_at: string | null;
+  trade_end_at: string | null;
   description: string | null;
   source: string | null;
   budget: number | null;
@@ -296,8 +414,36 @@ export interface TenderResponse {
   requirements: Record<string, unknown>;
   documents_url: string | null;
   notes: string | null;
+  /** AI document analysis (risks, bill of works); empty object if not yet run. */
+  tender_analysis?: TenderAnalysisState;
   created_at: string;
   updated_at: string;
+}
+
+export interface TenderChecklistItemResponse {
+  id: string;
+  title: string;
+  item_type: string;
+  is_completed: boolean;
+  completed_by: string | null;
+  completed_at: string | null;
+  calculation_task_id: string | null;
+  scheduled_offset_hours: number | null;
+}
+
+export interface TenderChecklistResponse {
+  id: string;
+  title: string;
+  items: TenderChecklistItemResponse[];
+}
+
+export interface TenderDetailResponse extends TenderResponse {
+  /** Next allowed pipeline statuses from API (empty if terminal / unknown). */
+  allowed_next_statuses?: string[];
+  tasks: TaskResponse[];
+  checklists: TenderChecklistResponse[];
+  documents: DocumentResponse[];
+  comments: CommentResponse[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -339,6 +485,10 @@ export interface WarehouseItemResponse {
   reserved_quantity: number;
   min_quantity: number;
   price: number;
+  cost_total?: number;
+  depreciation_total?: number;
+  remaining_value_total?: number;
+  depreciation_pct?: number;
   description: string | null;
   location: string | null;
   created_at: string;
@@ -348,6 +498,7 @@ export interface WarehouseItemResponse {
 export interface WarehouseMovementResponse {
   id: string;
   item_id: string;
+  item_name: string | null;
   task_id: string | null;
   user_id: string;
   movement_type: string;
@@ -465,6 +616,8 @@ export interface ReferenceResponse {
 export interface DashboardStats {
   total_tasks: number;
   tasks_by_status: Record<string, number>;
+  active_tasks: number;
+  completed_today: number;
   overdue_tasks: number;
   total_deals: number;
   deals_amount: number;
@@ -505,6 +658,14 @@ export interface WarehouseAnalytics {
   >;
 }
 
+export interface WarehouseItemsImportResponse {
+  created_count: number;
+  updated_count: number;
+  skipped_count: number;
+  error_count: number;
+  errors: string[];
+}
+
 /* ------------------------------------------------------------------ */
 /*  Board                                                              */
 /* ------------------------------------------------------------------ */
@@ -519,4 +680,37 @@ export interface BoardResponse {
   is_archived: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Chat                                                               */
+/* ------------------------------------------------------------------ */
+
+export interface ChatMessageResponse {
+  id: string;
+  room: string;
+  sender_id: string;
+  sender_name: string | null;
+  body: string;
+  created_at: string;
+  attachments: Array<ChatAttachmentResponse>;
+}
+
+export interface ChatAttachmentResponse {
+  id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  download_url: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Chat Room                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface ChatRoomResponse {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
 }

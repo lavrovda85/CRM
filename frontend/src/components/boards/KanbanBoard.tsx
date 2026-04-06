@@ -24,8 +24,12 @@ export interface KanbanCard {
   title: string;
   subtitle?: string;
   badges?: { label: string; color: string }[];
+  /** Optional human-readable observers list (watchers). */
+  observerNames?: string[];
   avatar?: string;
   progress?: number;
+  /** Done / closed — render with muted strikethrough title. */
+  completed?: boolean;
 }
 
 export interface KanbanBoardProps {

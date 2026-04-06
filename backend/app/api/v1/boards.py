@@ -12,7 +12,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.dependencies import PaginationParams, get_current_user, get_db
+from app.core.dependencies import PaginationParams, get_crm_user_id, get_current_user, get_db
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse
 from app.core.security import CurrentUser
@@ -24,6 +24,8 @@ from app.schemas.board import (
     BoardUpdate,
 )
 from app.schemas.task import TaskResponse
+from app.services.task_service import TaskService
+from app.services.user_identity import resolve_users_table_id
 
 router = APIRouter(prefix="/boards")
 
@@ -47,11 +49,12 @@ async def create_board(
     Возвращает:
         Созданную доску.
     """
+    owner_id = await resolve_users_table_id(db, user)
     board = Board(
         name=body.name,
         description=body.description,
         board_type=body.board_type,
-        owner_id=uuid.UUID(user.sub),
+        owner_id=owner_id,
         columns=body.columns,
     )
     db.add(board)
@@ -104,6 +107,7 @@ async def get_board(
     board_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    crm_uid: uuid.UUID = Depends(get_crm_user_id),
 ) -> BoardDetailResponse:
     """Get board detail with tasks grouped by status.
 
@@ -120,7 +124,14 @@ async def get_board(
     """
     result = await db.execute(
         select(Board)
-        .options(selectinload(Board.tasks))
+        .options(
+            selectinload(Board.tasks).selectinload(Task.assignee),
+            selectinload(Board.tasks).selectinload(Task.template),
+            selectinload(Board.tasks).selectinload(Task.creator),
+            selectinload(Board.tasks).selectinload(Task.requester_user),
+            selectinload(Board.tasks).selectinload(Task.co_assignees),
+            selectinload(Board.tasks).selectinload(Task.observers),
+        )
         .where(Board.id == board_id)
     )
     board = result.scalar_one_or_none()
@@ -129,6 +140,10 @@ async def get_board(
 
     tasks_by_status: dict[str, list] = defaultdict(list)
     for task in board.tasks:
+        if task.deleted_at is not None:
+            continue
+        if not TaskService.user_can_view_task(task, crm_uid):
+            continue
         tasks_by_status[task.status].append(
             TaskResponse.model_validate(task).model_dump()
         )

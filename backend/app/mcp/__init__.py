@@ -1,4 +1,4 @@
-"""MCP server package for HVAC CRM/ERP platform.
+"""MCP server package for SPEC CRM/ERP platform.
 
 Предоставляет MCP инструменты для управления задачами, шаблонами,
 CRM, тендерами, складом и аналитикой через AI-агентов.
