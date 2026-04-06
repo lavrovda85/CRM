@@ -1,0 +1,45 @@
+HVAC CRM — деплой на один сервер (Ubuntu), один IP для веба и SSH
+================================================================
+
+ВАЖНО
+-----
+1) Пароли и токены НЕ храните в git. Используйте .env на сервере (из env.template.ip).
+2) После любой утечки пароля — смените пароль пользователя Linux и секреты в .env.
+3) Полный перенос ВСЕГО стека в Kubernetes (Postgres, Keycloak, Celery, …) — отдельный
+   большой проект. Здесь: РАБОЧИЙ путь A (Docker Compose + nginx на :80) и опционально
+   мониторинг в k3s (Grafana) на других портах.
+
+Путь A — CRM через Docker Compose (рекомендуется для одного сервера)
+--------------------------------------------------------------------
+На сервере (под пользователем с sudo):
+
+  sudo bash deploy/server/01-install-docker.sh
+  bash deploy/server/02-clone-repo.sh          # задайте GIT_REPO_URL или скопируйте проект вручную
+  cp deploy/server/env.template.ip /opt/crm/.env   # поправьте секреты
+  nano /opt/crm/.env
+  bash deploy/server/03-compose-up.sh /opt/crm
+
+Откройте в браузере: http://ВАШ_IP/
+
+Путь B — k3s + Grafana/Prometheus (мониторинг кластера), CRM остаётся в Compose
+-------------------------------------------------------------------------------
+Порты по умолчанию: API k3s :6443, Grafana NodePort :30080 (см. install-k3s-monitoring.sh)
+
+  sudo bash deploy/server/install-k3s-monitoring.sh
+
+Lens: импортируйте kubeconfig (см. lens-kubeconfig.sample.yaml).
+
+Деплой обновлений из ветки master (cron или вручную)
+---------------------------------------------------
+На сервере в каталоге с репозиторием:
+
+  bash deploy/server/git-pull-redeploy.sh /opt/crm
+
+GitHub: почему «не публикуется»
+--------------------------------
+В этом репозитории может не быть remote: выполните `git remote -v`.
+Если пусто — добавьте:
+  git remote add origin git@github.com:USER/CRM.git
+  git push -u origin master
+Приватный репозиторий — нормально, «публиковать» не обязательно.
+Если push отклонён — проверьте SSH-ключ (ssh -T git@github.com) или Personal Access Token для HTTPS.

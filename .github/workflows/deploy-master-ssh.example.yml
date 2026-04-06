@@ -1,0 +1,35 @@
+# Rename to deploy-master-ssh.yml and configure GitHub Secrets:
+#   DEPLOY_HOST    = 192.168.9.17
+#   DEPLOY_USER    = ubuntu
+#   DEPLOY_SSH_KEY = private key (full PEM) for passwordless SSH
+#   DEPLOY_PATH    = /opt/crm
+#
+# On the server: add deploy user's public key to ~/.ssh/authorized_keys
+# Do NOT commit real keys or passwords.
+
+name: Deploy master to server
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            git fetch origin
+            git checkout master
+            git pull origin master
+            docker compose -f docker-compose.yml build --parallel
+            docker compose -f docker-compose.yml up -d --remove-orphans
