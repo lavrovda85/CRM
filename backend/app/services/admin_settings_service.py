@@ -178,6 +178,8 @@ def env_preview() -> dict[str, str]:
             continue
         if key == "openai_api_key":
             continue
+        if key == "github_ssh_key":
+            continue
         if isinstance(value, list):
             out[k] = ", ".join(str(x) for x in value)
         else:

@@ -27,6 +27,7 @@ from app.models.chat import ChatAttachment, ChatMessage, ChatRoom
 from app.models.tender import Tender, TenderChecklist, TenderChecklistItem, TenderComment
 from app.models.ai_assistant_chat import AiAssistantMessage, AiAssistantSession
 from app.models.system_setting import SystemSetting
+from app.models.deploy_job import DeployJob
 
 __all__ = [
     "BaseModel",
@@ -71,4 +72,5 @@ __all__ = [
     "AiAssistantMessage",
     "AiAssistantSession",
     "SystemSetting",
+    "DeployJob",
 ]

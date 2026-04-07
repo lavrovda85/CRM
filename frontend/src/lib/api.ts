@@ -1085,6 +1085,54 @@ export async function runAdminSchedulerRuleNow(
   });
 }
 
+export interface DeployStatus {
+  deploy_ui_enabled: boolean;
+  agent_reachable: boolean | null;
+  agent_error: string | null;
+  github_repo_configured: boolean;
+}
+
+export interface DeployJob {
+  id: string;
+  branch: string;
+  status: string;
+  previous_sha: string | null;
+  new_sha: string | null;
+  log_excerpt: string | null;
+  error_message: string | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export async function fetchDeployStatus(): Promise<DeployStatus> {
+  return request("/admin/deploy/status");
+}
+
+export async function fetchDeployBranches(): Promise<string[]> {
+  const r = await request<{ branches: string[] }>("/admin/deploy/branches");
+  return r.branches || [];
+}
+
+export async function runDeploy(branch: string): Promise<DeployJob> {
+  return request("/admin/deploy/run", {
+    method: "POST",
+    body: JSON.stringify({ branch }),
+  });
+}
+
+export async function fetchDeployJobs(limit = 30): Promise<DeployJob[]> {
+  return request(`/admin/deploy/jobs?limit=${limit}`);
+}
+
+export async function fetchDeployJob(jobId: string): Promise<DeployJob> {
+  return request(`/admin/deploy/jobs/${jobId}`);
+}
+
+export async function fetchProjectLogs(tail = 400): Promise<string> {
+  const r = await request<{ lines: string }>(`/admin/deploy/logs/project?tail=${tail}`);
+  return r.lines || "";
+}
+
 /** Update own profile (phone, name). Requires auth; does not use admin-only PATCH /users/{id}. */
 export async function updateCurrentUserProfile(data: {
   phone?: string | null;

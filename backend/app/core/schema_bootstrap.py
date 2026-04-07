@@ -151,3 +151,19 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
             'ON "chat_rooms" (company_id, code)'
         )
     )
+    await conn.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS deploy_jobs ("
+            "id uuid PRIMARY KEY,"
+            "branch varchar(512) NOT NULL,"
+            "status varchar(32) NOT NULL,"
+            "previous_sha varchar(64) NULL,"
+            "new_sha varchar(64) NULL,"
+            "log_excerpt text NULL,"
+            "error_message text NULL,"
+            "created_at timestamptz NOT NULL DEFAULT now(),"
+            "updated_at timestamptz NOT NULL DEFAULT now(),"
+            "finished_at timestamptz NULL"
+            ")"
+        )
+    )

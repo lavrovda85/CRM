@@ -157,6 +157,7 @@ def create_app() -> FastAPI:
         )
 
     from app.api.v1 import (
+        admin_deploy,
         admin_settings,
         ai_assistant,
         analytics,
@@ -198,6 +199,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router, prefix=api_prefix, tags=["Analytics"])
     app.include_router(ai_assistant.router, prefix=api_prefix, tags=["AI Assistant"])
     app.include_router(admin_settings.router, prefix=api_prefix, tags=["Admin Settings"])
+    app.include_router(admin_deploy.router, prefix=api_prefix, tags=["Admin Deploy"])
 
     @app.get("/health", tags=["System"])
     async def health_check() -> dict:

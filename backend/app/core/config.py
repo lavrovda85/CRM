@@ -173,6 +173,12 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
     # HTTP proxy only for OpenAI SDK (e.g. http://xray-openai:10808). Xray should route OpenAI -> VLESS, else direct.
     openai_http_proxy: str | None = Field(default=None, alias="OPENAI_HTTP_PROXY")
+    # Server deploy: SSH key and repo URL are consumed by deploy-agent (see DEPLOY_AGENT_URL). Listed here for .env parity.
+    github_ssh_key: str | None = Field(default=None, alias="GITHUB_SSH_KEY")
+    github_repo_url: str | None = Field(default=None, alias="GITHUB_REPO_URL")
+    # Base URL of deploy-agent sidecar, e.g. http://deploy-agent:9090 — required for admin UI deploy when ADMIN_DEPLOY_ENABLED=true.
+    deploy_agent_url: str | None = Field(default=None, alias="DEPLOY_AGENT_URL")
+    admin_deploy_enabled: bool = Field(default=False, alias="ADMIN_DEPLOY_ENABLED")
     ai_assistant_max_tool_rounds: int = Field(default=24, ge=1, le=48, alias="AI_ASSISTANT_MAX_TOOL_ROUNDS")
     ai_assistant_timezone: str = Field(
         default="Europe/Moscow",

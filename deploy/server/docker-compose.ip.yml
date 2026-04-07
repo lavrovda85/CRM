@@ -4,6 +4,27 @@
 #   docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml up -d --build
 
 services:
+  # Sidecar: git pull, docker-compose build/up, apply_schema, health check, rollback on failure.
+  # Mount host repo at DEPLOY_HOST_REPO_PATH (default /opt/crm) and set GITHUB_* + ADMIN_DEPLOY_ENABLED on backend.
+  deploy-agent:
+    build:
+      context: ../..
+      dockerfile: docker/deploy-agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      DEPLOY_REPO_PATH: /deploy/repo
+      DEPLOY_COMPOSE_FILE_MAIN: docker-compose.yml
+      DEPLOY_COMPOSE_FILE_EXTRA: deploy/server/docker-compose.ip.yml
+      DEPLOY_HEALTH_URL: http://backend:8000/health
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-}
+      GITHUB_SSH_KEY: ${GITHUB_SSH_KEY:-}
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DEPLOY_HOST_REPO_PATH:-/opt/crm}:/deploy/repo:rw
+    expose:
+      - "9090"
+
   xray-openai:
     restart: unless-stopped
 

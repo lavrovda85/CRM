@@ -7,8 +7,13 @@ import {
   deleteAdminSchedulerRule,
   fetchAdminSettings,
   fetchAdminSchedulerRules,
+  fetchDeployBranches,
+  fetchDeployJobs,
+  fetchDeployStatus,
+  fetchProjectLogs,
   fetchUsers,
   runAdminSchedulerRuleNow,
+  runDeploy,
   updateAdminSchedulerRule,
   updateAdminSchedulerSettings,
 } from "@/lib/api";
@@ -27,7 +32,29 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
-  const [tab, setTab] = useState<"rules" | "env">("rules");
+  const [tab, setTab] = useState<"rules" | "env" | "deploy" | "logs">("rules");
+  const [deployStatus, setDeployStatus] = useState<{
+    deploy_ui_enabled: boolean;
+    agent_reachable: boolean | null;
+    agent_error: string | null;
+    github_repo_configured: boolean;
+  } | null>(null);
+  const [deployBranches, setDeployBranches] = useState<string[]>([]);
+  const [deployBranch, setDeployBranch] = useState("");
+  const [deployBusy, setDeployBusy] = useState(false);
+  const [deployJobs, setDeployJobs] = useState<
+    Array<{
+      id: string;
+      branch: string;
+      status: string;
+      log_excerpt: string | null;
+      error_message: string | null;
+      created_at: string;
+    }>
+  >([]);
+  const [projectLogText, setProjectLogText] = useState("");
+  const [logsBusy, setLogsBusy] = useState(false);
+  const [logTail, setLogTail] = useState(400);
   const [envPreview, setEnvPreview] = useState<Record<string, string>>({});
   const [staff, setStaff] = useState<Array<{ id: string; full_name: string }>>([]);
   const [rules, setRules] = useState<Array<{ id: string; name: string; order: number }>>([]);
@@ -103,6 +130,63 @@ export default function AdminSettingsPage() {
       cancelled = true;
     };
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "deploy") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [st, jobs, branches] = await Promise.all([
+          fetchDeployStatus(),
+          fetchDeployJobs(20),
+          fetchDeployBranches().catch(() => [] as string[]),
+        ]);
+        if (cancelled) return;
+        setDeployStatus(st);
+        setDeployJobs(
+          jobs.map((j) => ({
+            id: j.id,
+            branch: j.branch,
+            status: j.status,
+            log_excerpt: j.log_excerpt,
+            error_message: j.error_message,
+            created_at: j.created_at,
+          })),
+        );
+        setDeployBranches(branches);
+        setDeployBranch((prev) => {
+          if (prev) return prev;
+          if (!branches.length) return "";
+          const mainOrMaster = branches.find((b) => b === "main" || b === "master");
+          return mainOrMaster || branches[0] || "";
+        });
+      } catch {
+        if (!cancelled) setDeployStatus(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, tab]);
+
+  useEffect(() => {
+    if (!isAdmin || tab !== "logs") return;
+    let cancelled = false;
+    void (async () => {
+      setLogsBusy(true);
+      try {
+        const lines = await fetchProjectLogs(logTail);
+        if (!cancelled) setProjectLogText(lines);
+      } catch {
+        if (!cancelled) setProjectLogText("Не удалось загрузить логи (deploy-agent и ADMIN_DEPLOY_ENABLED).");
+      } finally {
+        if (!cancelled) setLogsBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, tab, logTail]);
 
   async function onSave() {
     setSaving(true);
@@ -301,6 +385,33 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function onDeployRun() {
+    if (!deployBranch.trim()) return;
+    setError(null);
+    setOk(null);
+    setDeployBusy(true);
+    try {
+      const job = await runDeploy(deployBranch.trim());
+      setOk(`Деплой завершён: ${job.status}`);
+      const jobs = await fetchDeployJobs(20);
+      setDeployJobs(
+        jobs.map((j) => ({
+          id: j.id,
+          branch: j.branch,
+          status: j.status,
+          log_excerpt: j.log_excerpt,
+          error_message: j.error_message,
+          created_at: j.created_at,
+        })),
+      );
+      setDeployStatus(await fetchDeployStatus());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка деплоя");
+    } finally {
+      setDeployBusy(false);
+    }
+  }
+
   async function moveRule(delta: -1 | 1) {
     const idx = rules.findIndex((r) => r.id === selectedRuleId);
     if (idx < 0) return;
@@ -399,6 +510,20 @@ export default function AdminSettingsPage() {
           onClick={() => setTab("env")}
         >
           Environment
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-3 py-1.5 text-sm ${tab === "deploy" ? "bg-primary-600 text-white" : "bg-surface-100 text-surface-700"}`}
+          onClick={() => setTab("deploy")}
+        >
+          Deploy
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-3 py-1.5 text-sm ${tab === "logs" ? "bg-primary-600 text-white" : "bg-surface-100 text-surface-700"}`}
+          onClick={() => setTab("logs")}
+        >
+          Логи сервисов
         </button>
       </div>
 
@@ -509,6 +634,138 @@ export default function AdminSettingsPage() {
           ))}
         </div>
       </div>
+      )}
+
+      {tab === "deploy" && (
+        <div className="card space-y-4 p-4">
+          <h2 className="text-lg font-semibold">Деплой с сервера</h2>
+          <p className="text-sm text-surface-600">
+            Нужны <code className="rounded bg-surface-100 px-1">ADMIN_DEPLOY_ENABLED=true</code>,{" "}
+            <code className="rounded bg-surface-100 px-1">DEPLOY_AGENT_URL</code>, контейнер{" "}
+            <code className="rounded bg-surface-100 px-1">deploy-agent</code> и переменные{" "}
+            <code className="rounded bg-surface-100 px-1">GITHUB_SSH_KEY</code> /{" "}
+            <code className="rounded bg-surface-100 px-1">GITHUB_REPO_URL</code> на сервере. После pull выполняется
+            применение схемы БД и перезапуск compose; при ошибке или падении health — откат на предыдущий commit.
+          </p>
+          {deployStatus && (
+            <div className="rounded border border-surface-200 bg-surface-50 px-3 py-2 text-sm">
+              <div>
+                UI: {deployStatus.deploy_ui_enabled ? "включён" : "выключен"} · агент:{" "}
+                {deployStatus.agent_reachable === null
+                  ? "—"
+                  : deployStatus.agent_reachable
+                    ? "ok"
+                    : `недоступен${deployStatus.agent_error ? ` (${deployStatus.agent_error})` : ""}`}{" "}
+                · repo env: {deployStatus.github_repo_configured ? "задан" : "не задан"}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-sm">
+              Ветка
+              <select
+                className="input min-w-[220px]"
+                value={deployBranch}
+                onChange={(e) => setDeployBranch(e.target.value)}
+                disabled={deployBusy || !deployBranches.length}
+              >
+                {deployBranches.length === 0 ? (
+                  <option value="">(список веток недоступен)</option>
+                ) : (
+                  deployBranches.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={deployBusy || !deployBranch || !deployStatus?.deploy_ui_enabled}
+              onClick={() => void onDeployRun()}
+            >
+              {deployBusy ? "Деплой…" : "Деплоить"}
+            </button>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-surface-700">Последние запуски</h3>
+            <div className="max-h-48 overflow-auto rounded border border-surface-200 text-xs">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-surface-100 text-left">
+                    <th className="p-2">Время</th>
+                    <th className="p-2">Ветка</th>
+                    <th className="p-2">Статус</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deployJobs.map((j) => (
+                    <tr key={j.id} className="border-t border-surface-200">
+                      <td className="p-2 whitespace-nowrap">{new Date(j.created_at).toLocaleString()}</td>
+                      <td className="p-2 font-mono">{j.branch}</td>
+                      <td className="p-2">
+                        {j.status}
+                        {j.error_message ? (
+                          <span className="block text-red-600">{j.error_message}</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {deployJobs[0]?.log_excerpt ? (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-surface-700">Лог последнего деплоя</h3>
+              <pre className="max-h-96 overflow-auto rounded border border-surface-200 bg-surface-950 p-3 text-xs text-surface-100 whitespace-pre-wrap">
+                {deployJobs[0].log_excerpt}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {tab === "logs" && (
+        <div className="card space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold">Логи docker compose</h2>
+            <label className="flex items-center gap-2 text-sm">
+              tail
+              <input
+                type="number"
+                className="input w-24"
+                min={50}
+                max={5000}
+                value={logTail}
+                onChange={(e) => setLogTail(Number(e.target.value) || 400)}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              disabled={logsBusy}
+              onClick={() => {
+                setTab("logs");
+                void (async () => {
+                  setLogsBusy(true);
+                  try {
+                    setProjectLogText(await fetchProjectLogs(logTail));
+                  } finally {
+                    setLogsBusy(false);
+                  }
+                })();
+              }}
+            >
+              Обновить
+            </button>
+          </div>
+          <pre className="max-h-[32rem] overflow-auto rounded border border-surface-200 bg-surface-950 p-3 text-xs text-surface-100 whitespace-pre-wrap">
+            {logsBusy ? "Загрузка…" : projectLogText || "Пусто"}
+          </pre>
+        </div>
       )}
     </div>
   );
