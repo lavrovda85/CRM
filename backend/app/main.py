@@ -53,6 +53,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("Starting SPEC CRM Platform", version=settings.app_version)
 
+    try:
+        from app.core.schema_bootstrap import ensure_deploy_jobs_table
+
+        await ensure_deploy_jobs_table()
+    except Exception as exc:
+        logger.warning("ensure_deploy_jobs_table failed: %s", exc)
+
     if settings.debug or settings.schema_bootstrap_on_startup:
         from app.core.schema_bootstrap import ensure_application_schema
 

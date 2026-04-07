@@ -10,6 +10,34 @@ import app.models  # noqa: F401 — register models on Base.metadata
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+_DEPLOY_JOBS_DDL = text(
+    "CREATE TABLE IF NOT EXISTS deploy_jobs ("
+    "id uuid PRIMARY KEY,"
+    "branch varchar(512) NOT NULL,"
+    "status varchar(32) NOT NULL,"
+    "previous_sha varchar(64) NULL,"
+    "new_sha varchar(64) NULL,"
+    "log_excerpt text NULL,"
+    "error_message text NULL,"
+    "created_at timestamptz NOT NULL DEFAULT now(),"
+    "updated_at timestamptz NOT NULL DEFAULT now(),"
+    "finished_at timestamptz NULL"
+    ")"
+)
+
+
+async def apply_deploy_jobs_ddl(conn: AsyncConnection) -> None:
+    """Create ``deploy_jobs`` if missing (idempotent)."""
+    await conn.execute(_DEPLOY_JOBS_DDL)
+
+
+async def ensure_deploy_jobs_table() -> None:
+    """Ensure ``deploy_jobs`` exists for admin deploy UI (runs on every app startup)."""
+    from app.core.database import engine
+
+    async with engine.begin() as conn:
+        await apply_deploy_jobs_ddl(conn)
+
 
 async def ensure_application_schema() -> None:
     """Run ``create_all`` and additive SQL (safe to re-run)."""
@@ -151,19 +179,4 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
             'ON "chat_rooms" (company_id, code)'
         )
     )
-    await conn.execute(
-        text(
-            "CREATE TABLE IF NOT EXISTS deploy_jobs ("
-            "id uuid PRIMARY KEY,"
-            "branch varchar(512) NOT NULL,"
-            "status varchar(32) NOT NULL,"
-            "previous_sha varchar(64) NULL,"
-            "new_sha varchar(64) NULL,"
-            "log_excerpt text NULL,"
-            "error_message text NULL,"
-            "created_at timestamptz NOT NULL DEFAULT now(),"
-            "updated_at timestamptz NOT NULL DEFAULT now(),"
-            "finished_at timestamptz NULL"
-            ")"
-        )
-    )
+    await apply_deploy_jobs_ddl(conn)
