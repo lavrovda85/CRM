@@ -2,7 +2,7 @@
 # Uses Compose merge `!reset` so empty lists replace inherited volumes/ports (see Docker Compose merge docs).
 # Usage from repo root:
 #   docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml up -d --build
-# First-time on server (after .env from env.template.ip + git pull): bash deploy/server/first-time-stack.sh
+# Empty /opt/crm: on server run deploy/server/bootstrap-repo-path.sh, then .env, then first-time-stack.sh
 
 services:
   # Sidecar: git pull, docker-compose build/up, apply_schema, health check, rollback on failure.

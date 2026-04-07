@@ -5,6 +5,7 @@
 #   DEPLOY_PATH    — repo root on server (e.g. /opt/crm)
 #
 # On the server: add the matching public key to ~/.ssh/authorized_keys for DEPLOY_USER.
+# If DEPLOY_PATH is empty: clone once on the server — see deploy/server/bootstrap-repo-path.sh
 # Do NOT commit real keys or passwords.
 
 name: Deploy master to server
