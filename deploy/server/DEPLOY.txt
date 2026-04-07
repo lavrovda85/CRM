@@ -18,8 +18,27 @@ HVAC CRM — деплой на один сервер (Ubuntu), один IP дл�
   cp deploy/server/env.template.ip /opt/crm/.env   # поправьте секреты
   nano /opt/crm/.env
   bash deploy/server/03-compose-up.sh /opt/crm
+  bash deploy/server/04-migrate.sh /opt/crm   # Alembic (когда появятся revision-файлы в backend/migrations/versions)
+
+Первый запуск на ПУСТОЙ БД (схема как в dev: create_all + патчи):
+  В .env на сервере: SCHEMA_BOOTSTRAP_ON_STARTUP=true, затем перезапуск compose.
+  После успешного старта API верните SCHEMA_BOOTSTRAP_ON_STARTUP=false и снова перезапустите.
 
 Откройте в браузере: http://ВАШ_IP/
+
+Вручную Alembic:
+  docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml exec -T backend alembic upgrade head
+
+Keycloak / вход (LAN)
+----------------------
+- Учётные записи из импорта realm (docker/keycloak/hvac-realm.json): например admin@spec.local / admin123
+  (manager@hvac.local / manager123, engineer@hvac.local / engineer123). Пароль в CRM = пароль в Keycloak.
+- KEYCLOAK_CLIENT_SECRET в .env должен совпадать с секретом клиента hvac-backend в realm (по умолчанию
+  backend-secret-change-me). Иначе password grant вернёт Invalid credentials.
+- Для NextAuth/OIDC добавьте в realm клиент hvac-frontend redirect URI: http://ВАШ_IP/* (в шаблоне уже есть
+  пример для 192.168.9.17). После смены JSON пересоздайте realm в Keycloak или правьте клиент в админке.
+- Если пароль проходит, но дальше 401 по токену: в логах backend ищите JWT issuer mismatch — задайте
+  KEYCLOAK_TOKEN_ISSUER равным полю iss из access token (jwt.io).
 
 Путь B — k3s + Grafana/Prometheus (мониторинг кластера), CRM остаётся в Compose
 -------------------------------------------------------------------------------

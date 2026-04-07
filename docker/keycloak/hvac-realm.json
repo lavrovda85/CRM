@@ -39,6 +39,8 @@
         "http://localhost:3000/*",
         "http://localhost:3500/*",
         "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://192.168.9.17/*",
         "https://*.ngrok-free.app/*",
         "https://*.ngrok.io/*",
         "https://*.trycloudflare.com/*"
@@ -81,7 +83,7 @@
         {
           "type": "password",
           "value": "manager123",
-          "temporary": true
+          "temporary": false
         }
       ],
       "realmRoles": ["manager"]
@@ -96,7 +98,7 @@
         {
           "type": "password",
           "value": "engineer123",
-          "temporary": true
+          "temporary": false
         }
       ],
       "realmRoles": ["engineer"]

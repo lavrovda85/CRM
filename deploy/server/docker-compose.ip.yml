@@ -1,0 +1,62 @@
+# LAN / IP production overrides (no dev bind mounts, frontend production build).
+# Uses Compose merge `!reset` so empty lists replace inherited volumes/ports (see Docker Compose merge docs).
+# Usage from repo root:
+#   docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml up -d --build
+
+services:
+  xray-openai:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+
+  minio:
+    restart: unless-stopped
+    ports: !reset []
+
+  minio-init:
+    restart: "no"
+
+  keycloak:
+    restart: unless-stopped
+    ports: !reset []
+
+  backend:
+    restart: unless-stopped
+    volumes: !reset []
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    ports: !reset []
+
+  keycloak-sync:
+    restart: "no"
+    volumes: !reset []
+
+  mcp-server:
+    restart: unless-stopped
+    volumes: !reset []
+    ports: !reset []
+
+  celery-worker:
+    restart: unless-stopped
+    volumes: !reset []
+
+  celery-beat:
+    restart: unless-stopped
+    volumes: !reset []
+
+  frontend:
+    build:
+      target: production
+    restart: unless-stopped
+    volumes: !reset []
+    ports: !reset []
+
+  nginx:
+    restart: unless-stopped
+    ports:
+      - "80:80"

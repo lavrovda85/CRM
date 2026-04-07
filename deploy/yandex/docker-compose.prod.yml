@@ -10,6 +10,9 @@
 #   - nginx container also handles certbot webroot + SSL
 
 services:
+  xray-openai:
+    restart: unless-stopped
+
   postgres:
     restart: unless-stopped
     ports: []

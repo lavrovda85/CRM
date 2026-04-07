@@ -13,9 +13,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from openai import APIError, AsyncOpenAI
+from openai import APIError
 
 from app.core.config import Settings, get_settings
+from app.services.openai_client import create_async_openai_client
 from .tender_external_service import FetchedTenderPage, fetch_tender_page
 from .tender_search_query import should_drop_for_exclusion_tokens
 from .tender_zakupki_urls import (
@@ -135,7 +136,7 @@ async def _summarize_batch_openai(rows: list[dict[str, Any]], settings: Settings
     key = (settings.openai_api_key or "").strip()
     if not key or not rows:
         return {}
-    client = AsyncOpenAI(api_key=key)
+    client = create_async_openai_client(settings)
     payload: list[dict[str, Any]] = []
     for row in rows:
         dl = row.get("application_deadline_utc")

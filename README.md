@@ -33,8 +33,10 @@ cp .env.example .env
 # 3. Запустить все сервисы
 docker compose up -d
 
-# 4. Выполнить миграции базы данных
-docker compose exec backend alembic upgrade head
+# 4. Схема БД
+#    Пока нет Alembic revision-файлов, dev поднимает таблицы через BACKEND_DEBUG; для пустого прода задайте
+#    SCHEMA_BOOTSTRAP_ON_STARTUP=true один раз (см. .env.example), затем false.
+#    Когда появятся миграции: docker compose exec backend alembic upgrade head
 
 # 5. Открыть приложение
 #    Фронтенд:        http://localhost:3000

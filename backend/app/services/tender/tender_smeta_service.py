@@ -14,7 +14,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from openai import AsyncOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +22,7 @@ from app.core.database import async_session_factory
 from app.models.tender import Tender
 from app.prompts.tender_smeta_json import TENDER_SMETA_JSON_INSTRUCTION
 from app.services.fgis_cs_client import fetch_fgis_external_context
+from app.services.openai_client import create_async_openai_client
 from app.services.tender.tender_smeta_reconcile import reconcile_smeta_llm_output
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ async def _call_openai_smeta(
     if not key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
 
-    client = AsyncOpenAI(api_key=key)
+    client = create_async_openai_client(settings)
     bill_blob = json.dumps(bill_rows, ensure_ascii=False, indent=2)[:_MAX_PROMPT_CHARS]
     user_blob = (
         f"Тендер: {tender_title}\n\n"

@@ -6,9 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from openai import AsyncOpenAI
-
 from app.core.config import Settings, get_settings
+from app.services.openai_client import create_async_openai_client
 from app.core.exceptions import AiAssistantUnavailableError
 from app.core.security import CurrentUser
 from app.prompts.ai_assistant_system import SYSTEM_PROMPT
@@ -88,7 +87,7 @@ async def run_ai_chat(
             raise ValueError("attached content too large")
 
     registry = get_tool_registry()
-    client = AsyncOpenAI(api_key=cfg.openai_api_key)
+    client = create_async_openai_client(cfg)
     tools = openai_tools_schema(registry)
 
     context_patch: dict[str, Any] = {}

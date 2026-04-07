@@ -44,6 +44,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # HTTP proxy on 10808: OpenAI hostnames -> VLESS (if OPENAI_VLESS_URI set), else direct.
+  # Backend/Celery set OPENAI_HTTP_PROXY=http://xray-openai:10808 only when using this path.
+  xray-openai:
+    build:
+      context: .
+      dockerfile: docker/xray/Dockerfile
+    environment:
+      OPENAI_VLESS_URI: ${OPENAI_VLESS_URI:-}
+    expose:
+      - "10808"
+    restart: unless-stopped
+
   minio-init:
     image: minio/mc:latest
     depends_on:
@@ -100,9 +112,11 @@ services:
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_TOKEN_ISSUER: ${KEYCLOAK_TOKEN_ISSUER:-}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       BACKEND_DEBUG: ${BACKEND_DEBUG}
+      SCHEMA_BOOTSTRAP_ON_STARTUP: ${SCHEMA_BOOTSTRAP_ON_STARTUP:-false}
       SECRET_KEY: ${SECRET_KEY}
       # Pass through from repo .env so DB-only login works in Docker (Keycloak bypass password).
       DEV_BYPASS_AUTH: ${DEV_BYPASS_AUTH:-false}
@@ -111,6 +125,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_HTTP_PROXY: ${OPENAI_HTTP_PROXY:-}
       AI_ASSISTANT_MAX_TOOL_ROUNDS: ${AI_ASSISTANT_MAX_TOOL_ROUNDS:-24}
       TASK_SCHEDULER_ENABLED: ${TASK_SCHEDULER_ENABLED:-false}
       TASK_SCHEDULER_CRON_MINUTE: ${TASK_SCHEDULER_CRON_MINUTE:-0}
@@ -152,6 +167,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      xray-openai:
+        condition: service_started
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # One-shot after API is up: links users.keycloak_id; if KEYCLOAK_SYNC_INITIAL_PASSWORD is set, creates missing KC users and resets every active user password to that value (unset after bootstrap).
@@ -228,6 +245,7 @@ services:
       # Tender document analysis (tender_analysis job) runs in this process — same as backend API.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_HTTP_PROXY: ${OPENAI_HTTP_PROXY:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
@@ -262,6 +280,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      xray-openai:
+        condition: service_started
 
   celery-beat:
     build:

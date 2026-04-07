@@ -155,14 +155,28 @@ async def authenticate_bearer_token(token: str, settings: Settings) -> CurrentUs
 
         # Keycloak access tokens typically use ``aud: "account"``, not the OAuth client id.
         # The requesting client is in ``azp``; validating ``aud`` against ``keycloak_client_id`` breaks login.
-        issuer = f"{settings.keycloak_url}/realms/{settings.keycloak_realm}"
-        payload = jwt.decode(
-            token,
-            key,
-            algorithms=["RS256"],
-            issuer=issuer,
-            options={"verify_aud": False},
-        )
+        issuer = settings.keycloak_expected_issuer()
+        try:
+            payload = jwt.decode(
+                token,
+                key,
+                algorithms=["RS256"],
+                issuer=issuer,
+                options={"verify_aud": False},
+            )
+        except JWTError as exc:
+            try:
+                unverified = jwt.get_unverified_claims(token)
+                token_iss = unverified.get("iss")
+                logger.warning(
+                    "JWT validation failed (check issuer vs signature)",
+                    expected_issuer=issuer,
+                    token_iss=token_iss,
+                    hint="Set KEYCLOAK_TOKEN_ISSUER to token iss if Keycloak hostname differs from KEYCLOAK_URL",
+                )
+            except JWTError:
+                pass
+            raise exc
         azp = payload.get("azp")
         if azp is not None and azp != settings.keycloak_client_id:
             raise HVACBaseError(

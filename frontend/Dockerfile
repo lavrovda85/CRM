@@ -1,9 +1,9 @@
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
 
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --no-audit --fund=false && test -x node_modules/.bin/next
 
 FROM base AS dev
 COPY --from=deps /app/node_modules ./node_modules
@@ -11,6 +11,7 @@ COPY . .
 CMD ["npm", "run", "dev"]
 
 FROM base AS builder
+ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from openai import AsyncOpenAI
+from app.services.openai_client import create_async_openai_client
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -101,7 +101,7 @@ async def _call_openai(combined_text: str, tender_title: str) -> dict[str, Any]:
     if not key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
 
-    client = AsyncOpenAI(api_key=key)
+    client = create_async_openai_client(settings)
     user_blob = (
         f"Название тендера: {tender_title}\n\n"
         "Ниже — извлечённый текст из прикреплённых файлов (каждый файл может быть сокращён по объёму; "

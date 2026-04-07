@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     app_name: str = "SPEC CRM"
     app_version: str = "0.1.0"
     debug: bool = Field(default=False, alias="BACKEND_DEBUG")
+    schema_bootstrap_on_startup: bool = Field(
+        default=False,
+        alias="SCHEMA_BOOTSTRAP_ON_STARTUP",
+        description="Run create_all + dev parity DDL on startup (use true once on new prod DB).",
+    )
     secret_key: str = "change-me"
     log_level: str = "INFO"
 
@@ -142,6 +147,8 @@ class Settings(BaseSettings):
     keycloak_realm: str = "hvac"
     keycloak_client_id: str = "hvac-backend"
     keycloak_client_secret: str = "backend-secret-change-me"
+    # If Keycloak puts a different `iss` in access tokens than KEYCLOAK_URL/realms/... (hostname/proxy), set this.
+    keycloak_token_issuer: str | None = Field(default=None, alias="KEYCLOAK_TOKEN_ISSUER")
     # Master-realm admin (fallback when hvac-backend service account lacks realm-management roles).
     keycloak_admin_username: str = Field(default="", alias="KEYCLOAK_ADMIN")
     keycloak_admin_password: str = Field(default="", alias="KEYCLOAK_ADMIN_PASSWORD")
@@ -164,6 +171,8 @@ class Settings(BaseSettings):
     # OpenAI (AI assistant chat — same MCP tools as standalone MCP server)
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
+    # HTTP proxy only for OpenAI SDK (e.g. http://xray-openai:10808). Xray should route OpenAI -> VLESS, else direct.
+    openai_http_proxy: str | None = Field(default=None, alias="OPENAI_HTTP_PROXY")
     ai_assistant_max_tool_rounds: int = Field(default=24, ge=1, le=48, alias="AI_ASSISTANT_MAX_TOOL_ROUNDS")
     ai_assistant_timezone: str = Field(
         default="Europe/Moscow",
@@ -317,6 +326,13 @@ class Settings(BaseSettings):
                 return []
             return [str(x).strip() for x in parsed if str(x).strip()]
         return [x.strip() for x in raw.split(",") if x.strip()]
+
+    def keycloak_expected_issuer(self) -> str:
+        """Return JWT ``iss`` value for validating Keycloak access tokens."""
+        custom = (self.keycloak_token_issuer or "").strip()
+        if custom:
+            return custom.rstrip("/")
+        return f"{self.keycloak_url.rstrip('/')}/realms/{self.keycloak_realm}"
 
 
 @lru_cache
