@@ -35,8 +35,27 @@ import type {
   CompanyLoginOption,
 } from "@/types";
 
-/** API base URL. Prefer relative `/api/v1` so the browser hits Next.js rewrites (no CORS). */
-const BASE = (process.env.NEXT_PUBLIC_API_URL?.trim() || "/api/v1") as string;
+/**
+ * Public API base for the browser. Prefer same-origin `/api/v1` (Next.js `app/api/v1` proxy).
+ *
+ * If the bundle was built with an absolute NEXT_PUBLIC_API_URL pointing at another origin
+ * (e.g. port 80 while the UI is served on 9000), ignore it and use `/api/v1` to avoid CORS.
+ */
+function getApiBase(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim() ?? "";
+  if (typeof window !== "undefined" && fromEnv.length > 0) {
+    try {
+      const pageOrigin = window.location.origin;
+      const apiOrigin = new URL(fromEnv, pageOrigin).origin;
+      if (apiOrigin !== pageOrigin) {
+        return "/api/v1";
+      }
+    } catch {
+      return "/api/v1";
+    }
+  }
+  return fromEnv || "/api/v1";
+}
 
 /** Persists selected tenant for `X-Company-Id` on API calls (must match backend company context). */
 export const ACTIVE_COMPANY_ID_STORAGE_KEY = "hvac_active_company_id";
@@ -223,7 +242,7 @@ class ApiClient {
     const rt = this.refreshToken;
     this.refreshPromise = (async () => {
       try {
-        const res = await fetch(`${BASE}/auth/refresh`, {
+        const res = await fetch(`${getApiBase()}/auth/refresh`, {
           method: "POST",
           headers: {
             ...tunnelInterstitialBypassHeaders(),
@@ -275,7 +294,7 @@ class ApiClient {
         ? { ...headers, ...(options.headers as Record<string, string>) }
         : headers;
 
-      return fetch(`${BASE}${path}`, {
+      return fetch(`${getApiBase()}${path}`, {
         ...options,
         headers: mergedHeaders,
         signal: apiTimeoutSignal(options?.signal ?? null),
@@ -356,7 +375,7 @@ class ApiClient {
         ? { ...headers, ...(options.headers as Record<string, string>) }
         : headers;
 
-      return fetch(`${BASE}${path}`, {
+      return fetch(`${getApiBase()}${path}`, {
         ...options,
         headers: mergedHeaders,
         signal: apiTimeoutSignal(options?.signal ?? null),
@@ -1286,7 +1305,7 @@ export async function clearAiAssistantServerHistory(
 ): Promise<void> {
   const t = (accessTokenOverride ?? api.getToken())?.trim();
   if (!t) return;
-  const base = BASE.replace(/\/$/, "");
+  const base = getApiBase().replace(/\/$/, "");
   const url = `${base}/ai-assistant/clear`;
   try {
     await fetch(url, {
