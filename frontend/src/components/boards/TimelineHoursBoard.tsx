@@ -69,8 +69,7 @@ function priorityRank(p: string): number {
 function statusMarkerColor(status: string): string {
   if (status === "done" || status === "completed" || status === "closed") return "#22c55e";
   if (status === "in_progress") return "#3b82f6";
-  if (status === "testing") return "#f59e0b";
-  if (status === "photo_report") return "#8b5cf6";
+  if (status === "testing" || status === "photo_report") return "#f59e0b";
   if (status === "act_signing") return "#f97316";
   if (status === "dispatched") return "#06b6d4";
   return "#94a3b8";

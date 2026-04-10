@@ -91,7 +91,7 @@ export default function DashboardPage() {
     dispatched: "bg-sky-50 text-sky-700",
     in_progress: "bg-blue-50 text-blue-700",
     testing: "bg-amber-50 text-amber-700",
-    photo_report: "bg-violet-50 text-violet-700",
+    photo_report: "bg-amber-50 text-amber-700",
     act_signing: "bg-orange-50 text-orange-700",
     done: "bg-green-50 text-green-700",
     completed: "bg-green-50 text-green-700",
@@ -108,11 +108,11 @@ export default function DashboardPage() {
     new: "Новая",
     dispatched: "Назначена",
     in_progress: "В работе",
-    testing: "Тестирование",
-    photo_report: "Фотоотчёт",
+    testing: "Согласование",
+    photo_report: "Согласование",
     act_signing: "Подписание акта",
-    done: "Завершена",
-    completed: "Завершена",
+    done: "Выполнено",
+    completed: "Выполнено",
   };
 
   const priorityLabel: Record<string, string> = {

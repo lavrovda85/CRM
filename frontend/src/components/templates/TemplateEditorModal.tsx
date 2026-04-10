@@ -29,15 +29,15 @@ const CATEGORIES = [
 
 const DEFAULT_WORKFLOW = {
   initial_state: "new",
-  states: ["new", "dispatched", "in_progress", "testing", "photo_report", "act_signing", "done"],
+  states: ["new", "dispatched", "in_progress", "testing", "act_signing", "done"],
   transitions: [
     { from: "new", to: "dispatched" },
     { from: "dispatched", to: "in_progress" },
     { from: "in_progress", to: "testing" },
-    { from: "testing", to: "photo_report" },
+    { from: "testing", to: "act_signing" },
     { from: "testing", to: "in_progress" },
-    { from: "photo_report", to: "act_signing" },
     { from: "act_signing", to: "done" },
+    { from: "act_signing", to: "testing" },
   ],
 };
 

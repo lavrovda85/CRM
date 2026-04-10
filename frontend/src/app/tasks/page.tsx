@@ -39,10 +39,9 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "new", title: "Новая", color: "#94a3b8" },
   { id: "dispatched", title: "Назначена", color: "#38bdf8" },
   { id: "in_progress", title: "В работе", color: "#3b82f6" },
-  { id: "testing", title: "Тестирование", color: "#fbbf24" },
-  { id: "photo_report", title: "Фотоотчёт", color: "#8b5cf6" },
+  { id: "testing", title: "Согласование", color: "#fbbf24" },
   { id: "act_signing", title: "Подписание акта", color: "#f97316" },
-  { id: "done", title: "Завершена", color: "#22c55e" },
+  { id: "done", title: "Выполнено", color: "#22c55e" },
   { id: "closed", title: "Закрыта", color: "#9ca3af" },
 ];
 
@@ -66,11 +65,11 @@ const statusLabel: Record<string, string> = {
   new: "Новая",
   dispatched: "Назначена",
   in_progress: "В работе",
-  testing: "Тестирование",
-  photo_report: "Фотоотчёт",
+  testing: "Согласование",
+  photo_report: "Согласование",
   act_signing: "Подписание акта",
-  done: "Завершена",
-  completed: "Завершена",
+  done: "Выполнено",
+  completed: "Выполнено",
   closed: "Закрыта",
 };
 
