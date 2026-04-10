@@ -36,15 +36,21 @@ import type {
 } from "@/types";
 
 /**
- * Public API base. In the browser always use same-origin `/api/v1` (Next `app/api/v1` → backend).
- * Ignores any absolute `NEXT_PUBLIC_API_URL` baked at build time so UI on :9000 cannot call :80 by mistake.
- * Non-browser (SSR) uses env for the rare code path that runs without `window`.
+ * Public API base for fetches.
+ *
+ * In the browser use an absolute URL rooted at `window.location.origin` so requests stay on the same
+ * host:port as the address bar. A relative `/api/v1` can be wrongly resolved to port 80 if the document
+ * has a `<base href="http://host/">` (Next/metadata), which causes mixed :9000 / :80 traffic and CORS
+ * preflight failures (e.g. OPTIONS → 501 on nginx).
  */
 function getApiBase(): string {
   if (typeof window !== "undefined") {
-    return "/api/v1";
+    return `${window.location.origin}/api/v1`;
   }
-  return (process.env.NEXT_PUBLIC_API_URL?.trim() || "/api/v1") as string;
+  const env = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (env) return env.replace(/\/$/, "");
+  const port = process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}/api/v1`;
 }
 
 /** Persists selected tenant for `X-Company-Id` on API calls (must match backend company context). */
