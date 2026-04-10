@@ -9,7 +9,8 @@ services:
   # Mount host repo at DEPLOY_HOST_REPO_PATH (default /opt/crm) and set GITHUB_* + ADMIN_DEPLOY_ENABLED on backend.
   deploy-agent:
     build:
-      context: ../..
+      # Must be "." when merged with repo-root docker-compose.yml (not "../.." — that resolves past the repo).
+      context: .
       dockerfile: docker/deploy-agent/Dockerfile
     restart: unless-stopped
     environment:
