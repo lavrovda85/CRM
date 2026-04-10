@@ -36,25 +36,15 @@ import type {
 } from "@/types";
 
 /**
- * Public API base for the browser. Prefer same-origin `/api/v1` (Next.js `app/api/v1` proxy).
- *
- * If the bundle was built with an absolute NEXT_PUBLIC_API_URL pointing at another origin
- * (e.g. port 80 while the UI is served on 9000), ignore it and use `/api/v1` to avoid CORS.
+ * Public API base. In the browser always use same-origin `/api/v1` (Next `app/api/v1` → backend).
+ * Ignores any absolute `NEXT_PUBLIC_API_URL` baked at build time so UI on :9000 cannot call :80 by mistake.
+ * Non-browser (SSR) uses env for the rare code path that runs without `window`.
  */
 function getApiBase(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.trim() ?? "";
-  if (typeof window !== "undefined" && fromEnv.length > 0) {
-    try {
-      const pageOrigin = window.location.origin;
-      const apiOrigin = new URL(fromEnv, pageOrigin).origin;
-      if (apiOrigin !== pageOrigin) {
-        return "/api/v1";
-      }
-    } catch {
-      return "/api/v1";
-    }
+  if (typeof window !== "undefined") {
+    return "/api/v1";
   }
-  return fromEnv || "/api/v1";
+  return (process.env.NEXT_PUBLIC_API_URL?.trim() || "/api/v1") as string;
 }
 
 /** Persists selected tenant for `X-Company-Id` on API calls (must match backend company context). */
