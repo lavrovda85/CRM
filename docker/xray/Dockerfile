@@ -25,8 +25,9 @@ ENV XRAY_LOCATION_ASSET=/usr/local/share/xray
 COPY docker/xray/render_openai_xray_config.py /opt/xray/
 COPY backend/app/services/vless_uri.py /opt/xray/
 COPY docker/xray/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Strip Windows CRLF so /bin/sh can run the script (BusyBox-safe; avoids "no such file or directory").
+RUN tr -d '\015' < /entrypoint.sh > /tmp/entrypoint.sh && mv /tmp/entrypoint.sh /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 10808
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
