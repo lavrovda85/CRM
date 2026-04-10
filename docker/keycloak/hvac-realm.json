@@ -38,9 +38,12 @@
       "redirectUris": [
         "http://localhost:3000/*",
         "http://localhost:3500/*",
+        "http://localhost:9000/*",
         "http://localhost/*",
         "http://127.0.0.1/*",
+        "http://127.0.0.1:9000/*",
         "http://192.168.9.17/*",
+        "http://192.168.9.17:9000/*",
         "https://*.ngrok-free.app/*",
         "https://*.ngrok.io/*",
         "https://*.trycloudflare.com/*"

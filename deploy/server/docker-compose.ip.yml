@@ -71,12 +71,13 @@ services:
     restart: unless-stopped
     volumes: !reset []
 
+  # Variant A: same-origin API — set FRONTEND_HOST_PORT=9000 in .env (see env.template.ip).
+  # Requires NEXT_PUBLIC_API_URL empty. MinIO has no host port here, so 9000 is free for Next.js.
   frontend:
     build:
       target: production
     restart: unless-stopped
     volumes: !reset []
-    ports: !reset []
 
   nginx:
     restart: unless-stopped

@@ -14,6 +14,8 @@ _spec = importlib.util.spec_from_file_location("vless_uri", _dir / "vless_uri.py
 if _spec is None or _spec.loader is None:
     raise RuntimeError("Cannot load vless_uri.py")
 _vu = importlib.util.module_from_spec(_spec)
+# Required before exec_module so dataclasses can resolve cls.__module__ (Python 3.12+).
+sys.modules[_spec.name] = _vu
 _spec.loader.exec_module(_vu)
 VlessUriError = _vu.VlessUriError
 parse_vless_reality_uri = _vu.parse_vless_reality_uri
