@@ -69,7 +69,7 @@ async def _load_template_for_api(db: AsyncSession, template_id: uuid.UUID) -> Ta
     return template
 
 
-@router.post("/", response_model=TemplateResponse, status_code=201)
+@router.post("", response_model=TemplateResponse, status_code=201)
 async def create_template(
     body: TemplateCreate,
     db: AsyncSession = Depends(get_db),
@@ -120,7 +120,7 @@ async def create_template(
     return TemplateResponse.model_validate(template_for_api)
 
 
-@router.get("/", response_model=PaginatedResponse[TemplateResponse])
+@router.get("", response_model=PaginatedResponse[TemplateResponse])
 async def list_templates(
     category: str | None = Query(default=None, description="Filter by category"),
     is_active: bool | None = Query(default=None, description="Filter by active status"),

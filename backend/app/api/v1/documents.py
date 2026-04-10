@@ -176,7 +176,7 @@ async def upload_document(
     return DocumentResponse.model_validate(document)
 
 
-@router.get("/", response_model=PaginatedResponse[DocumentResponse])
+@router.get("", response_model=PaginatedResponse[DocumentResponse])
 async def list_documents(
     task_id: uuid.UUID | None = Query(default=None, description="Filter by task"),
     tender_id: uuid.UUID | None = Query(default=None, description="Filter by tender"),

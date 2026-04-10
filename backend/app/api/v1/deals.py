@@ -26,7 +26,7 @@ from app.schemas.deal import (
 router = APIRouter(prefix="/deals")
 
 
-@router.post("/", response_model=DealResponse, status_code=201)
+@router.post("", response_model=DealResponse, status_code=201)
 async def create_deal(
     body: DealCreate,
     db: AsyncSession = Depends(get_db),
@@ -66,7 +66,7 @@ async def create_deal(
     return DealResponse.model_validate(deal)
 
 
-@router.get("/", response_model=PaginatedResponse[DealResponse])
+@router.get("", response_model=PaginatedResponse[DealResponse])
 async def list_deals(
     stage_id: uuid.UUID | None = Query(default=None, description="Filter by stage"),
     client_id: uuid.UUID | None = Query(default=None, description="Filter by client"),

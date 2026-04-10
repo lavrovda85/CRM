@@ -17,7 +17,7 @@ from app.schemas.notification import NotificationResponse, NotificationUnreadCou
 router = APIRouter(prefix="/notifications")
 
 
-@router.get("/", response_model=PaginatedResponse[NotificationResponse])
+@router.get("", response_model=PaginatedResponse[NotificationResponse])
 async def list_notifications(
     pagination: PaginationParams = Depends(),
     unread_only: bool = Query(default=False, description="Only unread items"),

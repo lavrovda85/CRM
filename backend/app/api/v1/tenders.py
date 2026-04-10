@@ -125,7 +125,7 @@ async def _resolve_db_user(db: AsyncSession, current_user: CurrentUser) -> User:
     return db_user
 
 
-@router.post("/", response_model=TenderResponse, status_code=201)
+@router.post("", response_model=TenderResponse, status_code=201)
 async def create_tender(
     body: TenderCreate,
     db: AsyncSession = Depends(get_db),
@@ -151,7 +151,7 @@ async def create_tender(
     return TenderResponse.model_validate(tender_with_customer)
 
 
-@router.get("/", response_model=PaginatedResponse[TenderResponse])
+@router.get("", response_model=PaginatedResponse[TenderResponse])
 async def list_tenders(
     status: str | None = Query(default=None, description="Filter by status"),
     assigned_to: uuid.UUID | None = Query(default=None, description="Filter by assignee"),

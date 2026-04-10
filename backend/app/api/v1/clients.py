@@ -27,7 +27,7 @@ from app.schemas.client import (
 router = APIRouter(prefix="/clients")
 
 
-@router.post("/", response_model=ClientResponse, status_code=201)
+@router.post("", response_model=ClientResponse, status_code=201)
 async def create_client(
     body: ClientCreate,
     db: AsyncSession = Depends(get_db),
@@ -62,7 +62,7 @@ async def create_client(
     return ClientResponse.model_validate(client)
 
 
-@router.get("/", response_model=PaginatedResponse[ClientResponse])
+@router.get("", response_model=PaginatedResponse[ClientResponse])
 async def list_clients(
     search: str | None = Query(default=None, description="Search by name, phone or email"),
     pagination: PaginationParams = Depends(),

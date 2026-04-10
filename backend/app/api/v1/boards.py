@@ -30,7 +30,7 @@ from app.services.user_identity import resolve_users_table_id
 router = APIRouter(prefix="/boards")
 
 
-@router.post("/", response_model=BoardResponse, status_code=201)
+@router.post("", response_model=BoardResponse, status_code=201)
 async def create_board(
     body: BoardCreate,
     db: AsyncSession = Depends(get_db),
@@ -63,7 +63,7 @@ async def create_board(
     return BoardResponse.model_validate(board)
 
 
-@router.get("/", response_model=PaginatedResponse[BoardResponse])
+@router.get("", response_model=PaginatedResponse[BoardResponse])
 async def list_boards(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),

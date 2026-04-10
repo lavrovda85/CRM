@@ -28,7 +28,7 @@ from app.schemas.equipment import (
 router = APIRouter(prefix="/equipment")
 
 
-@router.post("/", response_model=EquipmentResponse, status_code=201)
+@router.post("", response_model=EquipmentResponse, status_code=201)
 async def register_equipment(
     body: EquipmentCreate,
     db: AsyncSession = Depends(get_db),
@@ -66,7 +66,7 @@ async def register_equipment(
     return EquipmentResponse.model_validate(equipment)
 
 
-@router.get("/", response_model=PaginatedResponse[EquipmentResponse])
+@router.get("", response_model=PaginatedResponse[EquipmentResponse])
 async def list_equipment(
     status: str | None = Query(default=None, description="Filter by status"),
     category: str | None = Query(default=None, description="Filter by category"),

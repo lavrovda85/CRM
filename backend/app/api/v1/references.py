@@ -27,7 +27,7 @@ from app.schemas.reference import (
 router = APIRouter(prefix="/references")
 
 
-@router.post("/", response_model=ReferenceResponse, status_code=201)
+@router.post("", response_model=ReferenceResponse, status_code=201)
 async def create_reference(
     body: ReferenceCreate,
     db: AsyncSession = Depends(get_db),
@@ -63,7 +63,7 @@ async def create_reference(
     return ReferenceResponse.model_validate(ref)
 
 
-@router.get("/", response_model=PaginatedResponse[ReferenceResponse])
+@router.get("", response_model=PaginatedResponse[ReferenceResponse])
 async def list_references(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
