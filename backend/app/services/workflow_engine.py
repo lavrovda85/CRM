@@ -580,6 +580,7 @@ class WorkflowEngine:
 
         for recipient_id in recipients:
             notification = Notification(
+                company_id=task.company_id,
                 user_id=recipient_id,
                 channel=channel,
                 event_type=template_name,

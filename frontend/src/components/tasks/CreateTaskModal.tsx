@@ -56,6 +56,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
 
   const loadReferences = useCallback(async () => {
     setLoadingRefs(true);
+    setError(null);
     try {
       const [tmplRes, clientRes, usersRes] = await Promise.all([
         fetchTemplates({ limit: 100 }),
@@ -65,8 +66,15 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
       setTemplates(tmplRes.items);
       setClients(clientRes.items);
       setUsers(usersRes.items);
-    } catch {
-      /* references will be empty */
+    } catch (e) {
+      setUsers([]);
+      setTemplates([]);
+      setClients([]);
+      setError(
+        e instanceof Error
+          ? `Не удалось загрузить справочники (шаблоны, клиенты, пользователи): ${e.message}. Проверьте доступ к API с текущего адреса и NEXT_PUBLIC_API_URL в .env при сборке frontend.`
+          : "Не удалось загрузить справочники",
+      );
     } finally {
       setLoadingRefs(false);
     }

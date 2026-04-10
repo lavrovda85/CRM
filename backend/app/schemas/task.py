@@ -47,6 +47,7 @@ class TaskCreate(BaseModel):
     priority: str = Field(default="medium", pattern=r"^(low|medium|high|critical)$")
     custom_fields: dict[str, Any] | None = Field(default=None)
     due_date: datetime | None = None
+    started_at: datetime | None = None
     address: str | None = None
     latitude: float | None = None
     longitude: float | None = None

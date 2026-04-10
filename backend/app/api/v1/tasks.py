@@ -154,6 +154,7 @@ async def create_task(
             longitude=body.longitude,
         ),
         due_date=body.due_date,
+        started_at=body.started_at,
         visibility=body.visibility,
     )
     db.add(task)

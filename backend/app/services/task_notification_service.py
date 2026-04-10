@@ -85,6 +85,7 @@ class TaskNotificationService:
     async def _insert(
         db: AsyncSession,
         *,
+        company_id: uuid.UUID,
         user_id: uuid.UUID,
         event_type: str,
         title: str,
@@ -93,6 +94,7 @@ class TaskNotificationService:
     ) -> None:
         db.add(
             Notification(
+                company_id=company_id,
                 user_id=user_id,
                 channel="web_push",
                 event_type=event_type,
@@ -108,10 +110,12 @@ class TaskNotificationService:
     async def notify_after_task_created(db: AsyncSession, task: Task, actor_id: uuid.UUID) -> None:
         """Notify assignee and co-assignees when a task is created (skip actor)."""
         tid = str(task.id)
+        cid = task.company_id
         if task.assigned_to and task.assigned_to != actor_id:
             for uid in await TaskNotificationService.filter_active_user_ids(db, [task.assigned_to]):
                 await TaskNotificationService._insert(
                     db,
+                    company_id=cid,
                     user_id=uid,
                     event_type="task_assigned",
                     title="Вам назначена задача",
@@ -124,6 +128,7 @@ class TaskNotificationService:
         for uid in await TaskNotificationService.filter_active_user_ids(db, co_ids):
             await TaskNotificationService._insert(
                 db,
+                company_id=cid,
                 user_id=uid,
                 event_type="task_assigned",
                 title="Вы соисполнитель",
@@ -142,6 +147,7 @@ class TaskNotificationService:
         for uid in await TaskNotificationService.filter_active_user_ids(db, obs_ids):
             await TaskNotificationService._insert(
                 db,
+                company_id=cid,
                 user_id=uid,
                 event_type="task_observed",
                 title="Вы наблюдаете задачу",
@@ -160,10 +166,12 @@ class TaskNotificationService:
     ) -> None:
         """Notify newly assigned user; optional message when removed (if not actor)."""
         tid = str(task.id)
+        cid = task.company_id
         if new_assignee and new_assignee != prev_assignee and new_assignee != actor_id:
             for uid in await TaskNotificationService.filter_active_user_ids(db, [new_assignee]):
                 await TaskNotificationService._insert(
                     db,
+                    company_id=cid,
                     user_id=uid,
                     event_type="task_assigned",
                     title="Вам назначена задача",
@@ -174,6 +182,7 @@ class TaskNotificationService:
             for uid in await TaskNotificationService.filter_active_user_ids(db, [prev_assignee]):
                 await TaskNotificationService._insert(
                     db,
+                    company_id=cid,
                     user_id=uid,
                     event_type="task_updated",
                     title="Снято назначение",
@@ -198,6 +207,7 @@ class TaskNotificationService:
             for uid in await TaskNotificationService.filter_active_user_ids(db, obs_ids):
                 await TaskNotificationService._insert(
                     db,
+                    company_id=cid,
                     user_id=uid,
                     event_type="task_updated",
                     title="Исполнитель обновлён",
@@ -235,6 +245,7 @@ class TaskNotificationService:
         for uid in await TaskNotificationService.filter_active_user_ids(db, recipients):
             await TaskNotificationService._insert(
                 db,
+                company_id=task.company_id,
                 user_id=uid,
                 event_type="task_updated",
                 title="Задача изменена",
@@ -261,6 +272,7 @@ class TaskNotificationService:
         for uid in recipients:
             await TaskNotificationService._insert(
                 db,
+                company_id=task.company_id,
                 user_id=uid,
                 event_type="task_updated",
                 title="Статус задачи изменён",
@@ -311,6 +323,7 @@ class TaskNotificationService:
                 due_s = task.due_date.isoformat() if task.due_date else ""
                 await TaskNotificationService._insert(
                     db,
+                    company_id=task.company_id,
                     user_id=uid,
                     event_type="task_due_soon",
                     title="Скоро дедлайн",
@@ -360,6 +373,7 @@ class TaskNotificationService:
                 due_s = task.due_date.isoformat() if task.due_date else ""
                 await TaskNotificationService._insert(
                     db,
+                    company_id=task.company_id,
                     user_id=uid,
                     event_type="task_overdue",
                     title="Просрочен срок",
