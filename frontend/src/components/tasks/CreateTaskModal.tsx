@@ -72,7 +72,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
       setClients([]);
       setError(
         e instanceof Error
-          ? `Не удалось загрузить справочники (шаблоны, клиенты, пользователи): ${e.message}. Проверьте доступ к API с текущего адреса и NEXT_PUBLIC_API_URL в .env при сборке frontend.`
+          ? `Не удалось загрузить справочники (шаблоны, клиенты, пользователи): ${e.message}. Убедитесь, что запросы идут на тот же хост и порт, что и страница (например :9000 → /api/v1 через Next.js), и что backend/nginx доступны.`
           : "Не удалось загрузить справочники",
       );
     } finally {

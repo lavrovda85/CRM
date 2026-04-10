@@ -35,32 +35,20 @@ import type {
   CompanyLoginOption,
 } from "@/types";
 
-declare global {
-  interface Window {
-    /** Set synchronously from root layout `<head>` before Next chunks load (see `layout.tsx`). */
-    __CRM_API_BASE__?: string;
-  }
-}
-
 /**
  * Public API base for fetches.
  *
- * Prefer `window.__CRM_API_BASE__` / `data-crm-api` set by an inline script in `<head>` so the value
- * is fixed before any module runs (avoids `<base href>` rewriting relative URLs to port 80 while the
- * tab is on :9000). Falls back to `location.protocol//location.host`.
+ * In the browser always use `window.location.origin` (the real address bar origin, including port).
+ * Do not read `document.baseURI` or rely on `data-*` on `<html>`: hydration can strip those, and a
+ * wrong cached attribute could point at port 80 while the app runs on :9000. Absolute URLs built
+ * from `origin + '/api/v1'` ignore `<base href>` for fetch resolution.
  */
 function getApiBase(): string {
-  if (typeof document !== "undefined") {
-    const fromHtml = document.documentElement.getAttribute("data-crm-api")?.trim();
-    if (fromHtml) return fromHtml.replace(/\/$/, "");
-  }
-  if (typeof window !== "undefined") {
-    const injected = window.__CRM_API_BASE__?.trim();
-    if (injected) return injected.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.location?.origin) {
     try {
-      return `${window.location.protocol}//${window.location.host}/api/v1`.replace(/\/$/, "");
-    } catch {
       return `${window.location.origin}/api/v1`.replace(/\/$/, "");
+    } catch {
+      /* fall through to SSR path */
     }
   }
   const env = process.env.NEXT_PUBLIC_API_URL?.trim();
