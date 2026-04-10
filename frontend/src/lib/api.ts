@@ -35,17 +35,33 @@ import type {
   CompanyLoginOption,
 } from "@/types";
 
+declare global {
+  interface Window {
+    /** Set synchronously from root layout `<head>` before Next chunks load (see `layout.tsx`). */
+    __CRM_API_BASE__?: string;
+  }
+}
+
 /**
  * Public API base for fetches.
  *
- * In the browser use an absolute URL rooted at `window.location.origin` so requests stay on the same
- * host:port as the address bar. A relative `/api/v1` can be wrongly resolved to port 80 if the document
- * has a `<base href="http://host/">` (Next/metadata), which causes mixed :9000 / :80 traffic and CORS
- * preflight failures (e.g. OPTIONS → 501 on nginx).
+ * Prefer `window.__CRM_API_BASE__` / `data-crm-api` set by an inline script in `<head>` so the value
+ * is fixed before any module runs (avoids `<base href>` rewriting relative URLs to port 80 while the
+ * tab is on :9000). Falls back to `location.protocol//location.host`.
  */
 function getApiBase(): string {
+  if (typeof document !== "undefined") {
+    const fromHtml = document.documentElement.getAttribute("data-crm-api")?.trim();
+    if (fromHtml) return fromHtml.replace(/\/$/, "");
+  }
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/api/v1`;
+    const injected = window.__CRM_API_BASE__?.trim();
+    if (injected) return injected.replace(/\/$/, "");
+    try {
+      return `${window.location.protocol}//${window.location.host}/api/v1`.replace(/\/$/, "");
+    } catch {
+      return `${window.location.origin}/api/v1`.replace(/\/$/, "");
+    }
   }
   const env = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (env) return env.replace(/\/$/, "");

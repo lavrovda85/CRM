@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -17,6 +18,10 @@ export const viewport: Viewport = {
   themeColor: "#4f46e5",
 };
 
+/** Runs before deferred Next.js chunks; pins API host:port to the real tab URL (not `<base href>`). */
+const CRM_API_BASE_BOOTSTRAP =
+  "try{var b=location.protocol+'//'+location.host+'/api/v1';document.documentElement.setAttribute('data-crm-api',b);window.__CRM_API_BASE__=b;}catch(e){}";
+
 export default function RootLayout({
   children,
 }: {
@@ -25,6 +30,9 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className="min-h-screen overflow-x-hidden bg-surface-50 font-sans">
+        <Script id="crm-api-base" strategy="beforeInteractive">
+          {CRM_API_BASE_BOOTSTRAP}
+        </Script>
         <div className="flex h-screen max-w-full overflow-x-hidden">
           <Suspense
             fallback={
