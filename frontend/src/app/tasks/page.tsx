@@ -40,12 +40,17 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "dispatched", title: "Назначена", color: "#38bdf8" },
   { id: "in_progress", title: "В работе", color: "#3b82f6" },
   { id: "testing", title: "Согласование", color: "#fbbf24" },
-  { id: "act_signing", title: "Подписание акта", color: "#f97316" },
   { id: "done", title: "Выполнено", color: "#22c55e" },
   { id: "closed", title: "Закрыта", color: "#9ca3af" },
 ];
 
 const KANBAN_IDS = new Set(KANBAN_COLUMNS.map((c) => c.id));
+
+/** Legacy tasks still in DB as `act_signing` are shown in the «Выполнено» column. */
+function kanbanBoardColumnId(status: string): string {
+  if (status === "act_signing") return "done";
+  return status;
+}
 
 const priorityColor: Record<string, string> = {
   low: "#22c55e",
@@ -502,7 +507,7 @@ function TasksPageInner() {
   }, [view, filtersOpen, setHeaderToolbar, setViewWithQuery]);
 
   const columns = [...KANBAN_COLUMNS];
-  const unmapped = tasks.filter((t) => !KANBAN_IDS.has(t.status));
+  const unmapped = tasks.filter((t) => !KANBAN_IDS.has(kanbanBoardColumnId(t.status)));
   if (unmapped.length > 0) {
     columns.push({ id: "_other", title: "Прочее", color: "#94a3b8" });
   }
@@ -510,7 +515,11 @@ function TasksPageInner() {
   const cards: Record<string, KanbanCard[]> = {};
   for (const col of columns) {
     cards[col.id] = tasks
-      .filter((t) => (col.id === "_other" ? !KANBAN_IDS.has(t.status) : t.status === col.id))
+      .filter((t) =>
+        col.id === "_other"
+          ? !KANBAN_IDS.has(kanbanBoardColumnId(t.status))
+          : kanbanBoardColumnId(t.status) === col.id,
+      )
       .map(taskToCard);
   }
 

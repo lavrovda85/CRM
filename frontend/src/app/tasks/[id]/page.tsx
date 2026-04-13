@@ -80,10 +80,11 @@ const TRANSITIONS: Record<string, string[]> = {
   new: ["dispatched"],
   dispatched: ["new", "in_progress"],
   in_progress: ["dispatched", "testing"],
-  testing: ["in_progress", "act_signing"],
-  photo_report: ["testing", "act_signing"],
+  testing: ["in_progress", "done"],
+  photo_report: ["testing", "done"],
+  /** Legacy rows created before the act-signing stage was removed from the pipeline. */
   act_signing: ["testing", "done"],
-  done: ["act_signing", "closed"],
+  done: ["testing", "closed"],
   closed: ["done"],
 };
 
