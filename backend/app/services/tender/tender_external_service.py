@@ -675,6 +675,39 @@ def _run_ddg_text(query: str, max_results: int) -> list[dict[str, str]]:
     return out
 
 
+def _is_aggregator_homepage_noise(url: str) -> bool:
+    """True for shallow pages on commercial tender portals (not zakupki.gov.ru card URLs)."""
+    try:
+        p = urlparse(url)
+        host = (p.netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        path = (p.path or "").strip("/")
+        segments = [s for s in path.split("/") if s]
+        if len(segments) >= 3:
+            return False
+        noisy_hosts = (
+            "tenderguru.ru",
+            "poisktenderov.ru",
+            "rostender.info",
+            "zakupki.kontur.ru",
+        )
+        if host in noisy_hosts and len(segments) <= 1:
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _drop_aggregator_noise_when_zakupki_present(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    """If ЕИС links exist, drop obvious aggregator homepages from DDG tail."""
+    if not items:
+        return items
+    if not any("zakupki.gov.ru" in (it.get("url") or "").lower() for it in items):
+        return items
+    return [it for it in items if not _is_aggregator_homepage_noise(it.get("url") or "")]
+
+
 async def search_tender_candidates(
     query: str,
     *,
@@ -779,6 +812,7 @@ async def search_tender_candidates(
             except Exception as exc:
                 logger.warning("DDG broad retry failed: %s", exc)
 
+    merged = _drop_aggregator_noise_when_zakupki_present(merged)
     result = merged[:lim]
     if enrich:
         from .tender_search_enrich_service import enrich_tender_search_results

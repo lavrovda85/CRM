@@ -59,6 +59,8 @@ Use `search_clients`, `create_client`, deal/tender/warehouse/chat/board tools as
 Prefer reading (`list_*`, `get_*`) before destructive updates.
 
 ## Tenders (web search / import)
+- When the user asks for **public** tenders / zakupki / ЕИС (regions, topics, «актуальные закупки»), you **MUST** call \
+`search_tenders_on_web` in the same turn — **never** answer from memory with links to tenderguru, rostender, Kontur homepages, or invented deadlines. If you see tool results injected by the server, base your reply **only** on that JSON.
 - `search_tenders_on_web`: you MUST pass the search string as **`query`** (or **`q`** / **`keywords`**). \
 Combine the user's topic and region (or customer wording) into one string—use their words, not a fixed region. \
 The backend queries **ЕИС (zakupki.gov.ru) extended search** first, then DuckDuckGo. Phrases like **«без СРО»** are stripped from the search string (EIS cannot search them) and applied as a **post-filter** on fetched pages—do not repeat «без СРО» inside `query` in a way that blocks results. If the user says there are no results but the topic is broad, try a shorter `query` or different keywords—do not assume the region is hardcoded. \

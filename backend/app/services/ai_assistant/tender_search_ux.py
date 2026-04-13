@@ -28,6 +28,62 @@ def user_wants_more_tender_results(message: str) -> bool:
     return False
 
 
+def should_force_tender_web_search(message: str) -> bool:
+    """True when the user asks for public procurement / ЕИС search, not CRM-internal lists.
+
+    Used to inject ``search_tenders_on_web`` if the model replied without tools (avoids generic
+    hallucinated links to tender aggregators).
+    """
+    t = (message or "").strip().lower()
+    if len(t) < 10:
+        return False
+    tender_kw = any(
+        x in t
+        for x in (
+            "тендер",
+            "тендеры",
+            "закупк",
+            "закупки",
+            "еис",
+            "zakupki",
+            "goszakup",
+            "госзакуп",
+        )
+    )
+    if not tender_kw:
+        return False
+    # Prefer CRM list tools, not web search
+    if any(x in t for x in ("в crm", "в срм", "в системе", "наши тендеры", "мои тендеры", "список тендеров в")):
+        return False
+    if "http://" in t or "https://" in t:
+        return False
+    webish = any(
+        x in t
+        for x in (
+            "актуальн",
+            "найди",
+            "поиск",
+            "посмотри",
+            "есть ли",
+            "какие ",
+            "подбери",
+            "интернет",
+            "на сайте",
+            "госзакуп",
+            "закупки гос",
+            "краснояр",
+            "област",
+            "край",
+            "регион",
+            "вентиляц",
+            "кондицион",
+            "монтаж",
+            "поставк",
+        )
+    )
+    return webish
+
+
 def collect_exclude_urls_from_session(session_context: dict[str, Any] | None) -> list[str]:
     """Return normalized list of URLs already shown (for ``exclude_urls``), capped."""
     if not session_context:

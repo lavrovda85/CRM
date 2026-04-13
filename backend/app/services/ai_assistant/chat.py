@@ -23,6 +23,7 @@ from app.services.ai_assistant.tender_import import (
 )
 from app.services.ai_assistant.tender_search_ux import (
     collect_exclude_urls_from_session,
+    should_force_tender_web_search,
     user_wants_more_tender_results,
 )
 from app.services.ai_assistant.time_context import build_server_time_system_message
@@ -111,7 +112,7 @@ async def run_ai_chat(
 
     max_rounds = cfg.ai_assistant_max_tool_rounds
     tender_import_confirmed = False
-    for _ in range(max_rounds):
+    for round_idx in range(max_rounds):
         tool_failure_payload = None
         response = await client.chat.completions.create(
             model=cfg.openai_model,
@@ -123,6 +124,63 @@ async def run_ai_chat(
         choice = response.choices[0].message
         tool_calls = choice.tool_calls
         if not tool_calls:
+            if (
+                round_idx == 0
+                and should_force_tender_web_search(text)
+                and not tender_import_confirmed
+            ):
+                forced_args: dict[str, Any] = {
+                    "query": text[:1200],
+                    "prefer_zakupki_gov": True,
+                }
+                out_forced = await invoke_crm_tool(
+                    "search_tenders_on_web",
+                    forced_args,
+                    user,
+                )
+                if isinstance(out_forced, dict) and out_forced.get("ok") is False:
+                    reply = format_tool_failure_reply(text, out_forced)
+                    return AiChatTurnResult(reply=reply, context_patch=context_patch)
+                for k, v in extract_context_patch_from_tool(
+                    "search_tenders_on_web",
+                    out_forced,
+                ).items():
+                    if v is not None:
+                        context_patch[k] = v
+                forced_tool_args = json.dumps(
+                    {
+                        "tool_name": "search_tenders_on_web",
+                        "arguments": forced_args,
+                    },
+                    ensure_ascii=False,
+                )
+                fake_tc_id = "call_forced_tender_search"
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": fake_tc_id,
+                                "type": "function",
+                                "function": {
+                                    "name": "invoke_crm_tool",
+                                    "arguments": forced_tool_args,
+                                },
+                            }
+                        ],
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": fake_tc_id,
+                        "content": serialize_tool_result(out_forced),
+                    },
+                )
+                context_patch["tender_search_reset_seen"] = True
+                continue
+
             reply = (choice.content or "").strip() or "(empty reply)"
             if user_wants_tender_import_crm(text) and not tender_import_confirmed:
                 fb_url = resolve_tender_search_url_for_import(session_context, text)
