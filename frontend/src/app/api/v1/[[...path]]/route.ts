@@ -54,24 +54,35 @@ function forwardResponseHeaders(src: Headers): Headers {
   return out;
 }
 
-/** Avoid hung Node fetch to FastAPI tying up the Next dev server (and slowing `docker stop`). */
+/** Default cap for most API calls (avoid hung Node fetch). */
 const UPSTREAM_FETCH_TIMEOUT_MS = 90_000;
+/** AI assistant: OpenAI + tools often exceeds 90s; align with client `api.ts` and nginx `/api/` (600s). */
+const UPSTREAM_AI_ASSISTANT_TIMEOUT_MS = 600_000;
 
-function upstreamTimeoutSignal(): AbortSignal | undefined {
+function upstreamTimeoutMs(segments: string[]): number {
+  if (segments.length > 0 && segments[0] === "ai-assistant") {
+    return UPSTREAM_AI_ASSISTANT_TIMEOUT_MS;
+  }
+  return UPSTREAM_FETCH_TIMEOUT_MS;
+}
+
+function upstreamTimeoutSignal(segments: string[]): AbortSignal | undefined {
   const ctor = AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal };
-  return ctor.timeout?.(UPSTREAM_FETCH_TIMEOUT_MS);
+  const ms = upstreamTimeoutMs(segments);
+  return ctor.timeout?.(ms);
 }
 
 async function proxy(request: NextRequest, path: string[] | undefined): Promise<Response> {
   const segments = path ?? [];
   const targetUrl = buildTarget(request, segments);
   const headers = forwardRequestHeaders(request);
+  const timeoutMs = upstreamTimeoutMs(segments);
 
   const init: RequestInit = {
     method: request.method,
     headers,
     redirect: "manual",
-    signal: upstreamTimeoutSignal(),
+    signal: upstreamTimeoutSignal(segments),
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -91,7 +102,7 @@ async function proxy(request: NextRequest, path: string[] | undefined): Promise<
       "name" in e &&
       (e as { name: string }).name === "AbortError";
     const msg = aborted
-      ? `upstream timed out after ${UPSTREAM_FETCH_TIMEOUT_MS / 1000}s`
+      ? `upstream timed out after ${timeoutMs / 1000}s`
       : e instanceof Error
         ? e.message
         : "upstream fetch failed";

@@ -85,14 +85,40 @@ function tunnelInterstitialBypassHeaders(): Record<string, string> {
 
 /** Prevents infinite spinners when Next.js → backend proxy or upstream hangs. */
 const API_REQUEST_TIMEOUT_MS = 45_000;
+/** AI assistant: OpenAI + many tool rounds can exceed 45s; keep below nginx 600s where used. */
+const API_AI_ASSISTANT_TIMEOUT_MS = 600_000;
 
-function apiTimeoutSignal(existing?: AbortSignal | null): AbortSignal | undefined {
+/** Normalize timeout / abort detection across browsers (DOMException vs Error). */
+function isAbortErrorLike(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === "AbortError") return true;
+  if (typeof e === "object" && e !== null && "name" in e) {
+    return (e as { name: string }).name === "AbortError";
+  }
+  return false;
+}
+
+function apiTimeoutMsForPath(path: string): number {
+  const p = (path.split("?")[0] ?? path).trim();
+  if (
+    p.startsWith("/ai-assistant/chat") ||
+    p === "/ai-assistant/clear"
+  ) {
+    return API_AI_ASSISTANT_TIMEOUT_MS;
+  }
+  return API_REQUEST_TIMEOUT_MS;
+}
+
+function apiTimeoutSignal(
+  path: string,
+  existing?: AbortSignal | null,
+): AbortSignal | undefined {
   if (typeof AbortSignal === "undefined") return undefined;
   const ctor = AbortSignal as unknown as {
     timeout?: (ms: number) => AbortSignal;
     any?: (signals: AbortSignal[]) => AbortSignal;
   };
-  const t = ctor.timeout?.(API_REQUEST_TIMEOUT_MS);
+  const ms = apiTimeoutMsForPath(path);
+  const t = ctor.timeout?.(ms);
   if (!t) return undefined;
   if (existing && ctor.any) {
     return ctor.any([t, existing]);
@@ -250,7 +276,7 @@ class ApiClient {
             ...activeCompanyHeaders(),
           },
           body: JSON.stringify({ refresh_token: rt }),
-          signal: apiTimeoutSignal(),
+          signal: apiTimeoutSignal("/auth/refresh"),
         });
         if (!res.ok) return false;
         const data = (await res.json()) as {
@@ -297,7 +323,7 @@ class ApiClient {
       return fetch(`${getApiBase()}${path}`, {
         ...options,
         headers: mergedHeaders,
-        signal: apiTimeoutSignal(options?.signal ?? null),
+        signal: apiTimeoutSignal(path, options?.signal ?? null),
       });
     };
 
@@ -305,7 +331,7 @@ class ApiClient {
     try {
       res = await exec();
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
+      if (isAbortErrorLike(e)) {
         throw new ApiError(
           408,
           "Request timed out — check API / BACKEND_INTERNAL_URL",
@@ -320,7 +346,7 @@ class ApiClient {
         try {
           res = await exec();
         } catch (e) {
-          if (e instanceof DOMException && e.name === "AbortError") {
+          if (isAbortErrorLike(e)) {
             throw new ApiError(
               408,
               "Request timed out — check API / BACKEND_INTERNAL_URL",
@@ -378,7 +404,7 @@ class ApiClient {
       return fetch(`${getApiBase()}${path}`, {
         ...options,
         headers: mergedHeaders,
-        signal: apiTimeoutSignal(options?.signal ?? null),
+        signal: apiTimeoutSignal(path, options?.signal ?? null),
       });
     };
 
@@ -386,7 +412,7 @@ class ApiClient {
     try {
       res = await exec();
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
+      if (isAbortErrorLike(e)) {
         throw new ApiError(
           408,
           "Request timed out — check API / BACKEND_INTERNAL_URL",
@@ -401,7 +427,7 @@ class ApiClient {
         try {
           res = await exec();
         } catch (e) {
-          if (e instanceof DOMException && e.name === "AbortError") {
+          if (isAbortErrorLike(e)) {
             throw new ApiError(
               408,
               "Request timed out — check API / BACKEND_INTERNAL_URL",
