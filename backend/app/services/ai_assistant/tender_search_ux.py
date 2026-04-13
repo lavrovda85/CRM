@@ -31,8 +31,8 @@ def user_wants_more_tender_results(message: str) -> bool:
 def should_force_tender_web_search(message: str) -> bool:
     """True when the user asks for public procurement / ЕИС search, not CRM-internal lists.
 
-    Used to inject ``search_tenders_on_web`` if the model replied without tools (avoids generic
-    hallucinated links to tender aggregators).
+    Used to inject ``search_tenders_on_web`` if the model replied without tools and that search
+    has not run yet this turn (avoids generic hallucinated links after a spurious first tool call).
     """
     t = (message or "").strip().lower()
     if len(t) < 10:

@@ -112,6 +112,9 @@ async def run_ai_chat(
 
     max_rounds = cfg.ai_assistant_max_tool_rounds
     tender_import_confirmed = False
+    # If the model calls another tool first, then answers without tools, we still inject
+    # ``search_tenders_on_web`` once per user turn (when ``should_force_tender_web_search``).
+    tender_web_search_invoked_this_turn = False
     for round_idx in range(max_rounds):
         tool_failure_payload = None
         response = await client.chat.completions.create(
@@ -125,7 +128,7 @@ async def run_ai_chat(
         tool_calls = choice.tool_calls
         if not tool_calls:
             if (
-                round_idx == 0
+                not tender_web_search_invoked_this_turn
                 and should_force_tender_web_search(text)
                 and not tender_import_confirmed
             ):
@@ -179,6 +182,7 @@ async def run_ai_chat(
                     },
                 )
                 context_patch["tender_search_reset_seen"] = True
+                tender_web_search_invoked_this_turn = True
                 continue
 
             reply = (choice.content or "").strip() or "(empty reply)"
@@ -292,6 +296,8 @@ async def run_ai_chat(
                                 if sdu is not None and str(sdu).strip():
                                     targs["enriched_submission_deadline_utc"] = str(sdu).strip()
                 out = await invoke_crm_tool(tname, targs, user)
+                if tname == "search_tenders_on_web":
+                    tender_web_search_invoked_this_turn = True
                 if (
                     tname == "import_tender_from_url"
                     and isinstance(out, dict)
