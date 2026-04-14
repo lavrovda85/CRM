@@ -164,7 +164,13 @@ function Save-Config([hashtable]$cfg) {
 
 function Get-Or-Create-Config {
     $existing = Load-Config
-    if ($existing -and -not $Update -and -not $MigrateOnly) {
+    if ($Update -or $MigrateOnly) {
+        if (-not $existing) {
+            err "Не найден $CONFIG_FILE. Сначала выполните полный деплой без -Update."
+        }
+        return $existing
+    }
+    if ($existing) {
         $reuse = ask "Найдена существующая конфигурация. Использовать? (y/n)" "y"
         if ($reuse -eq "y") { return $existing }
     }
