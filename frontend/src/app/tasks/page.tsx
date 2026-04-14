@@ -13,6 +13,7 @@ import {
   ChevronDown,
   X,
   Trash2,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 import { flushSync } from "react-dom";
@@ -89,6 +90,23 @@ const TASKS_CAL_DATE_SESSION_KEY    = "tasks_last_calendar_date";
 const TASKS_FILTERS_SESSION_KEY     = "tasks_last_filters";
 const TASKS_FILTERS_OPEN_SESSION_KEY = "tasks_filters_open";
 const TASKS_STAFF_IDS_SESSION_KEY   = "tasks_timeline_staff_ids";
+
+/** Initial filter object: URL params override; saved `q` from session is kept when URL sets status/overdue only. */
+function getInitialTaskFilters(searchParams: URLSearchParams): Record<string, string> {
+  const urlStatus = searchParams.get("status");
+  const urlOverdue = searchParams.get("overdue");
+  const urlQ = searchParams.get("q");
+  const fromSession = sessionGet(TASKS_FILTERS_SESSION_KEY, {} as Record<string, string>);
+  if (urlStatus || urlOverdue || urlQ) {
+    const f: Record<string, string> = {};
+    if (urlStatus) f.status = urlStatus;
+    if (urlOverdue) f.overdue = urlOverdue;
+    if (urlQ) f.q = urlQ;
+    else if (fromSession.q) f.q = fromSession.q;
+    return f;
+  }
+  return { ...fromSession };
+}
 
 function sessionGet<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -266,22 +284,11 @@ function TasksPageInner() {
   const [assignees, setAssignees] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
-    // Open panel automatically if URL carries filter params
-    if (searchParams.get("status") || searchParams.get("overdue")) return true;
+    if (searchParams.get("status") || searchParams.get("overdue") || searchParams.get("q")) return true;
     return sessionGet(TASKS_FILTERS_OPEN_SESSION_KEY, false);
   });
-  const [filters, setFilters] = useState<Record<string, string>>(() => {
-    // URL query params take precedence over session on first load
-    const urlStatus  = searchParams.get("status");
-    const urlOverdue = searchParams.get("overdue");
-    if (urlStatus || urlOverdue) {
-      const f: Record<string, string> = {};
-      if (urlStatus)  f.status  = urlStatus;
-      if (urlOverdue) f.overdue = urlOverdue;
-      return f;
-    }
-    return sessionGet(TASKS_FILTERS_SESSION_KEY, {});
-  });
+  const [filters, setFilters] = useState<Record<string, string>>(() => getInitialTaskFilters(searchParams));
+  const [searchDraft, setSearchDraft] = useState(() => getInitialTaskFilters(searchParams).q ?? "");
   const [createOpen, setCreateOpen] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<{ assignedTo?: string; startedAt?: string; dueDate?: string } | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -313,6 +320,21 @@ function TasksPageInner() {
   useEffect(() => { sessionSet(TASKS_FILTERS_SESSION_KEY, filters); }, [filters]);
   useEffect(() => { sessionSet(TASKS_FILTERS_OPEN_SESSION_KEY, filtersOpen); }, [filtersOpen]);
   useEffect(() => { sessionSet(TASKS_STAFF_IDS_SESSION_KEY, timelineStaffIds); }, [timelineStaffIds]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const trimmed = searchDraft.trim();
+      setFilters((prev) => {
+        const next = { ...prev };
+        if (trimmed) next.q = trimmed;
+        else delete next.q;
+        const prevQ = prev.q ?? "";
+        const nextQ = next.q ?? "";
+        return prevQ === nextQ ? prev : next;
+      });
+    }, 350);
+    return () => window.clearTimeout(id);
+  }, [searchDraft]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -719,6 +741,21 @@ function TasksPageInner() {
       {/* Filters Bar */}
       {filtersOpen && (
         <div className="card flex flex-wrap items-center gap-3 p-3">
+          <label className="relative flex min-w-[min(100%,220px)] flex-1 basis-[220px] items-center">
+            <Search
+              className="pointer-events-none absolute left-2.5 h-4 w-4 text-surface-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              className="input w-full min-w-0 pl-9"
+              placeholder="Поиск по названию и описанию"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              autoComplete="off"
+              aria-label="Поиск по задачам"
+            />
+          </label>
           <select
             className="input max-w-[160px]"
             value={filters.status ?? ""}
@@ -740,8 +777,15 @@ function TasksPageInner() {
             <option value="high">Высокий</option>
             <option value="critical">Критический</option>
           </select>
-          {Object.keys(filters).length > 0 && (
-            <button onClick={() => setFilters({})} className="btn-ghost btn-sm text-red-600 gap-1">
+          {(Object.keys(filters).length > 0 || searchDraft.trim().length > 0) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilters({});
+                setSearchDraft("");
+              }}
+              className="btn-ghost btn-sm text-red-600 gap-1"
+            >
               <X className="h-3.5 w-3.5" /> Сбросить
             </button>
           )}

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,6 +42,24 @@ from app.schemas.task import (
 )
 
 router = APIRouter(prefix="/tasks")
+
+_TERMINAL_TASK_STATUSES = ("done", "completed", "closed")
+
+
+def _tasks_search_clause(q: str | None):
+    """Build OR(title ILIKE, description ILIKE) for non-empty trimmed query."""
+    raw = (q or "").strip()
+    if not raw:
+        return None
+    term = f"%{raw[:200]}%"
+    return or_(Task.title.ilike(term), Task.description.ilike(term))
+
+
+def _overdue_query_active(overdue: str | None) -> bool:
+    """True when client sends overdue=1|true|yes|on (case-insensitive)."""
+    if overdue is None or overdue == "":
+        return False
+    return overdue.lower() in ("1", "true", "yes", "on")
 
 
 def _merge_geo_into_custom_fields(
@@ -203,6 +221,11 @@ async def list_tasks(
     client_id: uuid.UUID | None = Query(default=None, description="Filter by client"),
     board_id: uuid.UUID | None = Query(default=None, description="Filter by board"),
     priority: str | None = Query(default=None, description="Filter by priority"),
+    q: str | None = Query(default=None, description="Case-insensitive search in title and description"),
+    overdue: str | None = Query(
+        default=None,
+        description="If set (e.g. 1/true), only tasks past due_date and not in a terminal status",
+    ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -220,6 +243,8 @@ async def list_tasks(
         client_id: Фильтр по ID клиента.
         board_id: Фильтр по ID доски.
         priority: Фильтр по приоритету.
+        q: Поиск по подстроке в названии и описании.
+        overdue: Только просроченные нетерминальные задачи.
         pagination: Параметры пагинации.
         db: Асинхронная сессия БД.
         user: Текущий аутентифицированный пользователь.
@@ -278,6 +303,21 @@ async def list_tasks(
     if priority:
         query = query.where(Task.priority == priority)
         count_query = count_query.where(Task.priority == priority)
+
+    search_clause = _tasks_search_clause(q)
+    if search_clause is not None:
+        query = query.where(search_clause)
+        count_query = count_query.where(search_clause)
+
+    if _overdue_query_active(overdue):
+        now = datetime.now(timezone.utc)
+        overdue_cond = (
+            Task.due_date.isnot(None),
+            Task.due_date < now,
+            Task.status.notin_(_TERMINAL_TASK_STATUSES),
+        )
+        query = query.where(*overdue_cond)
+        count_query = count_query.where(*overdue_cond)
 
     total = (await db.execute(count_query)).scalar() or 0
     result = await db.execute(
