@@ -20,6 +20,8 @@ interface UiState {
   activePage: string;
   activeModal: ModalState | null;
   searchOpen: boolean;
+  /** Tasks list search text (header command palette + filters bar on `/tasks`). */
+  tasksSearchDraft: string;
   /** Optional center area in `Header` (e.g. tasks toolbar). Cleared on route leave. */
   headerToolbar: ReactNode | null;
 
@@ -33,6 +35,7 @@ interface UiState {
   closeModal: () => void;
   toggleSearch: () => void;
   setSearchOpen: (open: boolean) => void;
+  setTasksSearchDraft: (q: string) => void;
   setHeaderToolbar: (node: ReactNode | null) => void;
 }
 
@@ -55,6 +58,7 @@ export const useUiStore = create<UiState>((set) => ({
   activePage: "dashboard",
   activeModal: null,
   searchOpen: false,
+  tasksSearchDraft: "",
   headerToolbar: null,
 
   toggleSidebar: () =>
@@ -89,6 +93,8 @@ export const useUiStore = create<UiState>((set) => ({
   toggleSearch: () => set((state) => ({ searchOpen: !state.searchOpen })),
 
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  setTasksSearchDraft: (q) => set({ tasksSearchDraft: q }),
 
   setHeaderToolbar: (node) => set({ headerToolbar: node }),
 }));

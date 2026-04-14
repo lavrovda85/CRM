@@ -50,7 +50,11 @@ export function Header({ title }: HeaderProps) {
   const toggleMobileSidebar = useUiStore((s) => s.toggleMobileSidebar);
   const searchOpen = useUiStore((s) => s.searchOpen);
   const toggleSearch = useUiStore((s) => s.toggleSearch);
+  const setSearchOpen = useUiStore((s) => s.setSearchOpen);
+  const tasksSearchDraft = useUiStore((s) => s.tasksSearchDraft);
+  const setTasksSearchDraft = useUiStore((s) => s.setTasksSearchDraft);
   const headerToolbar = useUiStore((s) => s.headerToolbar);
+  const searchPaletteRef = useRef<HTMLInputElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -58,6 +62,7 @@ export function Header({ title }: HeaderProps) {
   const [notifItems, setNotifItems] = useState<InboxNotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [searchShortcutLabel, setSearchShortcutLabel] = useState("Ctrl+K");
 
   const refreshUnread = useCallback(async () => {
     try {
@@ -92,6 +97,12 @@ export function Header({ title }: HeaderProps) {
   }, [user, loadCompanies]);
 
   useEffect(() => {
+    setSearchShortcutLabel(
+      typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.userAgent) ? "⌘K" : "Ctrl+K",
+    );
+  }, []);
+
+  useEffect(() => {
     if (notifOpen) {
       loadInbox();
     }
@@ -118,6 +129,49 @@ export function Header({ title }: HeaderProps) {
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notifOpen]);
+
+  useEffect(() => {
+    function onGlobalKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        toggleSearch();
+      }
+    }
+    window.addEventListener("keydown", onGlobalKey);
+    return () => window.removeEventListener("keydown", onGlobalKey);
+  }, [toggleSearch]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setSearchOpen(false);
+    }
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [searchOpen, setSearchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      const t = window.setTimeout(() => searchPaletteRef.current?.focus(), 0);
+      return () => {
+        window.clearTimeout(t);
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [searchOpen]);
+
+  const onTasksSearchPaletteKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== "Enter") return;
+      if (pathname === "/tasks") return;
+      e.preventDefault();
+      router.push("/tasks");
+      setSearchOpen(false);
+    },
+    [pathname, router, setSearchOpen],
+  );
 
   async function handleNotifClick(n: InboxNotificationItem) {
     if (!n.is_read) {
@@ -154,6 +208,7 @@ export function Header({ title }: HeaderProps) {
     .toUpperCase();
 
   return (
+    <>
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-surface-100 bg-white/95 backdrop-blur px-4 supports-[backdrop-filter]:bg-white/80">
       <button
         onClick={toggleMobileSidebar}
@@ -185,7 +240,7 @@ export function Header({ title }: HeaderProps) {
           <Search className="h-4 w-4" />
           <span className="hidden lg:inline">Поиск…</span>
           <kbd className="ml-2 hidden rounded bg-surface-100 px-1.5 py-0.5 text-[10px] font-mono text-surface-400 lg:inline">
-            ⌘K
+            {searchShortcutLabel}
           </kbd>
         </button>
       </div>
@@ -352,5 +407,64 @@ export function Header({ title }: HeaderProps) {
         )}
       </div>
     </header>
+
+    {searchOpen && (
+      <div
+        className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 px-4 pt-[12vh] sm:pt-[18vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="global-task-search-title"
+      >
+        <button
+          type="button"
+          className="absolute inset-0 cursor-default"
+          tabIndex={-1}
+          aria-label="Закрыть"
+          onClick={() => setSearchOpen(false)}
+        />
+        <div
+          className="relative w-full max-w-lg rounded-xl border border-surface-100 bg-white p-4 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p id="global-task-search-title" className="mb-3 text-sm font-semibold text-surface-900">
+            Поиск задач
+          </p>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400"
+              aria-hidden
+            />
+            <input
+              id="global-task-search"
+              ref={searchPaletteRef}
+              type="search"
+              value={tasksSearchDraft}
+              onChange={(e) => setTasksSearchDraft(e.target.value)}
+              onKeyDown={onTasksSearchPaletteKeyDown}
+              placeholder={
+                pathname === "/tasks"
+                  ? "Название или описание…"
+                  : "Введите запрос и нажмите Enter"
+              }
+              className="input w-full pl-10"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Поиск задач по названию и описанию"
+            />
+          </div>
+          {pathname !== "/tasks" ? (
+            <p className="mt-2 text-xs text-surface-500">
+              Enter — открыть раздел «Задачи» с этим запросом. Здесь же можно искать, находясь в «Задачах».
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-surface-500">
+              Совпадения по названию и описанию. Esc — закрыть.
+            </p>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }

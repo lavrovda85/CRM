@@ -288,7 +288,9 @@ function TasksPageInner() {
     return sessionGet(TASKS_FILTERS_OPEN_SESSION_KEY, false);
   });
   const [filters, setFilters] = useState<Record<string, string>>(() => getInitialTaskFilters(searchParams));
-  const [searchDraft, setSearchDraft] = useState(() => getInitialTaskFilters(searchParams).q ?? "");
+  const [bootstrapSearchQ] = useState(() => getInitialTaskFilters(searchParams).q ?? "");
+  const searchDraft = useUiStore((s) => s.tasksSearchDraft);
+  const setTasksSearchDraft = useUiStore((s) => s.setTasksSearchDraft);
   const [createOpen, setCreateOpen] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<{ assignedTo?: string; startedAt?: string; dueDate?: string } | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -315,6 +317,11 @@ function TasksPageInner() {
   );
 
   const setHeaderToolbar = useUiStore((s) => s.setHeaderToolbar);
+
+  useLayoutEffect(() => {
+    setTasksSearchDraft(bootstrapSearchQ);
+    return () => setTasksSearchDraft("");
+  }, [bootstrapSearchQ, setTasksSearchDraft]);
 
   // Persist filters, panel open state, and staff filter to session storage on change
   useEffect(() => { sessionSet(TASKS_FILTERS_SESSION_KEY, filters); }, [filters]);
@@ -751,7 +758,7 @@ function TasksPageInner() {
               className="input w-full min-w-0 pl-9"
               placeholder="Поиск по названию и описанию"
               value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
+              onChange={(e) => setTasksSearchDraft(e.target.value)}
               autoComplete="off"
               aria-label="Поиск по задачам"
             />
@@ -782,7 +789,7 @@ function TasksPageInner() {
               type="button"
               onClick={() => {
                 setFilters({});
-                setSearchDraft("");
+                setTasksSearchDraft("");
               }}
               className="btn-ghost btn-sm text-red-600 gap-1"
             >
