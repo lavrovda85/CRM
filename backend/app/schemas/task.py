@@ -56,7 +56,7 @@ class TaskCreate(BaseModel):
     co_assignee_ids: list[uuid.UUID] = Field(default_factory=list)
     observer_ids: list[uuid.UUID] = Field(default_factory=list)
     visibility: str = Field(
-        default="company",
+        default="participants",
         pattern=r"^(company|participants)$",
         description="company: all company members; participants: assignee, co-assignees, observers, creator, requester",
     )

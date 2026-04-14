@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { createTask, fetchTemplates, fetchClients, fetchUsers, type UserListItem } from "@/lib/api";
 import type { TemplateResponse, ClientResponse, TaskResponse } from "@/types";
-import { YandexTaskLocationPicker } from "@/components/tasks/YandexTaskLocationPicker";
+
+const NEW_CLIENT_VALUE = "__new_client__";
 
 interface CreateTaskInitialValues {
   assignedTo?: string;
@@ -32,20 +34,17 @@ interface CreateTaskModalProps {
  *     onCreated: Callback после успешного создания задачи.
  */
 export function CreateTaskModal({ open, onClose, onCreated, initialValues }: CreateTaskModalProps) {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
   const [templateId, setTemplateId] = useState("");
   const [clientId, setClientId] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [requestedBy, setRequestedBy] = useState("");
   const [coAssigneeIds, setCoAssigneeIds] = useState<string[]>([]);
   const [observerIds, setObserverIds] = useState<string[]>([]);
   const [startedAt, setStartedAt] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [address, setAddress] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,14 +88,10 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
       setTemplateId("");
       setClientId("");
       setAssignedTo(initialValues?.assignedTo ?? "");
-      setRequestedBy("");
       setCoAssigneeIds([]);
       setObserverIds([]);
       setStartedAt(initialValues?.startedAt ?? "");
       setDueDate(initialValues?.dueDate ?? "");
-      setAddress("");
-      setLatitude("");
-      setLongitude("");
       setError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,18 +110,15 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
         title: title.trim(),
         description: description.trim() || null,
         priority,
+        visibility: "participants",
       };
       if (templateId) payload.template_id = templateId;
       if (clientId) payload.client_id = clientId;
       if (assignedTo) payload.assigned_to = assignedTo;
-      if (requestedBy) payload.requested_by = requestedBy;
       if (coAssigneeIds.length > 0) payload.co_assignee_ids = coAssigneeIds;
       if (observerIds.length > 0) payload.observer_ids = observerIds;
       if (startedAt) payload.started_at = new Date(startedAt).toISOString();
       if (dueDate) payload.due_date = new Date(dueDate).toISOString();
-      if (address.trim()) payload.address = address.trim();
-      if (latitude.trim()) payload.latitude = Number(latitude);
-      if (longitude.trim()) payload.longitude = Number(longitude);
 
       const created = await createTask(payload);
       onCreated(created);
@@ -245,18 +237,6 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
           />
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-surface-700">Геолокация</label>
-          <YandexTaskLocationPicker
-            address={address}
-            latitude={latitude}
-            longitude={longitude}
-            onAddressChange={setAddress}
-            onLatitudeChange={setLatitude}
-            onLongitudeChange={setLongitude}
-          />
-        </div>
-
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="task-template" className="mb-1 block text-sm font-medium text-surface-700">
@@ -283,11 +263,20 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
             <select
               id="task-client"
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === NEW_CLIENT_VALUE) {
+                  onClose();
+                  router.push("/clients?create=1");
+                  return;
+                }
+                setClientId(v);
+              }}
               className="input"
               disabled={loadingRefs}
             >
               <option value="">Не выбран</option>
+              <option value={NEW_CLIENT_VALUE}>+ Создать клиента…</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -307,24 +296,6 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
             disabled={loadingRefs}
           >
             <option value="">Не назначен</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="task-requester" className="mb-1 block text-sm font-medium text-surface-700">
-            Постановщик
-          </label>
-          <select
-            id="task-requester"
-            value={requestedBy}
-            onChange={(e) => setRequestedBy(e.target.value)}
-            className="input"
-            disabled={loadingRefs}
-          >
-            <option value="">Как автор записи (по умолчанию)</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
             ))}

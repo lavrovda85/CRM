@@ -161,7 +161,7 @@ class TaskService:
 
         co_raw = data.get("co_assignee_ids") or []
         obs_raw = data.get("observer_ids") or []
-        vis = data.get("visibility", TASK_VISIBILITY_COMPANY)
+        vis = data.get("visibility", TASK_VISIBILITY_PARTICIPANTS)
         if vis not in ALLOWED_TASK_VISIBILITIES:
             raise ValidationError("visibility", "Invalid visibility value")
 

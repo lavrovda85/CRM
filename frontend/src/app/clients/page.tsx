@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   Plus,
@@ -19,6 +20,8 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 export default function ClientsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [clients, setClients] = useState<ClientResponse[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -44,6 +47,12 @@ export default function ClientsPage() {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    setShowCreate(true);
+    router.replace("/clients", { scroll: false });
+  }, [searchParams, router]);
 
   async function handleCreate() {
     if (!form.name.trim() || creating) return;
