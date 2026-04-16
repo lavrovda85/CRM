@@ -13,6 +13,7 @@ name: Deploy master to server
 on:
   push:
     branches: [master]
+  workflow_dispatch: {}
 
 jobs:
   deploy:
