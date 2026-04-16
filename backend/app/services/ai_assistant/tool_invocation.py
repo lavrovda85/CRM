@@ -7,6 +7,7 @@ import logging
 from contextvars import Token
 from typing import Any
 
+from app.core.destructive_confirm import is_destructive_action_confirmed
 from app.core.exceptions import HVACBaseError
 from app.core.security import CurrentUser
 from app.core.database import async_session_factory
@@ -59,15 +60,18 @@ async def invoke_crm_tool(
         return {"ok": False, "code": "UNKNOWN_TOOL", "message": f"Unknown tool: {tool_name}"}
 
     normalized = normalize_tool_arguments(tool_name, arguments or {})
-    confirm = normalized.pop("__confirm", None)
-    if tool_name in DESTRUCTIVE_TOOLS and str(confirm or "").strip().lower() not in ("yes", "true", "1"):
+    confirm = normalized.get("__confirm")
+    if tool_name in DESTRUCTIVE_TOOLS and not is_destructive_action_confirmed(confirm):
         return {
             "ok": False,
             "code": "CONFIRMATION_REQUIRED",
             "message": "Destructive action requires confirmation",
             "details": {
                 "tool": tool_name,
-                "how_to_confirm": "Ask the user to confirm, then re-run the same tool call with arguments.__confirm = 'yes'.",
+                "how_to_confirm": (
+                    "Ask the user to confirm, then re-run the same tool call with "
+                    "arguments.__confirm set to their reply (e.g. «подтверждаю», «да», or \"yes\")."
+                ),
             },
         }
     kwargs = prepare_kwargs(fn, normalized)

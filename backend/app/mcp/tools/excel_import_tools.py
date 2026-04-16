@@ -7,6 +7,7 @@ import binascii
 import uuid
 
 from app.core.database import async_session_factory
+from app.core.destructive_confirm import is_destructive_action_confirmed
 from app.core.exceptions import ValidationError
 from app.mcp.actor_context import current_mcp_user_sub
 from app.mcp.server import mcp
@@ -32,17 +33,17 @@ async def import_excel_workbook_base64(
         file_base64: XLSX file content encoded as base64 (max ~6 MB).
         filename: Original name (for logs only).
         use_ai_mapping: Reserved for future AI column mapping.
-        __confirm: Must be \"yes\" to run (bulk import safety).
+        __confirm: Explicit confirmation (e.g. \"yes\", \"подтверждаю\", \"да\") for bulk import safety.
 
     Returns:
         Counts per domain and per-sheet summary; lists errors (truncated).
     """
     _ = filename
-    if str(__confirm or "").strip().lower() not in ("yes", "true", "1"):
+    if not is_destructive_action_confirmed(__confirm):
         return {
             "ok": False,
             "code": "CONFIRM_REQUIRED",
-            "message": "Bulk import requires __confirm: 'yes'.",
+            "message": "Bulk import requires explicit __confirm (e.g. 'yes' or 'подтверждаю').",
         }
 
     raw = (file_base64 or "").strip()
