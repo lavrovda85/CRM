@@ -533,6 +533,35 @@ export async function fetchWarehouseAnalytics(): Promise<WarehouseAnalytics> {
   return request("/analytics/warehouse");
 }
 
+export interface ExcelUnifiedImportSheetSummary {
+  sheet_name: string;
+  kind: string;
+  rows_processed?: number;
+  message?: string | null;
+}
+
+export interface ExcelUnifiedImportResponse {
+  clients_created: number;
+  clients_skipped: number;
+  warehouse_created: number;
+  warehouse_updated: number;
+  warehouse_skipped: number;
+  sheets: ExcelUnifiedImportSheetSummary[];
+  ai_mapping_used: boolean;
+  errors: string[];
+}
+
+/** Multi-sheet XLSX: clients (Russian «база» layouts) + warehouse (SKU/quantity). */
+export async function importExcelUnified(
+  file: File,
+  useAiMapping = false,
+): Promise<ExcelUnifiedImportResponse> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("use_ai_mapping", useAiMapping ? "true" : "false");
+  return api.postFormData<ExcelUnifiedImportResponse>("/import/excel", fd);
+}
+
 /* ------------------------------------------------------------------ */
 /*  In-app notifications (task inbox)                                 */
 /* ------------------------------------------------------------------ */

@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, CheckCircle2, Mic, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { Bot, CheckCircle2, FileSpreadsheet, Mic, Paperclip, Send, Sparkles, X } from "lucide-react";
 
 import {
   fetchAiAssistantMessages,
   fetchAiAssistantStatus,
   postAiAssistantChat,
+  importExcelUnified,
   ApiError,
   type AiAssistantStatus,
   type AiUploadContext,
+  type ExcelUnifiedImportResponse,
 } from "@/lib/api";
 import { useAiAssistantStore } from "@/stores/aiAssistant";
 
@@ -47,6 +49,10 @@ export default function AssistantPage() {
   const [listening, setListening] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploadAck, setUploadAck] = useState<AiUploadContext | null>(null);
+  const [excelImportBusy, setExcelImportBusy] = useState(false);
+  const [excelImportResult, setExcelImportResult] = useState<ExcelUnifiedImportResponse | null>(null);
+  const [excelImportError, setExcelImportError] = useState<string | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentsRef = useRef<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recRef = useRef<SpeechRecognition | null>(null);
@@ -239,6 +245,84 @@ export default function AssistantPage() {
             <p className="mt-1 text-xs text-amber-700">{historyError}</p>
           )}
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <FileSpreadsheet className="h-5 w-5 text-primary-600" aria-hidden />
+          <h2 className="text-sm font-semibold text-surface-900">Импорт Excel в CRM</h2>
+        </div>
+        <p className="mt-1 text-xs text-surface-600">
+          Файлы вроде «База клиентов»: листы с колонками наименование / контакты / оборудование попадают в{" "}
+          <strong>клиентов</strong>. Листы с артикулом и количеством — в{" "}
+          <strong>склад</strong>. Можно также попросить ассистента вызвать инструмент{" "}
+          <code className="rounded bg-surface-100 px-1">import_excel_workbook_base64</code> с подтверждением{" "}
+          <code className="rounded bg-surface-100 px-1">__confirm: &quot;yes&quot;</code>.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              if (!f) return;
+              setExcelImportError(null);
+              setExcelImportResult(null);
+              setExcelImportBusy(true);
+              try {
+                const r = await importExcelUnified(f, false);
+                setExcelImportResult(r);
+              } catch (err) {
+                setExcelImportError(
+                  err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Ошибка импорта",
+                );
+              } finally {
+                setExcelImportBusy(false);
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={excelImportBusy || disabled}
+            onClick={() => excelInputRef.current?.click()}
+            className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            {excelImportBusy ? "Импорт…" : "Выбрать .xlsx"}
+          </button>
+        </div>
+        {excelImportError && (
+          <p className="mt-2 text-xs text-red-600">{excelImportError}</p>
+        )}
+        {excelImportResult && (
+          <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-xs text-emerald-950">
+            <p>
+              Клиентов создано: <strong>{excelImportResult.clients_created}</strong>, пропущено:{" "}
+              {excelImportResult.clients_skipped}. Склад: +{excelImportResult.warehouse_created} новых,{" "}
+              {excelImportResult.warehouse_updated} обновлено.
+            </p>
+            {excelImportResult.sheets.length > 0 && (
+              <ul className="mt-1 list-inside list-disc text-emerald-900/90">
+                {excelImportResult.sheets.map((s) => (
+                  <li key={s.sheet_name}>
+                    {s.sheet_name}: {s.kind}
+                    {s.message ? ` — ${s.message}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {excelImportResult.errors.length > 0 && (
+              <ul className="mt-1 list-inside list-disc text-amber-900">
+                {excelImportResult.errors.slice(0, 8).map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex min-h-[320px] flex-1 flex-col rounded-2xl border border-surface-200 bg-white shadow-sm">

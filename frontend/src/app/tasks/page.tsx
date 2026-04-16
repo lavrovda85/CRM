@@ -14,13 +14,23 @@ import {
   X,
   Trash2,
   Search,
+  Table2,
 } from "lucide-react";
 import Link from "next/link";
 import { flushSync } from "react-dom";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ApiError, fetchTasks, deleteTask, transitionTask, updateTask, fetchUsers, type UserListItem } from "@/lib/api";
+import {
+  ApiError,
+  fetchTasks,
+  deleteTask,
+  transitionTask,
+  updateTask,
+  fetchUsers,
+  fetchClients,
+  type UserListItem,
+} from "@/lib/api";
 import { cn, formatEnumLabel } from "@/lib/utils";
-import type { TaskResponse } from "@/types";
+import type { ClientResponse, TaskResponse } from "@/types";
 import {
   getTaskDayInterval,
   intervalDurationMs,
@@ -35,6 +45,7 @@ import {
   TasksMonthCalendar,
   type MonthCalendarCellMode,
 } from "@/components/boards/TasksMonthCalendar";
+import { WorkScheduleTable } from "@/components/boards/WorkScheduleTable";
 
 const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "new", title: "Новая", color: "#94a3b8" },
@@ -137,8 +148,8 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 interface TasksHeaderToolbarProps {
-  view: "kanban" | "list" | "timeline" | "month";
-  onViewChange: (next: "kanban" | "list" | "timeline" | "month") => void;
+  view: "kanban" | "list" | "timeline" | "month" | "schedule";
+  onViewChange: (next: "kanban" | "list" | "timeline" | "month" | "schedule") => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
   onCreateClick: () => void;
@@ -226,6 +237,17 @@ function TasksHeaderToolbar({
         >
           <CalendarDays className="h-4 w-4" />
         </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("schedule")}
+          title="План работ (график)"
+          className={cn(
+            "rounded-md px-2 py-1.5 transition-colors sm:px-2.5",
+            view === "schedule" ? "bg-primary-600 text-white" : "text-surface-500 hover:text-surface-900",
+          )}
+        >
+          <Table2 className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );
@@ -271,16 +293,24 @@ export default function TasksPage() {
 function TasksPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [view, setView] = useState<"kanban" | "list" | "timeline" | "month">(() => {
+  const [view, setView] = useState<"kanban" | "list" | "timeline" | "month" | "schedule">(() => {
     const qv = searchParams.get("view");
-    if (qv === "list" || qv === "timeline" || qv === "month") return qv;
+    if (qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule") return qv;
     if (typeof window !== "undefined") {
       const saved = sessionStorage.getItem(TASKS_VIEW_SESSION_KEY);
-      if (saved === "kanban" || saved === "list" || saved === "timeline" || saved === "month") return saved;
+      if (
+        saved === "kanban" ||
+        saved === "list" ||
+        saved === "timeline" ||
+        saved === "month" ||
+        saved === "schedule"
+      )
+        return saved;
     }
     return "kanban";
   });
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [clientsById, setClientsById] = useState<Record<string, ClientResponse>>({});
   const [assignees, setAssignees] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
@@ -398,13 +428,42 @@ function TasksPageInner() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const pageSize = 200;
+        let offset = 0;
+        const map: Record<string, ClientResponse> = {};
+        while (true) {
+          const res = await fetchClients({ limit: pageSize, offset });
+          for (const c of res.items) {
+            map[c.id] = c;
+          }
+          offset += res.items.length;
+          if (offset >= res.total || res.items.length < pageSize) break;
+        }
+        if (!cancelled) setClientsById(map);
+      } catch {
+        if (!cancelled) setClientsById({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const qv = searchParams.get("view");
     const saved =
       typeof window !== "undefined" ? sessionStorage.getItem(TASKS_VIEW_SESSION_KEY) : null;
     const nextView =
-      qv === "list" || qv === "timeline" || qv === "month"
+      qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule"
         ? qv
-        : saved === "kanban" || saved === "list" || saved === "timeline" || saved === "month"
+        : saved === "kanban" ||
+            saved === "list" ||
+            saved === "timeline" ||
+            saved === "month" ||
+            saved === "schedule"
           ? saved
           : "kanban";
     if (nextView !== view) {
@@ -416,7 +475,7 @@ function TasksPageInner() {
     searchParams.get("month_cell") === "assignees" ? "assignees" : "tasks";
 
   const setViewWithQuery = useCallback(
-    (next: "kanban" | "list" | "timeline" | "month") => {
+    (next: "kanban" | "list" | "timeline" | "month" | "schedule") => {
       if (typeof window !== "undefined") sessionStorage.setItem(TASKS_VIEW_SESSION_KEY, next);
       setView(next);
       const params = new URLSearchParams(searchParams.toString());
@@ -796,10 +855,14 @@ function TasksPageInner() {
               <X className="h-3.5 w-3.5" /> Сбросить
             </button>
           )}
-          {(view === "timeline" || view === "month") && assignees.length > 0 && (
+          {(view === "timeline" || view === "month" || view === "schedule") && assignees.length > 0 && (
             <div className="flex w-full flex-col gap-2 border-t border-surface-100 pt-3">
               <div className="text-xs font-semibold text-surface-600">
-                {view === "month" ? "Календарь: кого показывать" : "Календарь: исполнители в колонках"}
+                {view === "month"
+                  ? "Календарь: кого показывать"
+                  : view === "schedule"
+                    ? "План работ: исполнители"
+                    : "Календарь: исполнители в колонках"}
               </div>
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
@@ -1070,6 +1133,15 @@ function TasksPageInner() {
             onSlotClick={handleSlotClick}
           />
         </div>
+      )}
+
+      {view === "schedule" && (
+        <WorkScheduleTable
+          tasks={tasksForCalendar}
+          clientsById={clientsById}
+          statusLabel={statusLabel}
+          isTerminal={isTerminalTaskStatus}
+        />
       )}
 
       {view === "month" && (

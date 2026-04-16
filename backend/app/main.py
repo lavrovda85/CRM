@@ -175,6 +175,7 @@ def create_app() -> FastAPI:
         deals,
         depreciation,
         documents,
+        excel_import,
         chat,
         notifications,
         references,
@@ -194,6 +195,7 @@ def create_app() -> FastAPI:
     app.include_router(templates.router, prefix=api_prefix, tags=["Templates"])
     app.include_router(boards.router, prefix=api_prefix, tags=["Boards"])
     app.include_router(clients.router, prefix=api_prefix, tags=["Clients"])
+    app.include_router(excel_import.router, prefix=api_prefix, tags=["Import"])
     app.include_router(deals.router, prefix=api_prefix, tags=["Deals"])
     app.include_router(tenders.router, prefix=api_prefix, tags=["Tenders"])
     app.include_router(time_tracking.router, prefix=api_prefix, tags=["Time Tracking"])

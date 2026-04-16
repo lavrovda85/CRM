@@ -24,6 +24,7 @@ import app.mcp.tools.template_tools  # noqa: E402, F401
 import app.mcp.tools.crm_tools  # noqa: E402, F401
 import app.mcp.tools.tender_tools  # noqa: E402, F401
 import app.mcp.tools.warehouse_tools  # noqa: E402, F401
+import app.mcp.tools.excel_import_tools  # noqa: E402, F401
 import app.mcp.tools.analytics_tools  # noqa: E402, F401
 import app.mcp.tools.chat_tools  # noqa: E402, F401
 import app.mcp.tools.board_tools  # noqa: E402, F401
