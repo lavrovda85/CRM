@@ -27,6 +27,7 @@ from app.services.ai_assistant.tender_search_ux import (
     user_wants_more_tender_results,
 )
 from app.services.ai_assistant.time_context import build_server_time_system_message
+from app.core.excel_import_sidecar import merge_uploaded_xlsx_into_import_arguments
 from app.services.ai_assistant.tool_invocation import invoke_crm_tool, serialize_tool_result
 from app.services.ai_assistant.tool_registry import get_tool_registry
 
@@ -52,6 +53,7 @@ async def run_ai_chat(
     session_context: dict[str, Any] | None = None,
     settings: Settings | None = None,
     multimodal_user_content: list[dict[str, Any]] | None = None,
+    xlsx_upload_bytes_by_filename: dict[str, bytes] | None = None,
 ) -> AiChatTurnResult:
     """Run one user turn: OpenAI chat with tool loop; return reply and context patch.
 
@@ -257,6 +259,9 @@ async def run_ai_chat(
             if not isinstance(tname, str):
                 out: Any = {"ok": False, "message": "tool_name must be a string"}
             else:
+                targs = merge_uploaded_xlsx_into_import_arguments(
+                    tname, targs, xlsx_upload_bytes_by_filename
+                )
                 if tname == "search_tenders_on_web" and session_context:
                     targs = dict(targs or {})
                     if user_wants_more_tender_results(text):

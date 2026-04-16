@@ -30,10 +30,10 @@ def format_tool_failure_reply(user_message: str, tool_result: dict[str, Any]) ->
             field_part = f" Поле: {field}." if field else ""
             if reason:
                 return (
-                    "Не удалось создать задачу из-за ошибки в данных (VALIDATION_ERROR)."
+                    "Не удалось выполнить операцию из-за ошибки в данных (VALIDATION_ERROR)."
                     f"{field_part} Причина: {reason}"
                 )
-            return f"Не удалось создать задачу из-за ошибки в данных (VALIDATION_ERROR).{field_part}"
+            return f"Не удалось выполнить операцию из-за ошибки в данных (VALIDATION_ERROR).{field_part}"
         if code == "NOT_FOUND":
             entity = details.get("entity") or "сущность"
             entity_id = details.get("entity_id")
@@ -51,5 +51,5 @@ def format_tool_failure_reply(user_message: str, tool_result: dict[str, Any]) ->
         return f"Не удалось выполнить операцию ({code})."
 
     if code == "VALIDATION_ERROR":
-        return f"Task creation failed (VALIDATION_ERROR): {details.get('reason') or msg}"
-    return f"Task creation failed ({code}): {msg}" if msg else f"Task creation failed ({code})"
+        return f"Operation failed (VALIDATION_ERROR): {details.get('reason') or msg}"
+    return f"Operation failed ({code}): {msg}" if msg else f"Operation failed ({code})"

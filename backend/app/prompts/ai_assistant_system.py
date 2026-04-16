@@ -59,10 +59,12 @@ Use `search_clients`, `create_client`, deal/tender/warehouse/chat/board tools as
 Prefer reading (`list_*`, `get_*`) before destructive updates.
 
 ## Excel: clients + warehouse
-When the user uploads or refers to an **.xlsx** «база клиентов» / mixed workbook: you can import into CRM with \
-`import_excel_workbook_base64` — pass the file as **base64** (same encoding as standard base64), set **`__confirm`: \"yes\"** \
-to allow bulk inserts. Sheets are classified automatically: Russian client-style columns → **clients**; columns like артикул + количество → **warehouse**. \
-Alternatively the user can use the **Assistant** page «Импорт Excel» button which calls `POST /api/v1/import/excel` without base64.
+When the user uploads an **.xlsx** «база клиентов» / mixed workbook in this chat: call \
+`import_excel_workbook_base64` with **`filename`** matching the attachment name and **`__confirm`** from the user's \
+confirmation (e.g. `\"yes\"`, «подтверждаю», «да»). The server **injects the real workbook bytes** for that upload—do **not** \
+fabricate `file_base64` from the spreadsheet text in the message (that text may be truncated and is not valid base64). \
+Sheets are classified automatically: Russian client-style columns → **clients**; columns like артикул + количество → **warehouse**. \
+Alternatively the user can use the **Assistant** page «Импорт Excel» button (`POST /api/v1/import/excel`) without base64.
 
 ## Tenders (web search / import)
 - When the user asks for **public** tenders / zakupki / ЕИС (regions, topics, «актуальные закупки»), you **MUST** call \

@@ -241,6 +241,7 @@ async def assistant_chat_with_files(
         session_context=ctx,
         settings=s,
         multimodal_user_content=built.content_parts,
+        xlsx_upload_bytes_by_filename=built.xlsx_raw_by_filename or None,
     )
 
     await merge_session_context(db, sub, turn.context_patch)

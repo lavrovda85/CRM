@@ -36,6 +36,8 @@ class AttachmentBuildResult:
     file_summaries: list[dict[str, Any]] = field(default_factory=list)
     vision_image_count: int = 0
     total_document_text_chars: int = 0
+    #: Original ``.xlsx`` bytes keyed by upload filename (for server-side import tool injection).
+    xlsx_raw_by_filename: dict[str, bytes] = field(default_factory=dict)
 
 
 def format_context_acknowledgement_line(summaries: list[dict[str, Any]]) -> str:
@@ -146,6 +148,7 @@ async def build_upload_parts(
     image_parts: list[dict[str, Any]] = []
     labels: list[str] = []
     file_summaries: list[dict[str, Any]] = []
+    xlsx_raw_by_filename: dict[str, bytes] = {}
 
     for uf in files:
         if not uf.filename:
@@ -158,6 +161,8 @@ async def build_upload_parts(
 
         kind = _guess_kind(uf.filename, uf.content_type)
         labels.append(uf.filename)
+        if kind == "xlsx":
+            xlsx_raw_by_filename[uf.filename] = raw
 
         if kind == "image":
             mime = (uf.content_type or "image/jpeg").split(";")[0].strip().lower()
@@ -297,4 +302,5 @@ async def build_upload_parts(
         file_summaries=file_summaries,
         vision_image_count=len(image_parts),
         total_document_text_chars=len(combined_text),
+        xlsx_raw_by_filename=xlsx_raw_by_filename,
     )
