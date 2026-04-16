@@ -6,10 +6,14 @@
 
 from functools import lru_cache
 import json
+import logging
 from pathlib import Path
+from typing import Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_settings_log = logging.getLogger(__name__)
 
 
 def _discover_env_files() -> tuple[str, ...] | str:
@@ -160,11 +164,14 @@ class Settings(BaseSettings):
     # Internal MinIO endpoint used by backend services running in Docker.
     minio_endpoint: str = "http://minio:9000"
     # Public MinIO endpoint used to generate presigned URLs for the browser.
-    # It must be reachable FROM the user's browser.
+    # It must be reachable FROM the user's browser. Use path-style base URL with NO path prefix
+    # that nginx rewrites away (that breaks SigV4). Example: http://your-host (nginx proxies /{MINIO_BUCKET}/).
     minio_public_endpoint: str = "http://localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin_secret"
     minio_bucket: str = "hvac-documents"
+    # When true, browsers load files via GET /api/v1/documents/{id}/file?token=... (backend reads MinIO on Docker network).
+    document_file_proxy_enabled: bool = Field(default=True, alias="DOCUMENT_FILE_PROXY_ENABLED")
 
     keycloak_url: str = "http://keycloak:8080"
     keycloak_realm: str = "hvac"
@@ -337,6 +344,20 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+    @model_validator(mode="after")
+    def _warn_minio_public_presign_proxy(self) -> Self:
+        """Log a warning when a legacy nginx prefix is likely to break presigned GET signatures."""
+        ep = (self.minio_public_endpoint or "").lower()
+        if "/storage-s3" in ep:
+            _settings_log.warning(
+                "MINIO_PUBLIC_ENDPOINT contains /storage-s3: nginx rewrites of that prefix break "
+                "AWS SigV4 presigned URLs (SignatureDoesNotMatch). Set MINIO_PUBLIC_ENDPOINT to "
+                "http://<public-host> with no path (port 80 behind nginx), and expose MinIO at "
+                "http://<public-host>/%s/ without URI rewriting. See docker/nginx/nginx.conf.",
+                self.minio_bucket,
+            )
+        return self
 
     @field_validator("task_scheduler_observer_ids", "task_scheduler_co_assignee_ids", mode="before")
     @classmethod

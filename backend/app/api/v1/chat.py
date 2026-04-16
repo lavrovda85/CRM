@@ -7,18 +7,26 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from datetime import datetime
+from urllib.parse import quote
 
-import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import Response
 from app.core.config import Settings, get_settings
 from app.core.dependencies import PaginationParams, get_current_user, get_db
-from app.core.exceptions import ValidationError, NotFoundError
+from app.core.exceptions import ExternalServiceError, NotFoundError, ValidationError
+from app.core.file_proxy_token import (
+    content_disposition_header,
+    decode_chat_attachment_token,
+    encode_chat_attachment_token,
+)
 from app.core.pagination import PaginatedResponse
 from app.core.security import CurrentUser
 from app.models import ChatAttachment, ChatMessage, ChatRoom, User
@@ -141,6 +149,28 @@ def _presign_url(s3, *, bucket: str, storage_path: str) -> str:
     )
 
 
+def _chat_attachment_download_url(
+    settings: Settings,
+    *,
+    attachment_id: uuid.UUID,
+    storage_path: str,
+    user_sub: str,
+) -> str:
+    """Public URL for a chat attachment (API proxy with token, or MinIO presigned)."""
+    if settings.document_file_proxy_enabled:
+        raw = encode_chat_attachment_token(
+            settings.secret_key,
+            attachment_id=attachment_id,
+            user_sub=user_sub or "",
+        )
+        return f"/api/v1/chat/attachments/{attachment_id}/file?token={quote(raw, safe='')}"
+    return _presign_url(
+        _get_presign_s3_client(settings),
+        bucket=settings.minio_bucket,
+        storage_path=storage_path,
+    )
+
+
 @router.get("/messages", response_model=PaginatedResponse[ChatMessageResponse])
 async def list_messages(
     room: str = Query(default="company", min_length=1, max_length=100),
@@ -182,8 +212,6 @@ async def list_messages(
     total = len(items)
 
     settings = get_settings()
-    # Use public endpoint for generating URLs consumed by the browser.
-    s3 = _get_presign_s3_client(settings)
 
     return PaginatedResponse(
         items=[
@@ -200,10 +228,11 @@ async def list_messages(
                         filename=a.filename,
                         mime_type=a.mime_type,
                         file_size=a.file_size,
-                        download_url=_presign_url(
-                            s3,
-                            bucket=settings.minio_bucket,
+                        download_url=_chat_attachment_download_url(
+                            settings,
+                            attachment_id=a.id,
                             storage_path=a.storage_path,
+                            user_sub=user.sub or "",
                         ),
                     )
                     for a in (m.attachments or [])
@@ -315,10 +344,51 @@ async def upload_chat_attachment(
         filename=attachment.filename,
         mime_type=attachment.mime_type,
         file_size=attachment.file_size,
-        download_url=_presign_url(
-            _get_presign_s3_client(settings),
-            bucket=settings.minio_bucket,
+        download_url=_chat_attachment_download_url(
+            settings,
+            attachment_id=attachment.id,
             storage_path=attachment.storage_path,
+            user_sub=user.sub or "",
         ),
+    )
+
+
+@router.get("/attachments/{attachment_id}/file")
+async def stream_chat_attachment_file(
+    attachment_id: uuid.UUID,
+    token: str = Query(..., min_length=8, description="Signed token from chat attachment download_url"),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Stream a chat attachment from MinIO using an API-issued token (no browser → MinIO hop)."""
+    if not settings.document_file_proxy_enabled:
+        raise NotFoundError("ChatAttachment", str(attachment_id))
+
+    payload = decode_chat_attachment_token(settings.secret_key, token, max_age=PRESIGNED_URL_EXPIRY_SECONDS)
+    if not payload or str(attachment_id) != payload.get("a"):
+        raise ValidationError("token", "Invalid or expired download token")
+
+    res = await db.execute(select(ChatAttachment).where(ChatAttachment.id == attachment_id))
+    attachment = res.scalar_one_or_none()
+    if not attachment:
+        raise NotFoundError("ChatAttachment", str(attachment_id))
+
+    def _load() -> tuple[bytes, str]:
+        s3 = _get_s3_client(settings)
+        resp = s3.get_object(Bucket=settings.minio_bucket, Key=attachment.storage_path)
+        body = resp["Body"].read()
+        ct = (resp.get("ContentType") or attachment.mime_type or "application/octet-stream").strip()
+        return body, ct
+
+    try:
+        data, content_type = await asyncio.to_thread(_load)
+    except Exception as exc:
+        logger.error("MinIO get_object for chat attachment failed", extra={"error": str(exc)})
+        raise ExternalServiceError("MinIO", "get_object", str(exc)) from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": content_disposition_header(attachment.filename, content_type)},
     )
 

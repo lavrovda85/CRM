@@ -1,25 +1,32 @@
 """Document management API endpoints.
 
 Загрузка файлов в MinIO, метаданные документов,
-скачивание по presigned URL.
+скачивание через presigned URL или прокси через API (см. ``document_file_proxy_enabled``).
 """
 
+import asyncio
 import uuid
-
 import logging
+from urllib.parse import quote
 
 try:
     import structlog  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
     structlog = None  # type: ignore
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.config import Settings, get_settings
 from app.core.dependencies import PaginationParams, get_current_user, get_db
-from app.core.exceptions import ExternalServiceError, NotFoundError
+from app.core.exceptions import ExternalServiceError, NotFoundError, ValidationError
+from app.core.file_proxy_token import (
+    content_disposition_header,
+    decode_document_file_token,
+    encode_document_file_token,
+)
 from app.core.pagination import PaginatedResponse
 from app.core.security import CurrentUser
 from app.models import Document, Task, Tender, User
@@ -184,6 +191,7 @@ async def list_documents(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> PaginatedResponse[DocumentResponse]:
     """List documents with optional filters.
 
@@ -201,8 +209,9 @@ async def list_documents(
     Возвращает:
         Постраничный ответ со списком документов.
     """
-    query = select(Document)
-    count_query = select(func.count(Document.id))  # pylint: disable=not-callable
+    _ = user.sub
+    query = select(Document).where(Document.company_id == ctx.company_id)
+    count_query = select(func.count(Document.id)).where(Document.company_id == ctx.company_id)  # pylint: disable=not-callable
 
     if task_id:
         query = query.where(Document.task_id == task_id)
@@ -235,6 +244,7 @@ async def get_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> DocumentResponse:
     """Get document metadata.
 
@@ -248,11 +258,67 @@ async def get_document(
     Возвращает:
         Метаданные документа.
     """
-    result = await db.execute(select(Document).where(Document.id == document_id))
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.company_id == ctx.company_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document", str(document_id))
+    _ = user.sub
     return DocumentResponse.model_validate(document)
+
+
+@router.get("/{document_id}/file")
+async def stream_document_file(
+    document_id: uuid.UUID,
+    token: str = Query(..., min_length=8, description="Signed token from GET /documents/{id}/download"),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Stream document bytes from MinIO (internal Docker network); browser uses ``?token=`` from /download."""
+    if not settings.document_file_proxy_enabled:
+        raise NotFoundError("Document", str(document_id))
+
+    payload = decode_document_file_token(settings.secret_key, token, max_age=3600)
+    if not payload or str(document_id) != payload.get("d"):
+        raise ValidationError("token", "Invalid or expired download token")
+
+    try:
+        company_id = uuid.UUID(str(payload.get("c")))
+    except (ValueError, TypeError) as exc:
+        raise ValidationError("token", "Invalid download token payload") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.company_id == company_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise NotFoundError("Document", str(document_id))
+
+    def _load() -> tuple[bytes, str]:
+        s3 = _get_s3_client(settings)
+        resp = s3.get_object(Bucket=settings.minio_bucket, Key=document.storage_path)
+        body = resp["Body"].read()
+        ct = (resp.get("ContentType") or document.mime_type or "application/octet-stream").strip()
+        return body, ct
+
+    try:
+        data, content_type = await asyncio.to_thread(_load)
+    except Exception as exc:
+        logger.error("MinIO get_object failed", error=str(exc), document_id=str(document_id))
+        raise ExternalServiceError("MinIO", "get_object", str(exc)) from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": content_disposition_header(document.filename, content_type)},
+    )
 
 
 @router.get("/{document_id}/download", response_model=DocumentDownloadResponse)
@@ -260,12 +326,13 @@ async def download_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
     settings: Settings = Depends(get_settings),
 ) -> DocumentDownloadResponse:
-    """Get a presigned URL to download a document from MinIO.
+    """Return a URL to download the document (API proxy with token, or legacy MinIO presigned URL).
 
-    Генерирует presigned URL для скачивания файла
-    из MinIO с ограниченным временем жизни (1 час).
+    When ``DOCUMENT_FILE_PROXY_ENABLED`` is true (default), ``url`` is same-origin
+    ``/api/v1/documents/{id}/file?token=...`` so the browser never calls MinIO directly.
 
     Аргументы:
         document_id: UUID документа.
@@ -274,12 +341,27 @@ async def download_document(
         settings: Настройки приложения.
 
     Возвращает:
-        Presigned URL и имя файла.
+        Download URL и имя файла.
     """
-    result = await db.execute(select(Document).where(Document.id == document_id))
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.company_id == ctx.company_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document", str(document_id))
+
+    if settings.document_file_proxy_enabled:
+        raw = encode_document_file_token(
+            settings.secret_key,
+            document_id=document.id,
+            company_id=document.company_id,
+            user_sub=user.sub or "",
+        )
+        url = f"/api/v1/documents/{document_id}/file?token={quote(raw, safe='')}"
+        return DocumentDownloadResponse(url=url, filename=document.filename)
 
     try:
         s3 = _get_presign_s3_client(settings)
@@ -304,6 +386,7 @@ async def delete_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
     settings: Settings = Depends(get_settings),
 ) -> None:
     """Delete a document and its file from MinIO.
@@ -316,7 +399,13 @@ async def delete_document(
         user: Текущий аутентифицированный пользователь.
         settings: Настройки приложения.
     """
-    result = await db.execute(select(Document).where(Document.id == document_id))
+    _ = user.sub
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.company_id == ctx.company_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document", str(document_id))
