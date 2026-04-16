@@ -47,3 +47,6 @@ htmlcov/
 
 # MinIO data
 minio_data/
+
+# Local Gradle cache / unpacked dist (never commit)
+.tmp-gradle/

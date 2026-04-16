@@ -25,6 +25,7 @@ celery_app = Celery(
         "app.workers.scheduled_tasks",
         "app.workers.tender_analysis",
         "app.workers.tender_smeta",
+        "app.workers.task_due_rollover",
     ],
 )
 
@@ -66,6 +67,13 @@ celery_app.conf.beat_schedule = {
     "scan-task-deadline-notifications": {
         "task": "app.workers.task_notifications.scan_task_deadlines",
         "schedule": crontab(minute=f"*/{settings.celery_task_notifications_scan_every_minutes}"),
+    },
+    "rollover-overdue-task-due-dates": {
+        "task": "app.workers.task_due_rollover.run_task_due_rollover",
+        "schedule": crontab(
+            hour=str(settings.celery_task_due_rollover_hour),
+            minute=str(settings.celery_task_due_rollover_minute),
+        ),
     },
 }
 

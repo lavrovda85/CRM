@@ -95,6 +95,29 @@ class Settings(BaseSettings):
         le=1440,
         alias="CELERY_TASK_NOTIFICATIONS_SCAN_EVERY_MINUTES",
     )
+    task_due_rollover_enabled: bool = Field(
+        default=False,
+        alias="TASK_DUE_ROLLOVER_ENABLED",
+        description="When true, Celery beat runs a daily job that moves overdue due_date to the next local day.",
+    )
+    task_due_rollover_timezone: str = Field(
+        default="Europe/Moscow",
+        alias="TASK_DUE_ROLLOVER_TIMEZONE",
+        description="IANA timezone for calendar-day boundaries when rolling task due dates.",
+    )
+    celery_task_due_rollover_hour: int = Field(
+        default=22,
+        ge=0,
+        le=23,
+        alias="CELERY_TASK_DUE_ROLLOVER_HOUR",
+        description="UTC hour for the daily rollover beat (default ~01:00 MSK next calendar day).",
+    )
+    celery_task_due_rollover_minute: int = Field(
+        default=5,
+        ge=0,
+        le=59,
+        alias="CELERY_TASK_DUE_ROLLOVER_MINUTE",
+    )
     celery_daily_summary_hour: int = Field(default=20, ge=0, le=23, alias="CELERY_DAILY_SUMMARY_HOUR")
     celery_daily_summary_minute: int = Field(default=0, ge=0, le=59, alias="CELERY_DAILY_SUMMARY_MINUTE")
     celery_monthly_depreciation_day_of_month: int = Field(
