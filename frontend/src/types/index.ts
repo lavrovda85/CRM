@@ -281,8 +281,15 @@ export interface ClientResponse {
   phone: string | null;
   email: string | null;
   inn: string | null;
+  kpp?: string | null;
+  ogrn?: string | null;
+  ogrnip?: string | null;
+  bik?: string | null;
+  bank_account?: string | null;
+  corr_account?: string | null;
+  bank_name?: string | null;
   coordinates: Record<string, unknown> | null;
-  metadata: Record<string, unknown>;
+  extra_data: Record<string, unknown>;
   notes: string | null;
   contacts: ClientContactResponse[];
   created_at: string;

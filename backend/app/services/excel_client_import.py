@@ -1,6 +1,7 @@
 """Heuristic import of HVAC-style client Excel sheets (Russian headers).
 
-Maps typical columns: тип клиента, наименование/объект, контакты, дата, вид работ, оборудование.
+Maps columns including «(auto)» normalized exports: компания, контакт, адрес, телефоны, email,
+вид клиента, ИНН/КПП/ОГРН, and legacy combined «контакты» cells.
 """
 
 from __future__ import annotations
@@ -13,8 +14,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Client
 from app.schemas.client import ClientCreate
+from app.services.client_payload import extra_data_for_create
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?:\+?\d[\d\s().\-]{8,}\d)")
@@ -54,6 +55,12 @@ def score_client_header_row(row: tuple[Any, ...]) -> int:
         "исполнитель",
         "п/п",
         "№",
+        "компания",
+        "auto",
+        "почт",
+        "инн",
+        "кпп",
+        "огрн",
     )
     return sum(1 for kw in keywords if kw in joined)
 
@@ -79,21 +86,68 @@ def _match_field(header: str, aliases: tuple[str, ...]) -> bool:
 def map_client_columns(headers: list[str]) -> dict[str, int]:
     """Map logical field -> column index (best effort)."""
     fields: dict[str, int] = {}
+
+    for idx, raw in enumerate(headers):
+        h = _norm_header(raw)
+        if not h:
+            continue
+        low = raw.lower() if isinstance(raw, str) else str(raw).lower()
+        if "(auto)" in low or "（auto）" in low:
+            if "компания" in h and "name" not in fields:
+                fields["name"] = idx
+            elif "контакт" in h and "лицо" in h and "contact_person" not in fields:
+                fields["contact_person"] = idx
+            elif "адрес" in h and "address_only" not in fields:
+                fields["address_only"] = idx
+            elif "телефон" in h and "phones" not in fields:
+                fields["phones"] = idx
+            elif "email" in h and "email_col" not in fields:
+                fields["email_col"] = idx
+
     for idx, raw in enumerate(headers):
         h = _norm_header(raw)
         if not h:
             continue
         if _match_field(
             h,
-            ("тип клиента", "юр/физ", "юр", "физ", "вид клиента"),
+            ("тип клиента", "юр/физ", "вид клиента", "физ/юр"),
         ) and "client_type" not in fields:
             fields["client_type"] = idx
+        elif _match_field(h, ("инн", "inn")) and "inn" not in fields:
+            fields["inn"] = idx
+        elif ("кпп" in h or "kpp" in h) and "kpp" not in fields:
+            fields["kpp"] = idx
+        elif ("огрнип" in h or "ogrnip" in h) and "ogrnip" not in fields:
+            fields["ogrnip"] = idx
+        elif ("огрн" in h or "ogrn" in h) and "ogrn" not in fields:
+            fields["ogrn"] = idx
+        elif ("бик" in h or "bik" in h) and "bik" not in fields:
+            fields["bik"] = idx
+        elif _match_field(h, ("р/с", "р/сч", "расчетный сч", "рс ", "р с ")) and "bank_account" not in fields:
+            fields["bank_account"] = idx
+        elif _match_field(h, ("к/с", "к/сч", "корр", "кс ")) and "corr_account" not in fields:
+            fields["corr_account"] = idx
+        elif "банк" in h and "bank_name" not in fields and "бик" not in h:
+            fields["bank_name"] = idx
         elif _match_field(
             h,
-            ("наименование", "объект", "название", "организация", "клиент", "адрес"),
+            ("наименование", "объект", "название", "организация", "клиент"),
         ) and "name" not in fields:
             fields["name"] = idx
-        elif _match_field(h, ("контакт", "телефон", "email", "связь", "почта")) and "contacts" not in fields:
+        elif ("лицо" in h and "контакт" in h) and "contact_person" not in fields:
+            fields["contact_person"] = idx
+        elif _match_field(h, ("фио контакт",)) and "contact_person" not in fields:
+            fields["contact_person"] = idx
+        elif _match_field(h, ("адрес",)) and "address_only" not in fields and "email" not in h:
+            fields["address_only"] = idx
+        elif _match_field(h, ("телефон", "тел.", "моб")) and "phones" not in fields:
+            fields["phones"] = idx
+        elif _match_field(h, ("email", "e-mail", "почта", "mail")) and "email_col" not in fields:
+            fields["email_col"] = idx
+        elif (
+            _match_field(h, ("телефон", "email", "связь", "почта"))
+            or ("контакт" in h and "лицо" not in h)
+        ) and "contacts" not in fields:
             fields["contacts"] = idx
         elif _match_field(h, ("дата",)) and "event_date" not in fields:
             fields["event_date"] = idx
@@ -121,9 +175,20 @@ def _extract_phone_email(blob: str) -> tuple[str | None, str | None]:
     return phone, email
 
 
+def _extract_email_only(blob: str) -> str | None:
+    if not blob:
+        return None
+    em = _EMAIL_RE.search(blob)
+    return em.group(0) if em else None
+
+
 def _client_type_from_cell(raw: str) -> str:
-    s = raw.lower()
-    if any(x in s for x in ("юр", "ооо", "организац", "company", "organization")):
+    s = raw.lower().strip()
+    if any(x in s for x in ("юр", "ооо", "организац", "company", "organization", "legal")):
+        return "organization"
+    if any(x in s for x in ("физ", "individual", "частн")):
+        return "individual"
+    if "ип" in s and len(s) <= 40:
         return "organization"
     return "individual"
 
@@ -142,19 +207,48 @@ def row_to_client_create(
     name_raw = get("name")
     if not name_raw:
         return None
-    # First line as display name, rest as address hint
     lines = [ln.strip() for ln in name_raw.splitlines() if ln.strip()]
     name = lines[0][:500] if lines else ""
     address = ""
-    if len(lines) > 1:
+    if "address_only" in col:
+        address = get("address_only")[:4000]
+    elif len(lines) > 1:
         address = "\n".join(lines[1:])[:4000]
     elif len(name_raw) > 200:
-        # Long single line: keep as name, duplicate nothing
         name = name_raw[:500]
 
     ctype = _client_type_from_cell(get("client_type")) if "client_type" in col else "individual"
+
+    phone: str | None = None
+    email: str | None = None
+
+    if "phones" in col:
+        pb = get("phones")
+        phone, em_ph = _extract_phone_email(pb)
+        if not email:
+            email = em_ph
+
     blob = get("contacts")
-    phone, email = _extract_phone_email(blob)
+    if not phone:
+        phone, em_c = _extract_phone_email(blob)
+        if not email:
+            email = em_c
+    if not email and "email_col" in col:
+        email = _extract_email_only(get("email_col"))
+    if not email and blob:
+        email = _extract_email_only(blob)
+
+    contact_person = get("contact_person") if "contact_person" in col else ""
+    primary_contact_name = contact_person.strip()[:255] if contact_person.strip() else None
+
+    inn = get("inn").strip()[:20] if get("inn") else None
+    kpp = get("kpp").strip()[:20] if get("kpp") else None
+    ogrn = get("ogrn").strip()[:20] if get("ogrn") else None
+    ogrnip = get("ogrnip").strip()[:20] if get("ogrnip") else None
+    bik = get("bik").strip()[:20] if get("bik") else None
+    bank_account = get("bank_account").strip()[:50] if get("bank_account") else None
+    corr_account = get("corr_account").strip()[:50] if get("corr_account") else None
+    bank_name = get("bank_name").strip()[:500] if get("bank_name") else None
 
     parts_notes: list[str] = []
     if get("event_date"):
@@ -179,6 +273,15 @@ def row_to_client_create(
         address=address or None,
         phone=phone,
         email=email,
+        inn=inn or None,
+        primary_contact_name=primary_contact_name,
+        kpp=kpp or None,
+        ogrn=ogrn or None,
+        ogrnip=ogrnip or None,
+        bik=bik or None,
+        bank_account=bank_account or None,
+        corr_account=corr_account or None,
+        bank_name=bank_name or None,
         extra_data=extra,
         notes=notes,
     )
@@ -192,6 +295,8 @@ async def import_clients_from_sheet(
     sheet_name: str,
 ) -> tuple[int, int, list[str]]:
     """Import client rows from one worksheet. Returns (created, skipped, errors)."""
+    from app.models import Client, ClientContact
+
     if not rows:
         return 0, 0, []
 
@@ -203,7 +308,6 @@ async def import_clients_from_sheet(
     headers = [_norm_cell(c) for c in header_cells]
     col = map_client_columns(headers)
     if "name" not in col:
-        # Fallback: use widest text column as name
         best_j = None
         best_len = 0
         sample = rows[header_idx + 1 : header_idx + 4] if len(rows) > header_idx + 1 else []
@@ -232,7 +336,6 @@ async def import_clients_from_sheet(
                 skipped += 1
                 continue
 
-            # Dedup: same phone or email or exact name
             dup = False
             if body.phone:
                 q = await db.execute(
@@ -263,6 +366,7 @@ async def import_clients_from_sheet(
                 skipped += 1
                 continue
 
+            extra_merged = extra_data_for_create(body)
             client = Client(
                 company_id=company_id,
                 name=body.name,
@@ -272,11 +376,20 @@ async def import_clients_from_sheet(
                 phone=body.phone,
                 email=body.email,
                 inn=body.inn,
-                extra_data=body.extra_data,
+                extra_data=extra_merged,
                 notes=body.notes,
             )
             db.add(client)
             await db.flush()
+            pc = (body.primary_contact_name or "").strip()
+            if pc:
+                db.add(
+                    ClientContact(
+                        client_id=client.id,
+                        full_name=pc[:255],
+                        is_primary=True,
+                    )
+                )
             created += 1
         except Exception as exc:
             errors.append(f"{sheet_name} row {ridx}: {exc}")

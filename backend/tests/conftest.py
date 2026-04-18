@@ -12,3 +12,7 @@ os.environ.setdefault(
         "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/hvac_crm",
     ),
 )
+# Avoid empty-string JSON parse failures when .env has blank complex fields.
+for _k in ("DEV_ADMIN_EMAILS", "DEV_ADMIN_USER_IDS"):
+    if not (os.environ.get(_k) or "").strip():
+        os.environ[_k] = "[]"

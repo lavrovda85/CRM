@@ -12,10 +12,13 @@ from sqlalchemy import or_, select, update
 
 from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundError, ValidationError
+from app.mcp.actor_context import current_mcp_user_sub
 from app.mcp.server import mcp
-from app.models import Client, Deal, DealStage
-from app.schemas.client import ClientCreate, ClientResponse
+from app.models import Client, ClientContact, Deal, DealStage
+from app.schemas.client import ClientCreate
 from app.schemas.deal import DealResponse
+from app.services import company_service
+from app.services.client_payload import build_client_response, extra_data_for_create
 
 
 def _uuid(raw: str, field: str) -> uuid.UUID:
@@ -32,17 +35,44 @@ async def create_client(
     address: str | None = None,
     phone: str | None = None,
     email: str | None = None,
+    inn: str | None = None,
+    primary_contact_name: str | None = None,
+    kpp: str | None = None,
+    ogrn: str | None = None,
+    ogrnip: str | None = None,
+    bik: str | None = None,
+    bank_account: str | None = None,
+    corr_account: str | None = None,
+    bank_name: str | None = None,
 ) -> dict:
-    """Create a new client."""
+    """Create a new client in the MCP actor's default company."""
     body = ClientCreate(
         name=name.strip(),
         client_type=client_type,
         address=address,
         phone=phone,
         email=email,
+        inn=inn,
+        primary_contact_name=primary_contact_name,
+        kpp=kpp,
+        ogrn=ogrn,
+        ogrnip=ogrnip,
+        bik=bik,
+        bank_account=bank_account,
+        corr_account=corr_account,
+        bank_name=bank_name,
     )
+    sub = current_mcp_user_sub()
+    try:
+        uid = uuid.UUID(sub)
+    except ValueError as exc:
+        raise ValidationError("actor", "Invalid MCP user id") from exc
+
     async with async_session_factory() as session:
+        company_id = await company_service.get_default_or_first_company_id(session, uid)
+        extra = extra_data_for_create(body)
         client = Client(
+            company_id=company_id,
             name=body.name,
             client_type=body.client_type,
             address=body.address,
@@ -50,14 +80,24 @@ async def create_client(
             phone=body.phone,
             email=body.email,
             inn=body.inn,
-            extra_data=body.extra_data,
+            extra_data=extra,
             notes=body.notes,
         )
         session.add(client)
         await session.flush()
+        pc = (body.primary_contact_name or "").strip()
+        if pc:
+            session.add(
+                ClientContact(
+                    client_id=client.id,
+                    full_name=pc[:255],
+                    is_primary=True,
+                )
+            )
+        await session.flush()
         await session.refresh(client, attribute_names=["contacts"])
         await session.commit()
-        return ClientResponse.model_validate(client).model_dump(mode="json")
+        return build_client_response(client).model_dump(mode="json")
 
 
 @mcp.tool()
@@ -72,15 +112,23 @@ async def search_clients(
     lim = max(1, min(int(limit), 100))
     pattern = f"%{q}%"
 
+    sub = current_mcp_user_sub()
+    try:
+        uid = uuid.UUID(sub)
+    except ValueError as exc:
+        raise ValidationError("actor", "Invalid MCP user id") from exc
+
     async with async_session_factory() as session:
+        company_id = await company_service.get_default_or_first_company_id(session, uid)
         stmt = (
             select(Client)
             .where(
+                Client.company_id == company_id,
                 or_(
                     Client.name.ilike(pattern),
                     Client.phone.ilike(pattern),
                     Client.email.ilike(pattern),
-                )
+                ),
             )
             .order_by(Client.name)
             .limit(lim)
@@ -88,7 +136,7 @@ async def search_clients(
         res = await session.execute(stmt)
         rows = res.scalars().all()
 
-    return [ClientResponse.model_validate(c).model_dump(mode="json") for c in rows]
+    return [build_client_response(c).model_dump(mode="json") for c in rows]
 
 
 async def _default_deal_stage_id(session) -> uuid.UUID:

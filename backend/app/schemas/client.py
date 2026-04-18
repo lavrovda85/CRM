@@ -21,6 +21,8 @@ class ClientCreate(BaseModel):
         phone (str | None): Контактный телефон.
         email (str | None): Email адрес.
         inn (str | None): ИНН (для организаций).
+        primary_contact_name (str | None): Контактное лицо (создаётся как основной ClientContact).
+        kpp / ogrn / ogrnip / bik / bank_*: Реквизиты юрлица (хранятся в ``extra_data``).
         coordinates (dict | None): GPS координаты {lat, lng}.
         extra_data (dict): Произвольные дополнительные данные.
         notes (str | None): Заметки менеджера.
@@ -32,6 +34,14 @@ class ClientCreate(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=255)
     inn: str | None = Field(default=None, max_length=20)
+    primary_contact_name: str | None = Field(default=None, max_length=255)
+    kpp: str | None = Field(default=None, max_length=20)
+    ogrn: str | None = Field(default=None, max_length=20)
+    ogrnip: str | None = Field(default=None, max_length=20)
+    bik: str | None = Field(default=None, max_length=20)
+    bank_account: str | None = Field(default=None, max_length=50)
+    corr_account: str | None = Field(default=None, max_length=50)
+    bank_name: str | None = Field(default=None, max_length=500)
     coordinates: dict[str, Any] | None = None
     extra_data: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
@@ -46,6 +56,7 @@ class ClientUpdate(BaseModel):
         phone (str | None): Контактный телефон.
         email (str | None): Email адрес.
         inn (str | None): ИНН.
+        kpp / ogrn / ogrnip / bik / bank_*: Реквизиты (мержатся в ``extra_data``).
         coordinates (dict | None): GPS координаты {lat, lng}.
         extra_data (dict | None): Произвольные дополнительные данные.
         notes (str | None): Заметки менеджера.
@@ -56,6 +67,13 @@ class ClientUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=255)
     inn: str | None = Field(default=None, max_length=20)
+    kpp: str | None = Field(default=None, max_length=20)
+    ogrn: str | None = Field(default=None, max_length=20)
+    ogrnip: str | None = Field(default=None, max_length=20)
+    bik: str | None = Field(default=None, max_length=20)
+    bank_account: str | None = Field(default=None, max_length=50)
+    corr_account: str | None = Field(default=None, max_length=50)
+    bank_name: str | None = Field(default=None, max_length=500)
     coordinates: dict[str, Any] | None = None
     extra_data: dict[str, Any] | None = None
     notes: str | None = None
@@ -118,6 +136,7 @@ class ClientResponse(BaseModel):
         phone (str | None): Контактный телефон.
         email (str | None): Email адрес.
         inn (str | None): ИНН.
+        kpp / ogrn / ogrnip / bik / bank_*: Дубли из ``extra_data`` для форм.
         coordinates (dict | None): GPS координаты {lat, lng}.
         extra_data (dict): Дополнительные данные.
         notes (str | None): Заметки менеджера.
@@ -135,6 +154,13 @@ class ClientResponse(BaseModel):
     phone: str | None = None
     email: str | None = None
     inn: str | None = None
+    kpp: str | None = None
+    ogrn: str | None = None
+    ogrnip: str | None = None
+    bik: str | None = None
+    bank_account: str | None = None
+    corr_account: str | None = None
+    bank_name: str | None = None
     coordinates: dict[str, Any] | None = None
     extra_data: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None

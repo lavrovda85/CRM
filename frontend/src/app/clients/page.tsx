@@ -27,7 +27,21 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: "", client_type: "individual", phone: "", email: "" });
+  const [form, setForm] = useState({
+    name: "",
+    client_type: "individual",
+    phone: "",
+    email: "",
+    address: "",
+    primary_contact_name: "",
+    inn: "",
+    kpp: "",
+    ogrn: "",
+    bik: "",
+    bank_account: "",
+    corr_account: "",
+    bank_name: "",
+  });
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,9 +72,40 @@ export default function ClientsPage() {
     if (!form.name.trim() || creating) return;
     setCreating(true);
     try {
-      await createClient(form);
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        client_type: form.client_type,
+        phone: form.phone.trim() || undefined,
+        email: form.email.trim() || undefined,
+        address: form.address.trim() || undefined,
+        primary_contact_name: form.primary_contact_name.trim() || undefined,
+      };
+      if (form.client_type === "organization") {
+        payload.inn = form.inn.trim() || undefined;
+        payload.kpp = form.kpp.trim() || undefined;
+        payload.ogrn = form.ogrn.trim() || undefined;
+        payload.bik = form.bik.trim() || undefined;
+        payload.bank_account = form.bank_account.trim() || undefined;
+        payload.corr_account = form.corr_account.trim() || undefined;
+        payload.bank_name = form.bank_name.trim() || undefined;
+      }
+      await createClient(payload);
       setShowCreate(false);
-      setForm({ name: "", client_type: "individual", phone: "", email: "" });
+      setForm({
+        name: "",
+        client_type: "individual",
+        phone: "",
+        email: "",
+        address: "",
+        primary_contact_name: "",
+        inn: "",
+        kpp: "",
+        ogrn: "",
+        bik: "",
+        bank_account: "",
+        corr_account: "",
+        bank_name: "",
+      });
       load();
     } catch {
       /* silent */
@@ -214,6 +259,28 @@ export default function ClientsPage() {
                   <option value="organization">Организация</option>
                 </select>
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-surface-700">Адрес</label>
+                <textarea
+                  className="input min-h-[72px] resize-y"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="Город, улица, дом"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-surface-700">
+                  Контактное лицо
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  value={form.primary_contact_name}
+                  onChange={(e) => setForm({ ...form, primary_contact_name: e.target.value })}
+                  placeholder="ФИО"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-surface-700">Телефон</label>
@@ -236,6 +303,85 @@ export default function ClientsPage() {
                   />
                 </div>
               </div>
+              {form.client_type === "organization" && (
+                <div className="space-y-3 rounded-lg border border-surface-100 bg-surface-50/80 p-3">
+                  <p className="text-xs font-medium text-surface-600">Реквизиты организации</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">ИНН</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.inn}
+                        onChange={(e) => setForm({ ...form, inn: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">КПП</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.kpp}
+                        onChange={(e) => setForm({ ...form, kpp: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-surface-700">ОГРН / ОГРНИП</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={form.ogrn}
+                      onChange={(e) => setForm({ ...form, ogrn: e.target.value })}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">БИК</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.bik}
+                        onChange={(e) => setForm({ ...form, bik: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">Расчётный счёт</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.bank_account}
+                        onChange={(e) => setForm({ ...form, bank_account: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-surface-700">Корр. счёт</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={form.corr_account}
+                      onChange={(e) => setForm({ ...form, corr_account: e.target.value })}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-surface-700">Банк</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={form.bank_name}
+                      onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+                      placeholder="Наименование банка"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex gap-3">
               <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Отмена</button>
