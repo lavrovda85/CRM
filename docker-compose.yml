@@ -38,11 +38,13 @@ services:
       - "9001:9001"
     volumes:
       - miniodata:/data
+    # `mc ready local` requires a preconfigured alias; official image includes curl.
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
 
   # HTTP proxy on 10808: OpenAI hostnames -> VLESS (if OPENAI_VLESS_URI set), else direct.
   # Backend/Celery set OPENAI_HTTP_PROXY=http://xray-openai:10808 only when using this path.

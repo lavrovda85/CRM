@@ -126,9 +126,35 @@ function apiTimeoutSignal(
   return t;
 }
 
+/**
+ * Parse error response body: JSON (FastAPI), or plain text / HTML from proxies.
+ */
+function parseErrorResponseBody(raw: string): unknown {
+  const t = raw.trim();
+  if (!t) return {};
+  try {
+    return JSON.parse(t) as unknown;
+  } catch {
+    const head = t.slice(0, 96).toLowerCase();
+    if (head.startsWith("<!doctype") || head.startsWith("<html")) {
+      return {
+        detail:
+          "Сервер вернул HTML вместо JSON — бэкенд, скорее всего, недоступен. Проверьте, что API запущен и для фронта задан BACKEND_INTERNAL_URL (Docker: http://backend:8000).",
+      };
+    }
+    return { detail: t.slice(0, 500) };
+  }
+}
+
 /** Parse FastAPI / backend JSON error bodies into one user-facing string. */
-function extractApiErrorMessage(body: unknown): string {
-  if (!body || typeof body !== "object") return "Request failed";
+function extractApiErrorMessage(
+  body: unknown,
+  httpStatus?: number,
+  httpStatusText?: string,
+): string {
+  if (!body || typeof body !== "object") {
+    return httpFallbackMessage(httpStatus, httpStatusText);
+  }
   const b = body as Record<string, unknown>;
   const err = b.error;
   if (err && typeof err === "object" && "message" in err) {
@@ -148,7 +174,16 @@ function extractApiErrorMessage(body: unknown): string {
         return String(item);
       }
     });
-    return parts.filter(Boolean).join("; ") || "Request failed";
+    const joined = parts.filter(Boolean).join("; ");
+    if (joined) return joined;
+  }
+  return httpFallbackMessage(httpStatus, httpStatusText);
+}
+
+function httpFallbackMessage(status?: number, statusText?: string): string {
+  if (status != null) {
+    const st = `${status}${statusText ? ` ${statusText}` : ""}`.trim();
+    return st ? `Ошибка запроса (${st})` : "Request failed";
   }
   return "Request failed";
 }
@@ -359,8 +394,9 @@ class ApiClient {
     }
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const message = extractApiErrorMessage(body);
+      const text = await res.text();
+      const body = parseErrorResponseBody(text);
+      const message = extractApiErrorMessage(body, res.status, res.statusText);
       const code =
         body && typeof body === "object" && "error" in body
           ? (body as { error?: { code?: string } }).error?.code
@@ -440,8 +476,9 @@ class ApiClient {
     }
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const message = extractApiErrorMessage(body);
+      const text = await res.text();
+      const body = parseErrorResponseBody(text);
+      const message = extractApiErrorMessage(body, res.status, res.statusText);
       const code =
         body && typeof body === "object" && "error" in body
           ? (body as { error?: { code?: string } }).error?.code
