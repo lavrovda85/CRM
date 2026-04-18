@@ -156,12 +156,19 @@ services:
       - ${DOCKER_DNS_SECONDARY:-1.1.1.1}
     ports:
       - "8000:8000"
+    # Prefer Python over curl: some images / worker restarts make curl-based checks flaky.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
-      interval: 5s
-      timeout: 4s
-      retries: 20
-      start_period: 90s
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10).read()",
+        ]
+      interval: 10s
+      timeout: 12s
+      retries: 8
+      start_period: 120s
     volumes:
       - ./backend:/app
     depends_on:
