@@ -54,11 +54,18 @@ def _default_mcp_user() -> CurrentUser:
         return CurrentUser(
             sub=DEV_USER_ID,
             email="dev@hvac-crm.local",
+            preferred_username="dev",
             full_name="Dev Admin",
             roles=["admin", "manager", "engineer", "warehouse_manager", "accountant"],
             raw_token="",
         )
-    return CurrentUser(sub=DEV_USER_ID, roles=["admin"], raw_token="")
+    return CurrentUser(
+        sub=DEV_USER_ID,
+        email="",
+        preferred_username="",
+        roles=["admin"],
+        raw_token="",
+    )
 
 
 def current_mcp_user() -> CurrentUser:

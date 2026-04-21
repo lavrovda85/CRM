@@ -24,7 +24,7 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.pagination import PaginatedResponse
-from app.core.permissions import is_client_portal_only_task_scope
+from app.core.permissions import user_sees_all_company_tasks
 from app.core.security import CurrentUser
 from app.models import Document, Task, Tender, TenderComment, TenderChecklist, TenderChecklistItem, User
 from app.schemas.task import TaskResponse
@@ -232,7 +232,7 @@ async def get_tender(
         if TaskService.user_can_view_task(
             t,
             db_user.id,
-            client_portal_only=is_client_portal_only_task_scope(user),
+            user_sees_all=user_sees_all_company_tasks(user),
         )
     ]
 
@@ -581,7 +581,7 @@ async def link_tasks_to_tender(
         tender_id,
         list(body.task_ids),
         viewer_user_id=db_user.id,
-        client_portal_only=is_client_portal_only_task_scope(user),
+        user_sees_all=user_sees_all_company_tasks(user),
     )
 
     return await get_tender(tender_id, db, user)
@@ -660,7 +660,7 @@ async def update_tender_checklist_item(
                 Task.active_filter(),
                 TaskService.sql_tasks_row_visible(
                     db_user.id,
-                    client_portal_only=is_client_portal_only_task_scope(user),
+                    user_sees_all=user_sees_all_company_tasks(user),
                 ),
             )
             task_res = await db.execute(task_stmt)

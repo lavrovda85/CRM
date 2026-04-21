@@ -16,7 +16,7 @@ from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.dependencies import PaginationParams, get_crm_user_id, get_current_user, get_db
 from app.core.exceptions import NotFoundError, ValidationError, WorkflowTransitionError
 from app.core.pagination import PaginatedResponse
-from app.core.permissions import MANAGE_TASKS, is_client_portal_only_task_scope
+from app.core.permissions import MANAGE_TASKS, user_sees_all_company_tasks
 from app.core.security import CurrentUser
 from app.models import (
     Checklist,
@@ -50,7 +50,7 @@ def _task_row_visibility(user: CurrentUser, crm_uid: uuid.UUID):
     """SQL predicate: which task rows the current user may access."""
     return TaskService.sql_tasks_row_visible(
         crm_uid,
-        client_portal_only=is_client_portal_only_task_scope(user),
+        user_sees_all=user_sees_all_company_tasks(user),
     )
 
 

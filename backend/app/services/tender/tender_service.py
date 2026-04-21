@@ -253,7 +253,7 @@ async def link_tasks_to_tender(
     task_ids: list[uuid.UUID],
     *,
     viewer_user_id: uuid.UUID | None = None,
-    client_portal_only: bool = False,
+    user_sees_all: bool = False,
 ) -> int:
     """Set ``tender_id`` on tasks; all IDs must exist.
 
@@ -262,7 +262,7 @@ async def link_tasks_to_tender(
         tender_id: Target tender.
         task_ids: Task UUIDs to attach (duplicates ignored for update count).
         viewer_user_id: If set, only tasks visible to this user may be linked.
-        client_portal_only: If True with ``viewer_user_id``, use strict client task scope.
+        user_sees_all: If True (admin), any task id in the company may be linked.
 
     Returns:
         Number of tasks updated.
@@ -284,7 +284,7 @@ async def link_tasks_to_tender(
         stmt = stmt.where(
             TaskService.sql_tasks_row_visible(
                 viewer_user_id,
-                client_portal_only=client_portal_only,
+                user_sees_all=user_sees_all,
             )
         )
     res = await session.execute(stmt)

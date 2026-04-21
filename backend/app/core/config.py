@@ -318,6 +318,21 @@ class Settings(BaseSettings):
     testing_company_slug: str = Field(default="spec-stroy", alias="TESTING_COMPANY_SLUG")
     dev_admin_user_ids: list[str] = Field(default_factory=list, alias="DEV_ADMIN_USER_IDS")
     dev_admin_emails: list[str] = Field(default_factory=list, alias="DEV_ADMIN_EMAILS")
+    task_full_access_accounts: list[str] = Field(
+        default_factory=list,
+        alias="TASK_FULL_ACCESS_ACCOUNTS",
+        description=(
+            "Who may list all company tasks: JWT email, preferred_username, or sub (UUID), "
+            "plus DEV_ADMIN_EMAILS / DEV_ADMIN_USER_IDS. Comma-separated or JSON array; "
+            "case-insensitive. Not keyed on realm roles."
+        ),
+    )
+
+    @field_validator("task_full_access_accounts", mode="before")
+    @classmethod
+    def parse_task_full_access_accounts(cls, v: str | list[str] | None) -> list[str]:
+        """Parse like dev admin lists (CSV or JSON array)."""
+        return cls.parse_dev_admin_lists(v)
 
     @field_validator("dev_admin_user_ids", "dev_admin_emails", mode="before")
     @classmethod

@@ -36,6 +36,7 @@ class CurrentUser:
     Атрибуты:
         sub: Keycloak subject (user ID).
         email: Email пользователя.
+        preferred_username: Имя учётной записи (Keycloak ``preferred_username``).
         full_name: Полное имя.
         roles: Список ролей из realm_access.
         raw_token: Исходный JWT токен.
@@ -43,6 +44,7 @@ class CurrentUser:
 
     sub: str
     email: str = ""
+    preferred_username: str = ""
     full_name: str = ""
     roles: list[str] = field(default_factory=list)
     raw_token: str = ""
@@ -51,6 +53,7 @@ class CurrentUser:
 _DEV_USER = CurrentUser(
     sub=DEV_USER_ID,
     email="dev@hvac-crm.local",
+    preferred_username="dev",
     full_name="Dev Admin",
     roles=["admin", "manager", "engineer", "warehouse_manager", "accountant"],
     raw_token="",
@@ -136,6 +139,9 @@ async def authenticate_bearer_token(token: str, settings: Settings) -> CurrentUs
             return CurrentUser(
                 sub=str(dev_payload.get("sub", "")),
                 email=str(dev_payload.get("email", "")),
+                preferred_username=str(
+                    dev_payload.get("preferred_username", "") or dev_payload.get("username", "")
+                ),
                 full_name=str(dev_payload.get("name", "")),
                 roles=realm_roles,
                 raw_token=token,
@@ -201,10 +207,12 @@ async def authenticate_bearer_token(token: str, settings: Settings) -> CurrentUs
         ) from exc
 
     realm_roles: list[str] = payload.get("realm_access", {}).get("roles", [])
+    pref = payload.get("preferred_username") or payload.get("username") or ""
     return CurrentUser(
-        sub=payload.get("sub", ""),
-        email=payload.get("email", ""),
-        full_name=payload.get("name", ""),
+        sub=str(payload.get("sub", "") or ""),
+        email=str(payload.get("email", "") or ""),
+        preferred_username=str(pref or ""),
+        full_name=str(payload.get("name", "") or ""),
         roles=realm_roles,
         raw_token=token,
     )

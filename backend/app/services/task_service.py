@@ -10,14 +10,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, delete, func, insert, or_, select
+from sqlalchemy import Text, cast, delete, func, insert, or_, select, true as sql_true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.task import (
     ALLOWED_TASK_VISIBILITIES,
-    TASK_VISIBILITY_COMPANY,
     TASK_VISIBILITY_PARTICIPANTS,
     Task,
     task_co_assignees,
@@ -72,24 +71,8 @@ class TaskService:
         )
 
     @staticmethod
-    def _participant_access_clause(viewer_id: uuid.UUID):
-        """SQL OR: user is creator, requester, assignee, co-assignee, or observer."""
-        co_exists = TaskService._co_assignee_exists_clause(viewer_id)
-        obs_exists = TaskService._observer_exists_clause(viewer_id)
-        return or_(
-            Task.created_by == viewer_id,
-            Task.requested_by == viewer_id,
-            Task.assigned_to == viewer_id,
-            co_exists,
-            obs_exists,
-        )
-
-    @staticmethod
-    def sql_client_portal_task_scope(viewer_id: uuid.UUID):
-        """Tasks visible to external ``client`` users only (no company-wide bypass).
-
-        Includes creator, primary assignee, co-assignee, and observer — not requester-only.
-        """
+    def sql_strict_participant_task_scope(viewer_id: uuid.UUID):
+        """Non-admin scope: creator, primary assignee, co-assignee, or observer."""
         return or_(
             Task.created_by == viewer_id,
             Task.assigned_to == viewer_id,
@@ -98,56 +81,33 @@ class TaskService:
         )
 
     @staticmethod
-    def sql_tasks_row_visible(viewer_id: uuid.UUID, *, client_portal_only: bool):
-        """SQL predicate for one task row: staff visibility rules or strict client scope."""
-        if client_portal_only:
-            return TaskService.sql_client_portal_task_scope(viewer_id)
-        return TaskService.sql_task_visible_to_user(viewer_id)
-
-    @staticmethod
-    def sql_task_visible_to_user(viewer_id: uuid.UUID):
-        """Restrict rows to tasks the viewer may see (company-wide vs participants-only)."""
-        pc = TaskService._participant_access_clause(viewer_id)
-        return or_(
-            Task.visibility == TASK_VISIBILITY_COMPANY,
-            Task.visibility.is_(None),
-            and_(Task.visibility == TASK_VISIBILITY_PARTICIPANTS, pc),
-        )
+    def sql_tasks_row_visible(viewer_id: uuid.UUID, *, user_sees_all: bool):
+        """SQL predicate: configured accounts unrestricted; others participant-only."""
+        if user_sees_all:
+            return sql_true()
+        return TaskService.sql_strict_participant_task_scope(viewer_id)
 
     @staticmethod
     def user_can_view_task(
         task: Task,
         viewer_id: uuid.UUID,
         *,
-        client_portal_only: bool = False,
+        user_sees_all: bool = False,
     ) -> bool:
         """Return True if ``viewer_id`` may see this task (ORM row, relations optional).
 
         Args:
             task: Loaded task (co_assignees / observers optional).
             viewer_id: CRM ``users.id`` of the viewer.
-            client_portal_only: If True, ignore company-wide visibility — only creator,
-                assignee, co-assignee, or observer.
+            user_sees_all: If True (admin), the task is visible regardless of involvement.
         """
-        if client_portal_only:
-            if task.created_by == viewer_id or task.assigned_to == viewer_id:
-                return True
-            co = getattr(task, "co_assignees", None) or []
-            obs = getattr(task, "observers", None) or []
-            return any(u.id == viewer_id for u in co) or any(u.id == viewer_id for u in obs)
-
-        vis = task.visibility or TASK_VISIBILITY_COMPANY
-        if vis != TASK_VISIBILITY_PARTICIPANTS:
+        if user_sees_all:
             return True
-        if task.created_by == viewer_id or task.requested_by == viewer_id or task.assigned_to == viewer_id:
+        if task.created_by == viewer_id or task.assigned_to == viewer_id:
             return True
         co = getattr(task, "co_assignees", None) or []
         obs = getattr(task, "observers", None) or []
-        if any(u.id == viewer_id for u in co):
-            return True
-        if any(u.id == viewer_id for u in obs):
-            return True
-        return False
+        return any(u.id == viewer_id for u in co) or any(u.id == viewer_id for u in obs)
 
     @staticmethod
     async def set_co_assignees(
@@ -262,7 +222,7 @@ class TaskService:
         *,
         only_active: bool = True,
         viewer_user_id: uuid.UUID | None = None,
-        client_portal_only: bool = False,
+        user_sees_all: bool = False,
     ) -> Task:
         """Retrieve a task by ID with eager-loaded relations.
 
@@ -271,7 +231,7 @@ class TaskService:
             task_id (uuid.UUID): UUID задачи.
             only_active (bool): If True, exclude soft-deleted tasks (default).
             viewer_user_id: If set, enforce task visibility for this user.
-            client_portal_only: If True with ``viewer_user_id``, use strict client scope.
+            user_sees_all: If True (allowlisted JWT identity), no participant filter.
 
         Returns:
             Task: Найденный объект задачи.
@@ -299,7 +259,7 @@ class TaskService:
             stmt = stmt.where(
                 TaskService.sql_tasks_row_visible(
                     viewer_user_id,
-                    client_portal_only=client_portal_only,
+                    user_sees_all=user_sees_all,
                 )
             )
         result = await db.execute(stmt)
@@ -322,7 +282,7 @@ class TaskService:
                 board_id (UUID), priority (str), limit (int), offset (int),
                 involves_user (UUID): primary assignee OR co-assignee.
                 viewer_user_id (UUID): Enforce visibility for this user (recommended for API).
-                client_portal_only (bool): If True, use strict client scope with ``viewer_user_id``.
+                user_sees_all (bool): If True, admin — no participant filter with ``viewer_user_id``.
 
         Returns:
             list[Task]: Список задач, отсортированных по дате создания (desc).
@@ -342,8 +302,8 @@ class TaskService:
 
         if vu := filters.get("viewer_user_id"):
             vuid = vu if isinstance(vu, uuid.UUID) else uuid.UUID(str(vu))
-            cp = bool(filters.get("client_portal_only"))
-            stmt = stmt.where(TaskService.sql_tasks_row_visible(vuid, client_portal_only=cp))
+            usa = bool(filters.get("user_sees_all"))
+            stmt = stmt.where(TaskService.sql_tasks_row_visible(vuid, user_sees_all=usa))
 
         if status := filters.get("status"):
             stmt = stmt.where(Task.status == status)
@@ -402,7 +362,7 @@ class TaskService:
         involves_user: uuid.UUID | None = None,
         client_id: uuid.UUID | None = None,
         viewer_user_id: uuid.UUID | None = None,
-        client_portal_only: bool = False,
+        user_sees_all: bool = False,
     ) -> list[Task]:
         """Search tasks by substring in title, description, or JSON ``custom_fields`` (ILIKE).
 
@@ -415,7 +375,7 @@ class TaskService:
             involves_user: Optional filter — primary assignee OR co-assignee.
             client_id: Optional client filter.
             viewer_user_id: If set, enforce task visibility for this user.
-            client_portal_only: If True with ``viewer_user_id``, use strict client scope.
+            user_sees_all: If True (allowlisted JWT identity), no participant filter.
 
         Returns:
             Matching tasks, newest first.
@@ -453,7 +413,7 @@ class TaskService:
             stmt = stmt.where(
                 TaskService.sql_tasks_row_visible(
                     viewer_user_id,
-                    client_portal_only=client_portal_only,
+                    user_sees_all=user_sees_all,
                 )
             )
         if status:

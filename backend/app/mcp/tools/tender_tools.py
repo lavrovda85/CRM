@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundError, ValidationError
-from app.core.permissions import is_client_portal_only_task_scope
+from app.core.permissions import user_sees_all_company_tasks
 from app.mcp.server import mcp
 from app.schemas.document import DocumentResponse
 from app.schemas.task import TaskResponse
@@ -248,7 +248,7 @@ async def link_tasks_to_tender(
             tid,
             parsed,
             viewer_user_id=viewer,
-            client_portal_only=is_client_portal_only_task_scope(current_mcp_user()),
+            user_sees_all=user_sees_all_company_tasks(current_mcp_user()),
         )
         await session.commit()
 

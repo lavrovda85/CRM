@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.core.dependencies import PaginationParams, get_crm_user_id, get_current_user, get_db
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse
-from app.core.permissions import is_client_portal_only_task_scope
+from app.core.permissions import user_sees_all_company_tasks
 from app.core.security import CurrentUser
 from app.models import Board, Task
 from app.schemas.board import (
@@ -146,7 +146,7 @@ async def get_board(
         if not TaskService.user_can_view_task(
             task,
             crm_uid,
-            client_portal_only=is_client_portal_only_task_scope(user),
+            user_sees_all=user_sees_all_company_tasks(user),
         ):
             continue
         tasks_by_status[task.status].append(

@@ -13,6 +13,6 @@ os.environ.setdefault(
     ),
 )
 # Avoid empty-string JSON parse failures when .env has blank complex fields.
-for _k in ("DEV_ADMIN_EMAILS", "DEV_ADMIN_USER_IDS"):
+for _k in ("DEV_ADMIN_EMAILS", "DEV_ADMIN_USER_IDS", "TASK_FULL_ACCESS_ACCOUNTS"):
     if not (os.environ.get(_k) or "").strip():
         os.environ[_k] = "[]"
