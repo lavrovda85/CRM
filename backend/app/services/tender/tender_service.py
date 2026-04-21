@@ -253,6 +253,7 @@ async def link_tasks_to_tender(
     task_ids: list[uuid.UUID],
     *,
     viewer_user_id: uuid.UUID | None = None,
+    client_portal_only: bool = False,
 ) -> int:
     """Set ``tender_id`` on tasks; all IDs must exist.
 
@@ -261,6 +262,7 @@ async def link_tasks_to_tender(
         tender_id: Target tender.
         task_ids: Task UUIDs to attach (duplicates ignored for update count).
         viewer_user_id: If set, only tasks visible to this user may be linked.
+        client_portal_only: If True with ``viewer_user_id``, use strict client task scope.
 
     Returns:
         Number of tasks updated.
@@ -279,7 +281,12 @@ async def link_tasks_to_tender(
     unique_ids = list(dict.fromkeys(task_ids))
     stmt = select(Task.id).where(Task.id.in_(unique_ids), Task.active_filter())
     if viewer_user_id is not None:
-        stmt = stmt.where(TaskService.sql_task_visible_to_user(viewer_user_id))
+        stmt = stmt.where(
+            TaskService.sql_tasks_row_visible(
+                viewer_user_id,
+                client_portal_only=client_portal_only,
+            )
+        )
     res = await session.execute(stmt)
     found = {row for row in res.scalars().all()}
     missing = [tid for tid in unique_ids if tid not in found]

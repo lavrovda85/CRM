@@ -24,6 +24,7 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.pagination import PaginatedResponse
+from app.core.permissions import is_client_portal_only_task_scope
 from app.core.security import CurrentUser
 from app.models import Document, Task, Tender, TenderComment, TenderChecklist, TenderChecklistItem, User
 from app.schemas.task import TaskResponse
@@ -225,7 +226,15 @@ async def get_tender(
         raise NotFoundError("Tender", str(tender_id))
 
     db_user = await _resolve_db_user(db, user)
-    visible_tasks = [t for t in tender.tasks if TaskService.user_can_view_task(t, db_user.id)]
+    visible_tasks = [
+        t
+        for t in tender.tasks
+        if TaskService.user_can_view_task(
+            t,
+            db_user.id,
+            client_portal_only=is_client_portal_only_task_scope(user),
+        )
+    ]
 
     tender_data = TenderResponse.model_validate(tender).model_dump()
     tender_data["tasks"] = [TaskResponse.model_validate(t) for t in visible_tasks]
@@ -568,7 +577,11 @@ async def link_tasks_to_tender(
     """
     db_user = await _resolve_db_user(db, user)
     await tender_service.link_tasks_to_tender(
-        db, tender_id, list(body.task_ids), viewer_user_id=db_user.id
+        db,
+        tender_id,
+        list(body.task_ids),
+        viewer_user_id=db_user.id,
+        client_portal_only=is_client_portal_only_task_scope(user),
     )
 
     return await get_tender(tender_id, db, user)
@@ -645,7 +658,10 @@ async def update_tender_checklist_item(
                 Task.id == task_id,
                 Task.tender_id == tender_id,
                 Task.active_filter(),
-                TaskService.sql_task_visible_to_user(db_user.id),
+                TaskService.sql_tasks_row_visible(
+                    db_user.id,
+                    client_portal_only=is_client_portal_only_task_scope(user),
+                ),
             )
             task_res = await db.execute(task_stmt)
             if task_res.scalar_one_or_none() is None:

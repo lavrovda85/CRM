@@ -16,7 +16,7 @@ from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.dependencies import PaginationParams, get_crm_user_id, get_current_user, get_db
 from app.core.exceptions import NotFoundError, ValidationError, WorkflowTransitionError
 from app.core.pagination import PaginatedResponse
-from app.core.permissions import MANAGE_TASKS
+from app.core.permissions import MANAGE_TASKS, is_client_portal_only_task_scope
 from app.core.security import CurrentUser
 from app.models import (
     Checklist,
@@ -44,6 +44,14 @@ from app.schemas.task import (
 router = APIRouter(prefix="/tasks")
 
 _TERMINAL_TASK_STATUSES = ("done", "completed", "closed")
+
+
+def _task_row_visibility(user: CurrentUser, crm_uid: uuid.UUID):
+    """SQL predicate: which task rows the current user may access."""
+    return TaskService.sql_tasks_row_visible(
+        crm_uid,
+        client_portal_only=is_client_portal_only_task_scope(user),
+    )
 
 
 def _tasks_search_clause(q: str | None):
@@ -255,12 +263,12 @@ async def list_tasks(
     query = select(Task).options(*_task_response_load_options()).where(
         Task.active_filter(),
         Task.company_id == ctx.company_id,
-        TaskService.sql_task_visible_to_user(crm_uid),
+        _task_row_visibility(user, crm_uid),
     )
     count_query = select(func.count(Task.id)).where(
         Task.active_filter(),
         Task.company_id == ctx.company_id,
-        TaskService.sql_task_visible_to_user(crm_uid),
+        _task_row_visibility(user, crm_uid),
     )
 
     if status:
@@ -388,7 +396,7 @@ async def get_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task = result.scalar_one_or_none()
@@ -402,6 +410,7 @@ async def update_task(
     task_id: uuid.UUID,
     body: TaskUpdate,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
     crm_uid: uuid.UUID = Depends(get_crm_user_id),
     ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> TaskResponse:
@@ -426,7 +435,7 @@ async def update_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task = result.scalar_one_or_none()
@@ -506,7 +515,7 @@ async def update_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task_for_api = loaded.scalar_one_or_none()
@@ -560,6 +569,7 @@ async def transition_task(
     task_id: uuid.UUID,
     body: TaskStatusTransition,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
     crm_uid: uuid.UUID = Depends(get_crm_user_id),
     ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> TaskResponse:
@@ -588,7 +598,7 @@ async def transition_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task = result.scalar_one_or_none()
@@ -675,7 +685,7 @@ async def transition_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task_for_api = loaded.scalar_one()
@@ -722,7 +732,7 @@ async def toggle_checklist_item(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     if tchk.scalar_one_or_none() is None:
@@ -775,6 +785,7 @@ async def create_comment(
     task_id: uuid.UUID,
     body: CommentCreate,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
     crm_uid: uuid.UUID = Depends(get_crm_user_id),
     ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> CommentResponse:
@@ -796,7 +807,7 @@ async def create_comment(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     task = result.scalar_one_or_none()
@@ -835,6 +846,7 @@ async def create_comment(
 async def delete_task(
     task_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
     crm_uid: uuid.UUID = Depends(get_crm_user_id),
     ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> None:
@@ -850,7 +862,7 @@ async def delete_task(
             Task.id == task_id,
             Task.active_filter(),
             Task.company_id == ctx.company_id,
-            TaskService.sql_task_visible_to_user(crm_uid),
+            _task_row_visibility(user, crm_uid),
         )
     )
     if chk.scalar_one_or_none() is None:

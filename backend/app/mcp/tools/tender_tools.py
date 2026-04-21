@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 
 from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.permissions import is_client_portal_only_task_scope
 from app.mcp.server import mcp
 from app.schemas.document import DocumentResponse
 from app.schemas.task import TaskResponse
 from app.schemas.tender import TenderChecklistResponse, TenderCommentResponse, TenderResponse
-from app.mcp.actor_context import actor_dict_for_service, current_mcp_user_sub
+from app.mcp.actor_context import actor_dict_for_service, current_mcp_user, current_mcp_user_sub
 from app.services import company_service
 from app.services.tender import tender_pipeline, tender_service
 from app.services.tender.tender_analysis_queue import schedule_tender_analysis
@@ -243,7 +244,11 @@ async def link_tasks_to_tender(
     viewer = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
         linked = await tender_service.link_tasks_to_tender(
-            session, tid, parsed, viewer_user_id=viewer
+            session,
+            tid,
+            parsed,
+            viewer_user_id=viewer,
+            client_portal_only=is_client_portal_only_task_scope(current_mcp_user()),
         )
         await session.commit()
 

@@ -36,6 +36,12 @@ from app.models.checklist import Checklist
 from app.models.task import Task
 from app.models.task_status import TaskStatusHistory
 from app.services.workflow_engine import WorkflowEngine
+from app.core.permissions import is_client_portal_only_task_scope
+
+
+def _mcp_client_portal_tasks() -> bool:
+    """Whether the MCP actor uses strict client task visibility."""
+    return is_client_portal_only_task_scope(current_mcp_user())
 
 
 def _resolve_create_task_title(title: str | None, name: str | None) -> str:
@@ -549,7 +555,7 @@ async def create_task(
         await db.refresh(task)
         # `TaskResponse` uses `assignee` and `template` relations; make sure they're
         # eagerly loaded to avoid `MissingGreenlet` during Pydantic validation.
-        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=actor["id"])
+        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=actor["id"], client_portal_only=_mcp_client_portal_tasks())
         await TaskNotificationService.notify_after_task_created(db, task_for_api, actor["id"])
         return TaskResponse.model_validate(task_for_api).model_dump(mode="json")
 
@@ -716,7 +722,7 @@ async def bulk_create_tasks(
                         payload["due_date"] = due_dt
                     task = await TaskService.create_task(db, payload, actor)
                 await db.flush()
-                row_loaded = await TaskService.get_task(db, task.id, viewer_user_id=actor["id"])
+                row_loaded = await TaskService.get_task(db, task.id, viewer_user_id=actor["id"], client_portal_only=_mcp_client_portal_tasks())
                 await TaskNotificationService.notify_after_task_created(db, row_loaded, actor["id"])
                 created.append({"index": idx, "id": str(task.id), "title": task.title})
             except HVACBaseError as exc:
@@ -864,7 +870,7 @@ async def update_task(task_id: str, fields: dict) -> dict:
                     current.append(resolved)
                 normalized["observer_ids"] = current
 
-        prev_task = await TaskService.get_task(db, tid, viewer_user_id=_viewer)
+        prev_task = await TaskService.get_task(db, tid, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         prev_assignee = prev_task.assigned_to
         actor = actor_dict_for_service()
 
@@ -872,7 +878,7 @@ async def update_task(task_id: str, fields: dict) -> dict:
         # messages for changes performed via MCP.
         task = await TaskService.update_task(db, tid, normalized, actor)
 
-        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=_viewer)
+        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         actor_id = actor["id"]
 
         if "assigned_to" in normalized and prev_assignee != task_for_api.assigned_to:
@@ -923,7 +929,7 @@ async def assign_task_to_user(task_id: str, assignee_query: str) -> dict:
 
     _viewer = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as db:
-        prev_task = await TaskService.get_task(db, tid, viewer_user_id=_viewer)
+        prev_task = await TaskService.get_task(db, tid, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         prev_assignee = prev_task.assigned_to
         users = await _find_active_users_by_query(db, query, limit=25)
         if not users:
@@ -950,7 +956,7 @@ async def assign_task_to_user(task_id: str, assignee_query: str) -> dict:
         chosen = users[0]
         actor = actor_dict_for_service()
         task = await TaskService.update_task(db, tid, {"assigned_to": chosen.id}, actor)
-        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=_viewer)
+        task_for_api = await TaskService.get_task(db, task.id, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
 
         if prev_assignee != task_for_api.assigned_to:
             await TaskNotificationService.notify_assignee_change(
@@ -999,7 +1005,7 @@ async def transition_task(
     _viewer = uuid.UUID(current_mcp_user_sub())
 
     async with async_session_factory() as db:
-        task = await TaskService.get_task(db, tid, viewer_user_id=_viewer)
+        task = await TaskService.get_task(db, tid, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         from_status = task.status
 
         # Используем WorkflowEngine, но поддерживаем обратные переходы,
@@ -1042,7 +1048,7 @@ async def transition_task(
             await db.flush()
 
         await db.commit()
-        updated = await TaskService.get_task(db, tid, viewer_user_id=_viewer)
+        updated = await TaskService.get_task(db, tid, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         await TaskNotificationService.notify_observers_status_changed(
             db,
             updated,
@@ -1098,6 +1104,7 @@ async def list_tasks(
         "client_id": uuid.UUID(client_id) if client_id else None,
         "limit": limit,
         "viewer_user_id": uuid.UUID(current_mcp_user_sub()),
+        "client_portal_only": _mcp_client_portal_tasks(),
     }
     if involves_user and str(involves_user).strip():
         filters["involves_user"] = uuid.UUID(str(involves_user).strip())
@@ -1169,6 +1176,7 @@ async def search_tasks(
             involves_user=involves_uuid,
             client_id=client_uuid,
             viewer_user_id=uuid.UUID(current_mcp_user_sub()),
+            client_portal_only=_mcp_client_portal_tasks(),
         )
         return [TaskResponse.model_validate(t).model_dump(mode="json") for t in tasks]
 
@@ -1220,7 +1228,10 @@ async def get_task_detail(task_id: str) -> dict:
             .where(
                 Task.id == tid,
                 Task.active_filter(),
-                TaskService.sql_task_visible_to_user(uuid.UUID(current_mcp_user_sub())),
+                TaskService.sql_tasks_row_visible(
+                    uuid.UUID(current_mcp_user_sub()),
+                    client_portal_only=_mcp_client_portal_tasks(),
+                ),
             )
         )
         task = result.scalar_one_or_none()
@@ -1245,7 +1256,7 @@ async def delete_task(task_id: str) -> dict:
         raise ValidationError("task_id", "Must be a valid UUID; use search_tasks to find id") from exc
     _viewer = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as db:
-        await TaskService.get_task(db, tid, viewer_user_id=_viewer)
+        await TaskService.get_task(db, tid, viewer_user_id=_viewer, client_portal_only=_mcp_client_portal_tasks())
         await TaskService.delete_task(db, tid, actor_dict_for_service())
         await db.commit()
         return {"deleted": True, "id": task_id, "soft": True}
@@ -1287,6 +1298,7 @@ async def bulk_delete_tasks(
         "status": status,
         "limit": lim,
         "viewer_user_id": uuid.UUID(current_mcp_user_sub()),
+        "client_portal_only": _mcp_client_portal_tasks(),
     }
     if client_id and str(client_id).strip():
         try:
