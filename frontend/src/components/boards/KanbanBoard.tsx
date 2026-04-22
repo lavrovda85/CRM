@@ -113,17 +113,10 @@ function DefaultCard({
 /* ------------------------------------------------------------------ */
 
 /**
- * Универсальная канбан-доска с drag-and-drop и адаптивной горизонтальной прокруткой.
+ * Kanban board with drag-and-drop.
  *
- * Args:
- *     columns: Массив определений колонок.
- *     cards: Объект, где ключ — ID колонки, значение — массив карточек.
- *     onCardMove: Callback при перемещении карточки.
- *     onCardClick: Callback при клике по карточке.
- *     renderCard: Кастомная функция рендеринга карточки.
- *
- * Returns:
- *     JSX-элемент канбан-доски.
+ * Desktop: columns share the viewport width (no fixed column width, no horizontal board scroll).
+ * Mobile: one column per row (vertical stack).
  */
 export function KanbanBoard({
   columns,
@@ -141,16 +134,16 @@ export function KanbanBoard({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin">
+      <div className="flex flex-col gap-4 pb-4 md:h-[min(70vh,calc(100vh-14rem))] md:flex-row md:w-full md:min-w-0 md:overflow-hidden md:gap-3">
         {columns.map((col) => {
           const colCards = cards[col.id] ?? [];
           return (
             <div
               key={col.id}
-              className="flex-shrink-0 w-72 snap-start"
+              className="flex min-h-0 w-full min-w-0 shrink-0 flex-col md:h-full md:flex-1"
             >
               {/* Column header */}
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex shrink-0 items-center gap-2">
                 <div
                   className="h-2.5 w-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: col.color }}
@@ -168,7 +161,7 @@ export function KanbanBoard({
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
-                      "min-h-[200px] space-y-2 rounded-xl p-2 transition-colors",
+                      "min-h-[200px] flex-1 space-y-2 overflow-y-auto rounded-xl p-2 transition-colors md:min-h-0",
                       snapshot.isDraggingOver ? "bg-primary-50/60" : "bg-surface-50/50",
                     )}
                   >

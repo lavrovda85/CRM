@@ -70,6 +70,13 @@ def _overdue_query_active(overdue: str | None) -> bool:
     return overdue.lower() in ("1", "true", "yes", "on")
 
 
+def _parse_csv_param(raw: str | None) -> list[str]:
+    """Split comma-separated non-empty tokens (status filters, etc.)."""
+    if not raw or not str(raw).strip():
+        return []
+    return [x.strip() for x in str(raw).split(",") if x.strip()]
+
+
 def _merge_geo_into_custom_fields(
     custom_fields: dict | None,
     *,
@@ -221,6 +228,14 @@ async def create_task(
 @router.get("", response_model=PaginatedResponse[TaskResponse])
 async def list_tasks(
     status: str | None = Query(default=None, description="Filter by status"),
+    status_in: str | None = Query(
+        default=None,
+        description="Comma-separated statuses (OR). If set, overrides single ``status``.",
+    ),
+    status_not_in: str | None = Query(
+        default=None,
+        description="Comma-separated statuses to exclude (e.g. hide closed from main board).",
+    ),
     assigned_to: uuid.UUID | None = Query(default=None, description="Filter by primary assignee"),
     involves_user: uuid.UUID | None = Query(
         default=None,
@@ -233,6 +248,14 @@ async def list_tasks(
     overdue: str | None = Query(
         default=None,
         description="If set (e.g. 1/true), only tasks past due_date and not in a terminal status",
+    ),
+    due_after: datetime | None = Query(default=None, description="Tasks with due_date >= this (UTC)"),
+    due_before: datetime | None = Query(default=None, description="Tasks with due_date <= this (UTC)"),
+    updated_after: datetime | None = Query(default=None, description="Tasks with updated_at >= this (UTC)"),
+    updated_before: datetime | None = Query(default=None, description="Tasks with updated_at <= this (UTC)"),
+    order: str | None = Query(
+        default="created_desc",
+        description="Sort: created_desc (default) or updated_desc",
     ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -271,9 +294,19 @@ async def list_tasks(
         _task_row_visibility(user, crm_uid),
     )
 
-    if status:
+    status_list = _parse_csv_param(status_in)
+    if status_list:
+        query = query.where(Task.status.in_(status_list))
+        count_query = count_query.where(Task.status.in_(status_list))
+    elif status:
         query = query.where(Task.status == status)
         count_query = count_query.where(Task.status == status)
+
+    status_excluded = _parse_csv_param(status_not_in)
+    if status_excluded:
+        query = query.where(Task.status.notin_(status_excluded))
+        count_query = count_query.where(Task.status.notin_(status_excluded))
+
     if involves_user:
         from app.models.task import task_co_assignees, task_observers
 
@@ -327,9 +360,25 @@ async def list_tasks(
         query = query.where(*overdue_cond)
         count_query = count_query.where(*overdue_cond)
 
+    if due_after is not None:
+        query = query.where(Task.due_date.isnot(None), Task.due_date >= due_after)
+        count_query = count_query.where(Task.due_date.isnot(None), Task.due_date >= due_after)
+    if due_before is not None:
+        query = query.where(Task.due_date.isnot(None), Task.due_date <= due_before)
+        count_query = count_query.where(Task.due_date.isnot(None), Task.due_date <= due_before)
+    if updated_after is not None:
+        query = query.where(Task.updated_at >= updated_after)
+        count_query = count_query.where(Task.updated_at >= updated_after)
+    if updated_before is not None:
+        query = query.where(Task.updated_at <= updated_before)
+        count_query = count_query.where(Task.updated_at <= updated_before)
+
+    order_norm = (order or "created_desc").strip().lower()
+    order_col = Task.updated_at.desc() if order_norm == "updated_desc" else Task.created_at.desc()
+
     total = (await db.execute(count_query)).scalar() or 0
     result = await db.execute(
-        query.order_by(Task.created_at.desc())
+        query.order_by(order_col)
         .offset(pagination.offset)
         .limit(pagination.limit)
     )

@@ -15,6 +15,7 @@ import {
   Trash2,
   Search,
   Table2,
+  History,
 } from "lucide-react";
 import Link from "next/link";
 import { flushSync } from "react-dom";
@@ -46,6 +47,7 @@ import {
   type MonthCalendarCellMode,
 } from "@/components/boards/TasksMonthCalendar";
 import { WorkScheduleTable } from "@/components/boards/WorkScheduleTable";
+import { TasksHistoryView } from "@/components/tasks/TasksHistoryView";
 
 const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "new", title: "Новая", color: "#94a3b8" },
@@ -53,14 +55,51 @@ const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "in_progress", title: "В работе", color: "#3b82f6" },
   { id: "testing", title: "Согласование", color: "#fbbf24" },
   { id: "done", title: "Выполнено", color: "#22c55e" },
-  { id: "closed", title: "Закрыта", color: "#9ca3af" },
 ];
 
 const KANBAN_IDS = new Set(KANBAN_COLUMNS.map((c) => c.id));
 
+const TASKS_KANBAN_STATUS_FILTER_KEY = "tasks_kanban_status_filter";
+
+/** Map board column filter keys to API status values (legacy rows use alternate status codes). */
+const COLUMN_FILTER_TO_STATUSES: Record<string, string[]> = {
+  new: ["new"],
+  dispatched: ["dispatched"],
+  in_progress: ["in_progress"],
+  testing: ["testing", "photo_report"],
+  done: ["done", "act_signing"],
+};
+
+function columnFilterToStatusInCsv(keys: string[]): string {
+  const acc = new Set<string>();
+  for (const k of keys) {
+    for (const s of COLUMN_FILTER_TO_STATUSES[k] ?? [k]) {
+      acc.add(s);
+    }
+  }
+  return [...acc].join(",");
+}
+
+function buildMainTasksFetchParams(
+  filters: Record<string, string>,
+  kanbanStatusKeys: string[],
+): Record<string, unknown> {
+  const { status: _ignored, ...rest } = filters;
+  const params: Record<string, unknown> = {
+    ...rest,
+    limit: 200,
+    status_not_in: "closed,completed",
+  };
+  if (kanbanStatusKeys.length > 0) {
+    params.status_in = columnFilterToStatusInCsv(kanbanStatusKeys);
+  }
+  return params;
+}
+
 /** Legacy tasks still in DB as `act_signing` are shown in the «Выполнено» column. */
 function kanbanBoardColumnId(status: string): string {
   if (status === "act_signing") return "done";
+  if (status === "photo_report") return "testing";
   return status;
 }
 
@@ -102,21 +141,29 @@ const TASKS_FILTERS_SESSION_KEY     = "tasks_last_filters";
 const TASKS_FILTERS_OPEN_SESSION_KEY = "tasks_filters_open";
 const TASKS_STAFF_IDS_SESSION_KEY   = "tasks_timeline_staff_ids";
 
-/** Initial filter object: URL params override; saved `q` from session is kept when URL sets status/overdue only. */
+/** Initial filter object: URL params override; saved `q` from session is kept when URL sets overdue/q only. */
 function getInitialTaskFilters(searchParams: URLSearchParams): Record<string, string> {
-  const urlStatus = searchParams.get("status");
   const urlOverdue = searchParams.get("overdue");
   const urlQ = searchParams.get("q");
   const fromSession = sessionGet(TASKS_FILTERS_SESSION_KEY, {} as Record<string, string>);
-  if (urlStatus || urlOverdue || urlQ) {
+  if (urlOverdue || urlQ) {
     const f: Record<string, string> = {};
-    if (urlStatus) f.status = urlStatus;
     if (urlOverdue) f.overdue = urlOverdue;
     if (urlQ) f.q = urlQ;
     else if (fromSession.q) f.q = fromSession.q;
     return f;
   }
-  return { ...fromSession };
+  const { status: _drop, ...rest } = fromSession;
+  return { ...rest };
+}
+
+function getInitialKanbanStatusFilter(searchParams: URLSearchParams): string[] {
+  const urlStatus = searchParams.get("status");
+  if (urlStatus && KANBAN_IDS.has(kanbanBoardColumnId(urlStatus))) {
+    return [kanbanBoardColumnId(urlStatus)];
+  }
+  const saved = sessionGet(TASKS_KANBAN_STATUS_FILTER_KEY, [] as string[]);
+  return Array.isArray(saved) ? saved.filter((id) => KANBAN_IDS.has(id)) : [];
 }
 
 function sessionGet<T>(key: string, fallback: T): T {
@@ -148,8 +195,8 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 interface TasksHeaderToolbarProps {
-  view: "kanban" | "list" | "timeline" | "month" | "schedule";
-  onViewChange: (next: "kanban" | "list" | "timeline" | "month" | "schedule") => void;
+  view: "kanban" | "list" | "timeline" | "month" | "schedule" | "history";
+  onViewChange: (next: "kanban" | "list" | "timeline" | "month" | "schedule" | "history") => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
   onCreateClick: () => void;
@@ -248,6 +295,17 @@ function TasksHeaderToolbar({
         >
           <Table2 className="h-4 w-4" />
         </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("history")}
+          title="История (закрытые и завершённые)"
+          className={cn(
+            "rounded-md px-2 py-1.5 transition-colors sm:px-2.5",
+            view === "history" ? "bg-primary-600 text-white" : "text-surface-500 hover:text-surface-900",
+          )}
+        >
+          <History className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );
@@ -293,9 +351,9 @@ export default function TasksPage() {
 function TasksPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [view, setView] = useState<"kanban" | "list" | "timeline" | "month" | "schedule">(() => {
+  const [view, setView] = useState<"kanban" | "list" | "timeline" | "month" | "schedule" | "history">(() => {
     const qv = searchParams.get("view");
-    if (qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule") return qv;
+    if (qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule" || qv === "history") return qv;
     if (typeof window !== "undefined") {
       const saved = sessionStorage.getItem(TASKS_VIEW_SESSION_KEY);
       if (
@@ -303,16 +361,20 @@ function TasksPageInner() {
         saved === "list" ||
         saved === "timeline" ||
         saved === "month" ||
-        saved === "schedule"
+        saved === "schedule" ||
+        saved === "history"
       )
         return saved;
     }
     return "kanban";
   });
+  const [kanbanStatusFilter, setKanbanStatusFilter] = useState<string[]>(() =>
+    getInitialKanbanStatusFilter(searchParams),
+  );
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [clientsById, setClientsById] = useState<Record<string, ClientResponse>>({});
   const [assignees, setAssignees] = useState<UserListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => searchParams.get("view") !== "history");
   const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
     if (searchParams.get("status") || searchParams.get("overdue") || searchParams.get("q")) return true;
     return sessionGet(TASKS_FILTERS_OPEN_SESSION_KEY, false);
@@ -354,7 +416,12 @@ function TasksPageInner() {
   }, [bootstrapSearchQ, setTasksSearchDraft]);
 
   // Persist filters, panel open state, and staff filter to session storage on change
+  useEffect(() => {
+    if (view === "history") setFiltersOpen(false);
+  }, [view]);
+
   useEffect(() => { sessionSet(TASKS_FILTERS_SESSION_KEY, filters); }, [filters]);
+  useEffect(() => { sessionSet(TASKS_KANBAN_STATUS_FILTER_KEY, kanbanStatusFilter); }, [kanbanStatusFilter]);
   useEffect(() => { sessionSet(TASKS_FILTERS_OPEN_SESSION_KEY, filtersOpen); }, [filtersOpen]);
   useEffect(() => { sessionSet(TASKS_STAFF_IDS_SESSION_KEY, timelineStaffIds); }, [timelineStaffIds]);
 
@@ -374,10 +441,14 @@ function TasksPageInner() {
   }, [searchDraft]);
 
   const load = useCallback(async () => {
+    if (view === "history") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetchTasks({ ...filters, limit: 200 });
+      const res = await fetchTasks(buildMainTasksFetchParams(filters, kanbanStatusFilter));
       setTasks(res.items);
     } catch (e) {
       const msg =
@@ -391,17 +462,18 @@ function TasksPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, kanbanStatusFilter, view]);
 
   const refetchTasksSilent = useCallback(async () => {
+    if (view === "history") return;
     try {
-      const res = await fetchTasks({ ...filters, limit: 200 });
+      const res = await fetchTasks(buildMainTasksFetchParams(filters, kanbanStatusFilter));
       setTasks(res.items);
       setLoadError(null);
     } catch {
       /* keep current state */
     }
-  }, [filters]);
+  }, [filters, kanbanStatusFilter, view]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -457,13 +529,14 @@ function TasksPageInner() {
     const saved =
       typeof window !== "undefined" ? sessionStorage.getItem(TASKS_VIEW_SESSION_KEY) : null;
     const nextView =
-      qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule"
+      qv === "list" || qv === "timeline" || qv === "month" || qv === "schedule" || qv === "history"
         ? qv
         : saved === "kanban" ||
             saved === "list" ||
             saved === "timeline" ||
             saved === "month" ||
-            saved === "schedule"
+            saved === "schedule" ||
+            saved === "history"
           ? saved
           : "kanban";
     if (nextView !== view) {
@@ -475,7 +548,7 @@ function TasksPageInner() {
     searchParams.get("month_cell") === "assignees" ? "assignees" : "tasks";
 
   const setViewWithQuery = useCallback(
-    (next: "kanban" | "list" | "timeline" | "month" | "schedule") => {
+    (next: "kanban" | "list" | "timeline" | "month" | "schedule" | "history") => {
       if (typeof window !== "undefined") sessionStorage.setItem(TASKS_VIEW_SESSION_KEY, next);
       setView(next);
       const params = new URLSearchParams(searchParams.toString());
@@ -804,8 +877,8 @@ function TasksPageInner() {
         </div>
       )}
 
-      {/* Filters Bar */}
-      {filtersOpen && (
+      {/* Filters Bar (history uses its own filters inside the tab) */}
+      {filtersOpen && view !== "history" && (
         <div className="card flex flex-wrap items-center gap-3 p-3">
           <label className="relative flex min-w-[min(100%,220px)] flex-1 basis-[220px] items-center">
             <Search
@@ -822,16 +895,37 @@ function TasksPageInner() {
               aria-label="Поиск по задачам"
             />
           </label>
-          <select
-            className="input max-w-[160px]"
-            value={filters.status ?? ""}
-            onChange={(e) => setFilter("status", e.target.value)}
-          >
-            <option value="">Все статусы</option>
-            {KANBAN_COLUMNS.map((c) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
-            ))}
-          </select>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+            <span className="text-xs font-semibold text-surface-600">Статусы (несколько колонок)</span>
+            <div className="flex flex-wrap gap-2">
+              {KANBAN_COLUMNS.map((c) => (
+                <label
+                  key={c.id}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1 text-xs",
+                    kanbanStatusFilter.includes(c.id)
+                      ? "border-primary-400 bg-primary-50 text-primary-900"
+                      : "border-surface-200 bg-white text-surface-600",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-surface-300"
+                    checked={kanbanStatusFilter.includes(c.id)}
+                    onChange={(e) => {
+                      setKanbanStatusFilter((prev) => {
+                        const set = new Set(prev);
+                        if (e.target.checked) set.add(c.id);
+                        else set.delete(c.id);
+                        return [...set];
+                      });
+                    }}
+                  />
+                  {c.title}
+                </label>
+              ))}
+            </div>
+          </div>
           <select
             className="input max-w-[160px]"
             value={filters.priority ?? ""}
@@ -843,12 +937,13 @@ function TasksPageInner() {
             <option value="high">Высокий</option>
             <option value="critical">Критический</option>
           </select>
-          {(Object.keys(filters).length > 0 || searchDraft.trim().length > 0) && (
+          {(Object.keys(filters).length > 0 || searchDraft.trim().length > 0 || kanbanStatusFilter.length > 0) && (
             <button
               type="button"
               onClick={() => {
                 setFilters({});
                 setTasksSearchDraft("");
+                setKanbanStatusFilter([]);
               }}
               className="btn-ghost btn-sm text-red-600 gap-1"
             >
@@ -1161,10 +1256,15 @@ function TasksPageInner() {
         />
       )}
 
+      {view === "history" && <TasksHistoryView assignees={assignees} />}
+
       {/* FAB for mobile */}
       <button
         onClick={() => setCreateOpen(true)}
-        className="fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 active:bg-primary-800 transition-colors lg:hidden"
+        className={cn(
+          "fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 active:bg-primary-800 transition-colors lg:hidden",
+          view === "history" && "hidden",
+        )}
       >
         <Plus className="h-6 w-6" />
       </button>
