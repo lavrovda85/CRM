@@ -355,6 +355,31 @@ class CommentResponse(BaseModel):
     attachments: list[Any] = Field(default_factory=list)
     created_at: datetime
 
+    @model_validator(mode="before")
+    @classmethod
+    def _from_comment_orm(cls, data: Any) -> Any:
+        """Build ``author_name`` from loaded ``Comment.author`` (ORM ``@property`` is not always read)."""
+        from app.models.comment import Comment as CommentModel
+
+        if not isinstance(data, CommentModel):
+            return data
+        author = getattr(data, "author", None)
+        author_name: str | None = None
+        if author is not None:
+            fn = getattr(author, "full_name", None)
+            if fn is not None:
+                s = str(fn).strip()
+                author_name = s or None
+        return {
+            "id": data.id,
+            "author_id": data.author_id,
+            "author_name": author_name,
+            "body": data.body,
+            "mentions": list(data.mentions) if data.mentions is not None else [],
+            "attachments": list(data.attachments) if data.attachments is not None else [],
+            "created_at": data.created_at,
+        }
+
 
 class DocumentResponse(BaseModel):
     """Document nested in task detail.

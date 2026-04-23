@@ -263,11 +263,28 @@ export default function TaskDetailPage({
     };
   }, [id, applyTaskData]);
 
-  // Load users for assignee select
+  // Load users for assignee select and comment author resolution
   useEffect(() => {
-    fetchUsers({ is_active: true, limit: 200 })
-      .then((res) => setUsers(res.items))
-      .catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const pageSize = 200;
+        let offset = 0;
+        const all: UserSummary[] = [];
+        while (!cancelled) {
+          const res = await fetchUsers({ is_active: true, limit: pageSize, offset });
+          all.push(...res.items);
+          offset += res.items.length;
+          if (offset >= res.total || res.items.length < pageSize) break;
+        }
+        if (!cancelled) setUsers(all);
+      } catch {
+        if (!cancelled) setUsers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -306,6 +323,29 @@ export default function TaskDetailPage({
     for (const d of task.documents) map.set(d.id, d);
     return map;
   }, [task]);
+
+  /** Resolve comment author when API omits ``author_name`` (cache / older backend). */
+  const commentAuthorNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of users) {
+      const n = u.full_name?.trim();
+      if (n) m.set(String(u.id), n);
+    }
+    if (task) {
+      const pool: UserSummary[] = [
+        ...(task.assignee ? [task.assignee] : []),
+        ...(task.creator ? [task.creator] : []),
+        ...(task.requester ? [task.requester] : []),
+        ...(task.co_assignees ?? []),
+        ...(task.observers ?? []),
+      ];
+      for (const u of pool) {
+        const n = u.full_name?.trim();
+        if (n) m.set(String(u.id), n);
+      }
+    }
+    return m;
+  }, [users, task]);
 
   const commentAttachmentIds = useMemo(() => {
     if (!task) return [];
@@ -1194,9 +1234,9 @@ export default function TaskDetailPage({
                 const isMine =
                   currentUserId !== null && String(comment.author_id) === String(currentUserId);
                 const label =
-                  comment.author_name && comment.author_name.trim().length > 0
-                    ? comment.author_name.trim()
-                    : "Участник";
+                  (comment.author_name && comment.author_name.trim()) ||
+                  commentAuthorNameById.get(String(comment.author_id)) ||
+                  "Участник";
                 const initials = (label === "Участник" ? "?" : label).charAt(0).toUpperCase();
                 return (
                   <div key={comment.id} className={cn("flex gap-2", isMine && "flex-row-reverse")}>
