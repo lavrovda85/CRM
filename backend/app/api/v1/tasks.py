@@ -120,7 +120,7 @@ def _task_detail_load_options():
     """ORM loader options for Task -> TaskDetail without async lazy loads."""
     return (
         selectinload(Task.checklists).selectinload(Checklist.items),
-        selectinload(Task.comments),
+        selectinload(Task.comments).selectinload(Comment.author),
         selectinload(Task.documents),
         selectinload(Task.time_entries),
         selectinload(Task.status_history),
@@ -887,8 +887,12 @@ async def create_comment(
     )
     db.add(comment)
     await db.flush()
-    await db.refresh(comment)
-    return CommentResponse.model_validate(comment)
+    loaded = (
+        await db.execute(
+            select(Comment).options(selectinload(Comment.author)).where(Comment.id == comment.id),
+        )
+    ).scalar_one()
+    return CommentResponse.model_validate(loaded)
 
 
 @router.delete("/{task_id}", status_code=204)

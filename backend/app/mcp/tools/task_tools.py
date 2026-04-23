@@ -33,6 +33,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import HVACBaseError, WorkflowTransitionError
 from app.models.checklist import Checklist
+from app.models.comment import Comment
 from app.models.task import Task
 from app.models.task_status import TaskStatusHistory
 from app.services.workflow_engine import WorkflowEngine
@@ -1214,7 +1215,7 @@ async def get_task_detail(task_id: str) -> dict:
             select(Task)
             .options(
                 selectinload(Task.checklists).selectinload(Checklist.items),
-                selectinload(Task.comments),
+                selectinload(Task.comments).selectinload(Comment.author),
                 selectinload(Task.documents),
                 selectinload(Task.time_entries),
                 selectinload(Task.status_history),

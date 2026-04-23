@@ -38,3 +38,15 @@ class Comment(BaseModel):
 
     task = relationship("Task", back_populates="comments")
     author = relationship("User", back_populates="comments")
+
+    @property
+    def author_name(self) -> str | None:
+        """Author display name for API schemas when ``author`` is loaded."""
+        author = getattr(self, "author", None)
+        if author is None:
+            return None
+        name = getattr(author, "full_name", None)
+        if name is None:
+            return None
+        stripped = str(name).strip()
+        return stripped or None

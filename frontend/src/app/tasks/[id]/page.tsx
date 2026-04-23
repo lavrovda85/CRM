@@ -41,8 +41,9 @@ import {
   fetchWarehouseItems,
   fetchWarehouseMovements,
   createWarehouseMovement,
+  fetchCurrentUser,
 } from "@/lib/api";
-import { formatEnumLabel } from "@/lib/utils";
+import { cn, formatEnumLabel } from "@/lib/utils";
 import type {
   TaskDetail,
   UserSummary,
@@ -208,6 +209,7 @@ export default function TaskDetailPage({
   const [materialError, setMaterialError] = useState<string | null>(null);
   const [materialSubmitting, setMaterialSubmitting] = useState(false);
   const [taskMovements, setTaskMovements] = useState<WarehouseMovementResponse[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const applyTaskData = useCallback((data: TaskDetail) => {
     setTask(data);
@@ -266,6 +268,20 @@ export default function TaskDetailPage({
     fetchUsers({ is_active: true, limit: 200 })
       .then((res) => setUsers(res.items))
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchCurrentUser()
+      .then((u) => {
+        if (!cancelled) setCurrentUserId(u.id);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentUserId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load warehouse items when materials dialog is opened
@@ -1136,6 +1152,7 @@ export default function TaskDetailPage({
             ) : (
               <p className="p-4 text-sm text-surface-500">
                 Списания со склада по задаче пока не добавлены. Нажмите «Добавить», чтобы привязать материалы или инструмент.
+                Списания, привязанные к задаче, учитываются в отчётах по складу.
               </p>
             )}
           </div>
@@ -1172,101 +1189,153 @@ export default function TaskDetailPage({
                 <span className="text-sm font-normal text-surface-400">{task.comments.length}</span>
               </h2>
             </div>
-            <div className="divide-y divide-surface-50">
-              {task.comments.map((comment) => (
-                <div key={comment.id} className="p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-xs font-medium text-primary-700">
-                      {(comment.author_name ?? "?").charAt(0)}
+            <div className="flex flex-col gap-3 bg-surface-50/50 p-3 sm:p-4">
+              {task.comments.map((comment) => {
+                const isMine =
+                  currentUserId !== null && String(comment.author_id) === String(currentUserId);
+                const label =
+                  comment.author_name && comment.author_name.trim().length > 0
+                    ? comment.author_name.trim()
+                    : "Участник";
+                const initials = (label === "Участник" ? "?" : label).charAt(0).toUpperCase();
+                return (
+                  <div key={comment.id} className={cn("flex gap-2", isMine && "flex-row-reverse")}>
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                        isMine ? "bg-primary-600 text-white" : "bg-surface-200 text-surface-700",
+                      )}
+                      aria-hidden
+                    >
+                      {initials}
                     </div>
-                    <span className="text-sm font-medium">{comment.author_name ?? "Неизвестный"}</span>
-                    <span className="text-xs text-surface-400">
-                      {new Date(comment.created_at).toLocaleString("ru-RU")}
-                    </span>
-                  </div>
-                  {comment.body ? (
-                    <p className="mt-2 text-sm text-surface-600 pl-9">{comment.body}</p>
-                  ) : null}
+                    <div className={cn("min-w-0 max-w-[min(100%,36rem)]", isMine && "flex flex-col items-end")}>
+                      <div
+                        className={cn(
+                          "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs",
+                          isMine && "flex-row-reverse justify-end",
+                        )}
+                      >
+                        <span className="font-semibold text-surface-800">{label}</span>
+                        <span className="text-surface-400">
+                          {new Date(comment.created_at).toLocaleString("ru-RU", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      {(comment.body ||
+                        (Array.isArray(comment.attachments) && comment.attachments.length > 0)) && (
+                        <div
+                          className={cn(
+                            "mt-1 w-full rounded-2xl px-3 py-2 text-left text-sm text-surface-800 shadow-sm",
+                            isMine
+                              ? "rounded-tr-sm bg-primary-100 text-surface-900"
+                              : "rounded-tl-sm border border-surface-100 bg-white",
+                          )}
+                        >
+                          {comment.body ? (
+                            <p className="whitespace-pre-wrap break-words">{comment.body}</p>
+                          ) : null}
 
-                  {Array.isArray(comment.attachments) && comment.attachments.length > 0 ? (
-                    <div className="mt-2 space-y-2 pl-9">
-                      {(comment.attachments as unknown[])
-                        .map((a) => String(a))
-                        .filter(Boolean)
-                        .map((docId) => {
-                          const doc = documentById.get(docId);
-                          if (!doc) return null;
+                          {Array.isArray(comment.attachments) && comment.attachments.length > 0 ? (
+                            <div className={cn("space-y-2", comment.body ? "mt-2" : "")}>
+                              {(comment.attachments as unknown[])
+                                .map((a) => String(a))
+                                .filter(Boolean)
+                                .map((docId) => {
+                                  const doc = documentById.get(docId);
+                                  if (!doc) return null;
 
-                          const downloadUrl = docUrls[docId];
-                          const filename = doc.filename;
-                          const isImage = doc.mime_type?.startsWith("image/");
-                          const isAudio = doc.mime_type?.startsWith("audio/");
+                                  const downloadUrl = docUrls[docId];
+                                  const filename = doc.filename;
+                                  const isImage = doc.mime_type?.startsWith("image/");
+                                  const isAudio = doc.mime_type?.startsWith("audio/");
 
-                          if (isImage) {
-                            if (!downloadUrl) {
-                              return (
-                                <div key={docId} className="rounded-lg border border-surface-100 p-3 text-xs text-surface-500">
-                                  {filename} (loading...)
-                                </div>
-                              );
-                            }
-                            return (
-                              <img
-                                key={docId}
-                                src={downloadUrl}
-                                alt={filename}
-                                className="mt-1 max-h-[220px] w-full cursor-zoom-in rounded-lg border border-surface-100 bg-white/20 object-contain"
-                                onClick={() => setImagePreview({ src: downloadUrl, alt: filename })}
-                              />
-                            );
-                          }
-
-                          if (isAudio) {
-                            if (!downloadUrl) {
-                              return (
-                                <div key={docId} className="rounded-lg border border-surface-100 p-3 text-xs text-surface-500">
-                                  {filename} (loading...)
-                                </div>
-                              );
-                            }
-                            return (
-                              <div key={docId} className="rounded-lg border border-surface-100 bg-white/40 p-3">
-                                <p className="mb-1 truncate text-xs text-surface-600">{filename}</p>
-                                <audio controls src={downloadUrl} className="w-full" />
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div key={docId} className="flex items-center justify-between rounded-lg border border-surface-100 bg-white/40 p-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-xs font-medium text-surface-700">{filename}</p>
-                                <p className="text-[10px] text-surface-400">{doc.mime_type}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    const { url } = await getDocumentDownloadUrl(docId);
-                                    window.open(url, "_blank");
-                                  } catch {
-                                    /* silent */
+                                  if (isImage) {
+                                    if (!downloadUrl) {
+                                      return (
+                                        <div
+                                          key={docId}
+                                          className="rounded-lg border border-surface-100 p-3 text-xs text-surface-500"
+                                        >
+                                          {filename} (loading...)
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <img
+                                        key={docId}
+                                        src={downloadUrl}
+                                        alt={filename}
+                                        className="mt-1 max-h-[220px] w-full cursor-zoom-in rounded-lg border border-surface-100 bg-white/20 object-contain"
+                                        onClick={() => setImagePreview({ src: downloadUrl, alt: filename })}
+                                      />
+                                    );
                                   }
-                                }}
-                                className="rounded p-1.5 text-surface-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                                title="Скачать"
-                              >
-                                <Paperclip className="h-4 w-4" />
-                              </button>
+
+                                  if (isAudio) {
+                                    if (!downloadUrl) {
+                                      return (
+                                        <div
+                                          key={docId}
+                                          className="rounded-lg border border-surface-100 p-3 text-xs text-surface-500"
+                                        >
+                                          {filename} (loading...)
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div
+                                        key={docId}
+                                        className="rounded-lg border border-surface-100 bg-white/40 p-3"
+                                      >
+                                        <p className="mb-1 truncate text-xs text-surface-600">{filename}</p>
+                                        <audio controls src={downloadUrl} className="w-full" />
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div
+                                      key={docId}
+                                      className="flex items-center justify-between rounded-lg border border-surface-100 bg-white/40 p-3"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-medium text-surface-700">{filename}</p>
+                                        <p className="text-[10px] text-surface-400">{doc.mime_type}</p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            const { url } = await getDocumentDownloadUrl(docId);
+                                            window.open(url, "_blank");
+                                          } catch {
+                                            /* silent */
+                                          }
+                                        }}
+                                        className="rounded p-1.5 text-surface-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                                        title="Скачать"
+                                      >
+                                        <Paperclip className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
                             </div>
-                          );
-                        })}
+                          ) : null}
+                        </div>
+                      )}
                     </div>
-                  ) : null}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
               {task.comments.length === 0 && (
-                <p className="p-6 text-center text-sm text-surface-400">Комментариев пока нет</p>
+                <p className="py-6 text-center text-sm text-surface-400">Комментариев пока нет</p>
               )}
             </div>
             <div className="border-t border-surface-100 p-4">
@@ -1370,67 +1439,41 @@ export default function TaskDetailPage({
           </div>
         </div>
 
-        {/* Sidebar — Activity & Materials */}
+        {/* Sidebar — activity only (materials live in the main column) */}
         <div className="space-y-4 lg:col-span-2">
-          <div className="card sticky top-6 space-y-4">
-            <div>
-              <div className="border-b border-surface-100 p-4">
-                <h2 className="font-semibold">Активность</h2>
-              </div>
-              <div className="max-h-[40vh] overflow-y-auto p-4">
-                {task.status_history.length === 0 ? (
-                  <p className="text-sm text-surface-400">Активности пока нет</p>
-                ) : (
-                  <div className="relative space-y-4 pl-5 before:absolute before:left-[7px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-surface-100">
-                    {[...task.status_history].reverse().map((entry) => (
-                      <div key={entry.id} className="relative">
-                        <div className="absolute -left-5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-primary-400" />
-                        <div className="rounded-lg bg-surface-50 p-3">
-                          <div className="flex items-center gap-1 text-xs">
-                            <span className={`badge ${statusColor[entry.from_status] ?? "bg-surface-100 text-surface-600"}`}>
-                              {formatEnumLabel(entry.from_status, statusLabel)}
-                            </span>
-                            <ChevronRight className="h-3 w-3 text-surface-400" />
-                            <span className={`badge ${statusColor[entry.to_status] ?? "bg-surface-100 text-surface-600"}`}>
-                              {formatEnumLabel(entry.to_status, statusLabel)}
-                            </span>
-                          </div>
-                          {entry.reason && (
-                            <p className="mt-1.5 text-xs text-surface-500">{entry.reason}</p>
-                          )}
-                          <p className="mt-1 text-[10px] text-surface-400">
-                            {new Date(entry.created_at).toLocaleString("ru-RU")}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+          <div className="card sticky top-6">
+            <div className="border-b border-surface-100 p-4">
+              <h2 className="font-semibold">Активность</h2>
             </div>
-
-            <div className="border-t border-surface-100 p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-sm font-semibold">
-                  <Package className="h-4 w-4 text-primary-500" />
-                  Материалы и инструмент
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMaterialError(null);
-                    setSelectedItemId("");
-                    setMaterialQty("");
-                    setMaterialsOpen(true);
-                  }}
-                  className="btn-ghost btn-xs text-primary-600"
-                >
-                  Добавить
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-surface-500">
-                Списания со склада, привязанные к этой задаче, будут видны в отчётах.
-              </p>
+            <div className="max-h-[min(50vh,28rem)] overflow-y-auto p-4">
+              {task.status_history.length === 0 ? (
+                <p className="text-sm text-surface-400">Активности пока нет</p>
+              ) : (
+                <div className="relative space-y-4 pl-5 before:absolute before:left-[7px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-surface-100">
+                  {[...task.status_history].reverse().map((entry) => (
+                    <div key={entry.id} className="relative">
+                      <div className="absolute -left-5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-primary-400" />
+                      <div className="rounded-lg bg-surface-50 p-3">
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className={`badge ${statusColor[entry.from_status] ?? "bg-surface-100 text-surface-600"}`}>
+                            {formatEnumLabel(entry.from_status, statusLabel)}
+                          </span>
+                          <ChevronRight className="h-3 w-3 text-surface-400" />
+                          <span className={`badge ${statusColor[entry.to_status] ?? "bg-surface-100 text-surface-600"}`}>
+                            {formatEnumLabel(entry.to_status, statusLabel)}
+                          </span>
+                        </div>
+                        {entry.reason && (
+                          <p className="mt-1.5 text-xs text-surface-500">{entry.reason}</p>
+                        )}
+                        <p className="mt-1 text-[10px] text-surface-400">
+                          {new Date(entry.created_at).toLocaleString("ru-RU")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
