@@ -151,6 +151,9 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
             ")"
         )
     )
+    await conn.execute(
+        text("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS hourly_rate numeric(12, 2) NULL")
+    )
     await conn.execute(text("ALTER TABLE warehouse_items DROP CONSTRAINT IF EXISTS warehouse_items_sku_key"))
     await conn.execute(
         text(

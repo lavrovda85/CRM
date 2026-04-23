@@ -59,6 +59,10 @@ export interface CompanyResponse {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Kanban board UUID for field / crew tasks (isolated from office ``/tasks``). */
+  field_work_board_id?: string | null;
+  /** Default task template UUID for new field-work tasks. */
+  default_field_task_template_id?: string | null;
 }
 
 export interface CompanyMembershipItem {
@@ -533,6 +537,7 @@ export interface EquipmentResponse {
   service_life_months: number;
   current_value: number;
   status: EquipmentStatus;
+  hourly_rate?: number | null;
   assigned_to: string | null;
   location: string | null;
   notes: string | null;

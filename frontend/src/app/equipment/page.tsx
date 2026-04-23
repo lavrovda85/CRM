@@ -32,6 +32,7 @@ const categoryLabels: Record<string, string> = {
   hand_tool: "Ручной инструмент",
   safety: "Безопасность",
   vehicle: "Транспорт",
+  crew: "Бригада / подряд (почасовая)",
 };
 
 export default function EquipmentPage() {
@@ -162,6 +163,13 @@ export default function EquipmentPage() {
                   </span>
                   <span className="font-medium">₽{Number(eq.current_value).toLocaleString("ru-RU")}</span>
                 </div>
+
+                {eq.hourly_rate != null && Number(eq.hourly_rate) > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-surface-500">Ставка часа</span>
+                    <span className="font-medium">₽{Number(eq.hourly_rate).toLocaleString("ru-RU")}</span>
+                  </div>
+                )}
 
                 {/* Depreciation Bar */}
                 <div>

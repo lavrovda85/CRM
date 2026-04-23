@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.dependencies import get_db
+from app.core.permissions import MANAGE_TASKS
 from app.core.security import CurrentUser, get_current_user
 from app.models.company import Company, UserCompanyMembership
 from app.schemas.company import (
@@ -17,6 +18,7 @@ from app.schemas.company import (
     CompanyLoginOption,
     CompanyMembershipInfo,
     CompanyResponse,
+    CompanyWorkspaceSettingsPatch,
 )
 from app.services import company_service
 from app.services.user_identity import resolve_users_table_id
@@ -100,4 +102,20 @@ async def get_active_company_info(
 ) -> CompanyResponse:
     """Return metadata for the resolved active company (from ``X-Company-Id`` or default)."""
     co = await company_service.get_company(db, ctx.company_id)
+    return CompanyResponse.model_validate(co)
+
+
+@router.patch("/active/workspace", response_model=CompanyResponse)
+async def patch_active_company_workspace(
+    body: CompanyWorkspaceSettingsPatch,
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = Depends(MANAGE_TASKS),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
+) -> CompanyResponse:
+    """Update field-work board and default task template IDs (admin/manager)."""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        co = await company_service.get_company(db, ctx.company_id)
+        return CompanyResponse.model_validate(co)
+    co = await company_service.patch_company_workspace_settings(db, ctx.company_id, patch)
     return CompanyResponse.model_validate(co)

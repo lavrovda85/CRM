@@ -56,6 +56,7 @@ async def register_equipment(
         service_life_months=body.service_life_months,
         current_value=body.purchase_price,
         status="active",
+        hourly_rate=body.hourly_rate,
         assigned_to=body.assigned_to,
         location=body.location,
         notes=body.notes,

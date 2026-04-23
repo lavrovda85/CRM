@@ -18,7 +18,7 @@ class EquipmentCreate(BaseModel):
     Атрибуты:
         name (str): Название оборудования.
         serial_number (str): Серийный номер.
-        category (str): Категория — power_tool, measuring, hand_tool, safety, vehicle.
+        category (str): Категория — power_tool, measuring, hand_tool, safety, vehicle, crew.
         purchase_price (Decimal): Цена покупки.
         purchase_date (date): Дата покупки.
         service_life_months (int): Расчётный срок службы в месяцах.
@@ -36,6 +36,11 @@ class EquipmentCreate(BaseModel):
     assigned_to: uuid.UUID | None = None
     location: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+    hourly_rate: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description="Cost per hour when this asset represents labour/crew (optional).",
+    )
 
 
 class EquipmentUpdate(BaseModel):
@@ -56,6 +61,7 @@ class EquipmentUpdate(BaseModel):
     assigned_to: uuid.UUID | None = None
     location: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+    hourly_rate: Decimal | None = Field(default=None, ge=0)
 
 
 class EquipmentWriteOff(BaseModel):
@@ -125,6 +131,7 @@ class EquipmentResponse(BaseModel):
     service_life_months: int
     current_value: Decimal
     status: str
+    hourly_rate: Decimal | None = None
     assigned_to: uuid.UUID | None = None
     location: str | None = None
     notes: str | None = None

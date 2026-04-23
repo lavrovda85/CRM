@@ -42,6 +42,11 @@ class Equipment(TenantMixin, BaseModel):
     service_life_months: Mapped[int] = mapped_column(Integer, nullable=False, default=36)
     current_value: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active", index=True)
+    hourly_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+        doc="Optional cost per hour (e.g. crew / subcontractor modeled as equipment).",
+    )
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )

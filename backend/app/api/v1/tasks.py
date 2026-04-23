@@ -243,6 +243,10 @@ async def list_tasks(
     ),
     client_id: uuid.UUID | None = Query(default=None, description="Filter by client"),
     board_id: uuid.UUID | None = Query(default=None, description="Filter by board"),
+    exclude_board_id: uuid.UUID | None = Query(
+        default=None,
+        description="Exclude tasks assigned to this board (e.g. hide field-crew board on the office tasks page)",
+    ),
     priority: str | None = Query(default=None, description="Filter by priority"),
     q: str | None = Query(default=None, description="Case-insensitive search in title and description"),
     overdue: str | None = Query(
@@ -341,6 +345,9 @@ async def list_tasks(
     if board_id:
         query = query.where(Task.board_id == board_id)
         count_query = count_query.where(Task.board_id == board_id)
+    if exclude_board_id:
+        query = query.where((Task.board_id.is_(None)) | (Task.board_id != exclude_board_id))
+        count_query = count_query.where((Task.board_id.is_(None)) | (Task.board_id != exclude_board_id))
     if priority:
         query = query.where(Task.priority == priority)
         count_query = count_query.where(Task.priority == priority)

@@ -33,6 +33,7 @@ import type {
   WarehouseMovementResponse,
   InboxNotificationItem,
   CompanyLoginOption,
+  CompanyResponse,
 } from "@/types";
 
 /**
@@ -552,6 +553,20 @@ function qs(params: Record<string, unknown>): string {
 
 export async function fetchCompanyLoginOptions(): Promise<CompanyLoginOption[]> {
   return request<CompanyLoginOption[]>("/companies/login-options");
+}
+
+export async function fetchActiveCompany(): Promise<CompanyResponse> {
+  return request<CompanyResponse>("/companies/active");
+}
+
+export async function patchCompanyWorkspaceSettings(body: {
+  field_work_board_id?: string | null;
+  default_field_task_template_id?: string | null;
+}): Promise<CompanyResponse> {
+  return request<CompanyResponse>("/companies/active/workspace", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }
 
 /* ------------------------------------------------------------------ */

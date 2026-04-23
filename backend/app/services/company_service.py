@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import HVACBaseError, NotFoundError, ValidationError
+from app.models.board import Board
 from app.models.company import Company, UserCompanyMembership
+from app.models.task_template import TaskTemplate
 from app.models.user import User
 
 
@@ -226,4 +228,50 @@ async def get_company(db: AsyncSession, company_id: uuid.UUID) -> Company:
     co = await db.get(Company, company_id)
     if co is None or not co.is_active:
         raise NotFoundError("Company", str(company_id))
+    return co
+
+
+async def patch_company_workspace_settings(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    patch: dict,
+) -> Company:
+    """Merge field-work Kanban and default template IDs into ``Company.settings``.
+
+    ``patch`` keys are optional; only present keys are applied. Use ``None`` value to clear a key.
+    """
+    co = await get_company(db, company_id)
+    settings = dict(co.settings or {})
+
+    if "field_work_board_id" in patch:
+        raw = patch["field_work_board_id"]
+        if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+            settings.pop("field_work_board_id", None)
+        else:
+            try:
+                bid = uuid.UUID(str(raw).strip())
+            except ValueError as exc:
+                raise ValidationError("field_work_board_id", "Must be a valid UUID") from exc
+            board = await db.get(Board, bid)
+            if board is None or board.company_id != company_id:
+                raise ValidationError("field_work_board_id", "Board not found in this company")
+            settings["field_work_board_id"] = str(bid)
+
+    if "default_field_task_template_id" in patch:
+        raw = patch["default_field_task_template_id"]
+        if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+            settings.pop("default_field_task_template_id", None)
+        else:
+            try:
+                tid = uuid.UUID(str(raw).strip())
+            except ValueError as exc:
+                raise ValidationError("default_field_task_template_id", "Must be a valid UUID") from exc
+            tpl = await db.get(TaskTemplate, tid)
+            if tpl is None or tpl.company_id != company_id:
+                raise ValidationError("default_field_task_template_id", "Task template not found in this company")
+            settings["default_field_task_template_id"] = str(tid)
+
+    co.settings = settings
+    await db.flush()
+    await db.refresh(co)
     return co

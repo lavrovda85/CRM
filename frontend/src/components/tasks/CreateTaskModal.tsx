@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { cn } from "@/lib/utils";
 import { createTask, fetchTemplates, fetchClients, fetchUsers, type UserListItem } from "@/lib/api";
 import type { TemplateResponse, ClientResponse, TaskResponse } from "@/types";
 
@@ -15,11 +16,21 @@ interface CreateTaskInitialValues {
   dueDate?: string;    // datetime-local: YYYY-MM-DDTHH:mm
 }
 
+export type CreateTaskModalVariant = "default" | "field_work";
+
 interface CreateTaskModalProps {
   open: boolean;
   onClose: () => void;
   onCreated: (task: TaskResponse) => void;
   initialValues?: CreateTaskInitialValues;
+  /** Office vs field-work board UX (field: simpler form, default template). */
+  variant?: CreateTaskModalVariant;
+  /** Pre-select template when modal opens (e.g. company default for field board). */
+  defaultTemplateId?: string;
+  /** Always sent on create — isolates tasks to the field-work Kanban board. */
+  fixedBoardId?: string;
+  /** When true, template cannot be changed (default template locked). */
+  lockTemplate?: boolean;
 }
 
 /**
@@ -33,7 +44,16 @@ interface CreateTaskModalProps {
  *     onClose: Callback закрытия.
  *     onCreated: Callback после успешного создания задачи.
  */
-export function CreateTaskModal({ open, onClose, onCreated, initialValues }: CreateTaskModalProps) {
+export function CreateTaskModal({
+  open,
+  onClose,
+  onCreated,
+  initialValues,
+  variant = "default",
+  defaultTemplateId,
+  fixedBoardId,
+  lockTemplate = false,
+}: CreateTaskModalProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -85,7 +105,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
       setTitle("");
       setDescription("");
       setPriority("medium");
-      setTemplateId("");
+      setTemplateId(defaultTemplateId?.trim() ? defaultTemplateId.trim() : "");
       setClientId("");
       setAssignedTo(initialValues?.assignedTo ?? "");
       setCoAssigneeIds([]);
@@ -95,7 +115,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
       setError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, loadReferences]);
+  }, [open, loadReferences, defaultTemplateId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -113,6 +133,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
         visibility: "participants",
       };
       if (templateId) payload.template_id = templateId;
+      if (fixedBoardId?.trim()) payload.board_id = fixedBoardId.trim();
       if (clientId) payload.client_id = clientId;
       if (assignedTo) payload.assigned_to = assignedTo;
       if (coAssigneeIds.length > 0) payload.co_assignee_ids = coAssigneeIds;
@@ -134,7 +155,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
     <Modal
       open={open}
       onClose={onClose}
-      title="Новая задача"
+      title={variant === "field_work" ? "Новая задача (выезд)" : "Новая задача"}
       className="sm:max-w-xl"
       footer={
         <>
@@ -237,7 +258,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className={cn("grid gap-4", variant === "field_work" ? "grid-cols-1" : "grid-cols-2")}>
           <div>
             <label htmlFor="task-template" className="mb-1 block text-sm font-medium text-surface-700">
               Шаблон
@@ -247,7 +268,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
               className="input"
-              disabled={loadingRefs}
+              disabled={loadingRefs || lockTemplate}
             >
               <option value="">Без шаблона</option>
               {templates.map((t) => (
@@ -256,6 +277,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
             </select>
           </div>
 
+          {variant !== "field_work" && (
           <div>
             <label htmlFor="task-client" className="mb-1 block text-sm font-medium text-surface-700">
               Клиент
@@ -282,6 +304,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
               ))}
             </select>
           </div>
+          )}
         </div>
 
         <div>
@@ -302,6 +325,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
           </select>
         </div>
 
+        {variant !== "field_work" && (
         <div>
           <span className="mb-1 block text-sm font-medium text-surface-700">Соисполнители</span>
           <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-lg border border-surface-200 p-2">
@@ -327,7 +351,9 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
             )}
           </div>
         </div>
+        )}
 
+        {variant !== "field_work" && (
         <div>
           <span className="mb-1 block text-sm font-medium text-surface-700">Наблюдатели</span>
           <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-lg border border-surface-200 p-2">
@@ -353,6 +379,7 @@ export function CreateTaskModal({ open, onClose, onCreated, initialValues }: Cre
             )}
           </div>
         </div>
+        )}
       </form>
     </Modal>
   );

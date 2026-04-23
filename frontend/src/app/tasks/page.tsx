@@ -28,6 +28,7 @@ import {
   updateTask,
   fetchUsers,
   fetchClients,
+  fetchActiveCompany,
   type UserListItem,
 } from "@/lib/api";
 import { cn, formatEnumLabel } from "@/lib/utils";
@@ -83,6 +84,7 @@ function columnFilterToStatusInCsv(keys: string[]): string {
 function buildMainTasksFetchParams(
   filters: Record<string, string>,
   kanbanStatusKeys: string[],
+  excludeBoardId?: string | null,
 ): Record<string, unknown> {
   const { status: _ignored, ...rest } = filters;
   const params: Record<string, unknown> = {
@@ -93,6 +95,8 @@ function buildMainTasksFetchParams(
   if (kanbanStatusKeys.length > 0) {
     params.status_in = columnFilterToStatusInCsv(kanbanStatusKeys);
   }
+  const ex = excludeBoardId?.trim();
+  if (ex) params.exclude_board_id = ex;
   return params;
 }
 
@@ -388,6 +392,7 @@ function TasksPageInner() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [fieldWorkExcludeBoardId, setFieldWorkExcludeBoardId] = useState<string | null>(null);
 
   const timelineDateField: TimelineDateField = "due_date";
   const [timelineSelectedDate, setTimelineSelectedDate] = useState(() => {
@@ -426,6 +431,21 @@ function TasksPageInner() {
   useEffect(() => { sessionSet(TASKS_STAFF_IDS_SESSION_KEY, timelineStaffIds); }, [timelineStaffIds]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchActiveCompany()
+      .then((c) => {
+        const bid = c.field_work_board_id?.trim() || null;
+        if (!cancelled) setFieldWorkExcludeBoardId(bid);
+      })
+      .catch(() => {
+        if (!cancelled) setFieldWorkExcludeBoardId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const id = window.setTimeout(() => {
       const trimmed = searchDraft.trim();
       setFilters((prev) => {
@@ -448,7 +468,9 @@ function TasksPageInner() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetchTasks(buildMainTasksFetchParams(filters, kanbanStatusFilter));
+      const res = await fetchTasks(
+        buildMainTasksFetchParams(filters, kanbanStatusFilter, fieldWorkExcludeBoardId),
+      );
       setTasks(res.items);
     } catch (e) {
       const msg =
@@ -462,18 +484,20 @@ function TasksPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [filters, kanbanStatusFilter, view]);
+  }, [filters, kanbanStatusFilter, fieldWorkExcludeBoardId, view]);
 
   const refetchTasksSilent = useCallback(async () => {
     if (view === "history") return;
     try {
-      const res = await fetchTasks(buildMainTasksFetchParams(filters, kanbanStatusFilter));
+      const res = await fetchTasks(
+        buildMainTasksFetchParams(filters, kanbanStatusFilter, fieldWorkExcludeBoardId),
+      );
       setTasks(res.items);
       setLoadError(null);
     } catch {
       /* keep current state */
     }
-  }, [filters, kanbanStatusFilter, view]);
+  }, [filters, kanbanStatusFilter, fieldWorkExcludeBoardId, view]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
