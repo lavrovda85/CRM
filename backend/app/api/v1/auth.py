@@ -12,7 +12,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -33,6 +33,7 @@ from app.services.company_service import ensure_default_company_for_user, get_me
 
 router = APIRouter(prefix="/auth")
 logger = structlog.get_logger(__name__)
+_REFRESH_COOKIE = "hvac_refresh_token"
 
 _ROLE_PRIORITY = ("admin", "manager", "warehouse_manager", "accountant", "engineer")
 
@@ -321,10 +322,37 @@ def _user_to_auth_user(u: User) -> AuthUser:
     )
 
 
+def _set_refresh_cookie(response: Response, refresh_token: str, request: Request) -> None:
+    """Persist refresh token in cookie for longer browser session."""
+    settings = get_settings()
+    secure = request.url.scheme == "https"
+    response.set_cookie(
+        key=_REFRESH_COOKIE,
+        value=refresh_token,
+        max_age=settings.auth_cookie_max_age_seconds,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+def _clear_refresh_cookie(response: Response, request: Request) -> None:
+    """Clear refresh cookie on logout."""
+    secure = request.url.scheme == "https"
+    response.delete_cookie(
+        key=_REFRESH_COOKIE,
+        path="/",
+        samesite="lax",
+        secure=secure,
+    )
+
+
 @router.post("/login", response_model=dict)
 async def login(
     body: AuthLoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Login user and return Keycloak tokens + user profile.
@@ -403,6 +431,7 @@ async def login(
                 details={"company_id": str(body.company_id)},
             )
         active_company_id = body.company_id
+    _set_refresh_cookie(response, tokens.refresh_token, request)
 
     return {
         "tokens": tokens.model_dump(),
@@ -415,6 +444,7 @@ async def login(
 async def refresh_session(
     body: AuthRefreshRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Rotate access token using a refresh token (Keycloak).
@@ -432,8 +462,15 @@ async def refresh_session(
     tokens: AuthTokens
 
     try:
+        refresh_token = (body.refresh_token or "").strip() or request.cookies.get(_REFRESH_COOKIE, "").strip()
+        if not refresh_token:
+            raise HVACBaseError(
+                message="Refresh token is required",
+                code="AUTH_REFRESH_FAILED",
+                status_code=401,
+            )
         tokens = await _keycloak_refresh_grant(
-            refresh_token=body.refresh_token,
+            refresh_token=refresh_token,
             settings=settings,
         )
     except HVACBaseError as exc:
@@ -441,7 +478,7 @@ async def refresh_session(
             raise
         try:
             payload = jwt.decode(
-                body.refresh_token,
+                refresh_token,
                 settings.secret_key,
                 algorithms=["HS256"],
                 options={"verify_aud": False},
@@ -487,10 +524,21 @@ async def refresh_session(
             status_code=403,
         )
 
+    _set_refresh_cookie(response, tokens.refresh_token, request)
     return {
         "tokens": tokens.model_dump(),
         "user": _user_to_auth_user(db_user).model_dump(),
     }
+
+
+@router.post("/logout", response_model=dict)
+async def logout(
+    request: Request,
+    response: Response,
+) -> dict:
+    """Clear auth cookies (best-effort endpoint for browser logout)."""
+    _clear_refresh_cookie(response, request)
+    return {"ok": True}
 
 
 @router.get("/me", response_model=AuthUser)

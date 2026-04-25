@@ -210,6 +210,13 @@ class Settings(BaseSettings):
     deploy_agent_url: str | None = Field(default=None, alias="DEPLOY_AGENT_URL")
     admin_deploy_enabled: bool = Field(default=False, alias="ADMIN_DEPLOY_ENABLED")
     ai_assistant_max_tool_rounds: int = Field(default=24, ge=1, le=48, alias="AI_ASSISTANT_MAX_TOOL_ROUNDS")
+    auth_cookie_max_age_seconds: int = Field(
+        default=30 * 24 * 60 * 60,
+        ge=3600,
+        le=365 * 24 * 60 * 60,
+        alias="AUTH_COOKIE_MAX_AGE_SECONDS",
+        description="Max-Age for auth refresh cookie to keep web sessions alive longer.",
+    )
     ai_assistant_timezone: str = Field(
         default="Europe/Moscow",
         alias="AI_ASSISTANT_TIMEZONE",

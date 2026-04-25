@@ -308,12 +308,12 @@ class ApiClient {
   }
 
   private async tryRefreshToken(): Promise<boolean> {
-    if (!this.refreshToken) return false;
     if (this.refreshPromise) return this.refreshPromise;
 
-    const rt = this.refreshToken;
+    const rt = this.refreshToken?.trim() || "";
     this.refreshPromise = (async () => {
       try {
+        const refreshBody = rt ? { refresh_token: rt } : {};
         const res = await fetch(`${getApiBase()}/auth/refresh`, {
           method: "POST",
           headers: {
@@ -321,7 +321,8 @@ class ApiClient {
             "Content-Type": "application/json",
             ...activeCompanyHeaders(),
           },
-          body: JSON.stringify({ refresh_token: rt }),
+          body: JSON.stringify(refreshBody),
+          credentials: "include",
           signal: apiTimeoutSignal("/auth/refresh"),
         });
         if (!res.ok) return false;
@@ -335,10 +336,10 @@ class ApiClient {
         };
         const t = data.tokens;
         if (!t?.access_token) return false;
-        const newRefresh = t.refresh_token || rt;
+        const newRefresh = (t.refresh_token || rt || "").trim();
         this.setToken(t.access_token);
-        this.setRefreshToken(newRefresh);
-        this.onTokensRefreshed?.(t.access_token, newRefresh);
+        this.setRefreshToken(newRefresh || null);
+        if (newRefresh) this.onTokensRefreshed?.(t.access_token, newRefresh);
         return true;
       } catch {
         return false;
@@ -563,6 +564,14 @@ function qs(params: Record<string, unknown>): string {
 
 export async function fetchCompanyLoginOptions(): Promise<CompanyLoginOption[]> {
   return request<CompanyLoginOption[]>("/companies/login-options");
+}
+
+export async function logoutSession(): Promise<void> {
+  try {
+    await request("/auth/logout", { method: "POST" });
+  } catch {
+    /* ignore logout endpoint failures */
+  }
 }
 
 export async function fetchActiveCompany(): Promise<CompanyResponse> {

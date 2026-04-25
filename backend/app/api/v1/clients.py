@@ -24,6 +24,7 @@ from app.schemas.client import (
     ClientUpdate,
 )
 from app.services.client_payload import build_client_response, extra_data_for_create
+from app.services.client_schema_service import ensure_client_legal_columns
 
 router = APIRouter(prefix="/clients")
 
@@ -45,6 +46,7 @@ async def create_client(
     Возвращает:
         Созданного клиента.
     """
+    await ensure_client_legal_columns(db)
     extra = extra_data_for_create(body)
     client = Client(
         company_id=ctx.company_id,
@@ -102,6 +104,7 @@ async def list_clients(
     Возвращает:
         Постраничный ответ со списком клиентов.
     """
+    await ensure_client_legal_columns(db)
     query = (
         select(Client)
         .options(selectinload(Client.contacts))
@@ -154,6 +157,7 @@ async def get_client(
     Возвращает:
         Детальную информацию о клиенте.
     """
+    await ensure_client_legal_columns(db)
     result = await db.execute(
         select(Client)
         .options(selectinload(Client.contacts))
@@ -185,6 +189,7 @@ async def update_client(
     Возвращает:
         Обновлённого клиента.
     """
+    await ensure_client_legal_columns(db)
     result = await db.execute(
         select(Client).where(Client.id == client_id, Client.company_id == ctx.company_id)
     )
@@ -229,6 +234,7 @@ async def add_contact(
     Возвращает:
         Созданное контактное лицо.
     """
+    await ensure_client_legal_columns(db)
     result = await db.execute(
         select(Client).where(Client.id == client_id, Client.company_id == ctx.company_id)
     )
@@ -271,6 +277,7 @@ async def delete_client(
         db: Асинхронная сессия БД.
         ctx: Активная компания.
     """
+    await ensure_client_legal_columns(db)
     result = await db.execute(
         select(Client).where(Client.id == client_id, Client.company_id == ctx.company_id)
     )

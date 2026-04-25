@@ -34,7 +34,7 @@ class AuthRefreshRequest(BaseModel):
         refresh_token: OAuth2 refresh token previously issued by Keycloak.
     """
 
-    refresh_token: str = Field(..., min_length=10, max_length=16000)
+    refresh_token: str | None = Field(default=None, min_length=10, max_length=16000)
 
 
 class AuthTokens(BaseModel):

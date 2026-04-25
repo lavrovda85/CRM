@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.client import ClientCreate
 from app.services.client_payload import extra_data_for_create
+from app.services.client_schema_service import ensure_client_legal_columns
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(r"(?:\+?\d[\d\s().\-]{8,}\d)")
@@ -327,6 +328,8 @@ async def import_clients_from_sheet(
 
     if "name" not in col:
         return 0, 0, [f"Sheet {sheet_name!r}: could not detect name column"]
+
+    await ensure_client_legal_columns(db)
 
     created = 0
     skipped = 0

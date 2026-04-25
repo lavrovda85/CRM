@@ -10,6 +10,7 @@ import {
   ACTIVE_COMPANY_ID_STORAGE_KEY,
   api,
   clearAiAssistantServerHistory,
+  logoutSession,
 } from "@/lib/api";
 import { clearAiAssistantSession } from "@/stores/aiAssistant";
 import { useCompanyStore } from "@/stores/company";
@@ -148,6 +149,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     logoutInProgress = true;
     const accessForClear = api.getToken()?.trim() ?? null;
     try {
+      void logoutSession();
       clearProactiveRefreshTimer();
       useCompanyStore.getState().reset();
       clearAiAssistantSession();
@@ -203,6 +205,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const token = localStorage.getItem(TOKEN_KEY)?.trim();
     if (!token) {
+      const refreshedFromCookie = await api.refreshAccessToken().catch(() => false);
+      if (refreshedFromCookie) {
+        const user = await api.get<User>("/auth/me");
+        const refreshedToken = api.getToken();
+        if (refreshedToken) {
+          localStorage.setItem(TOKEN_KEY, refreshedToken);
+        }
+        const currentRefresh = localStorage.getItem(REFRESH_KEY)?.trim() || null;
+        api.setRefreshToken(currentRefresh);
+        api.setUnauthorizedHandler(() => get().logout());
+        if (refreshedToken) {
+          ws.setToken(refreshedToken);
+        } else {
+          ws.clearToken();
+        }
+        ws.connect();
+        set({
+          user,
+          token: refreshedToken,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+        scheduleProactiveTokenRefresh();
+        void useCompanyStore.getState().loadFromApi();
+        return;
+      }
       const ok = await tryTokenlessDevMe();
       if (!ok) {
         api.setUnauthorizedHandler(() => get().logout());
