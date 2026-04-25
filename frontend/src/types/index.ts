@@ -84,6 +84,7 @@ export interface CompanyLoginOption {
 export type NotificationType =
   | "task_assigned"
   | "task_updated"
+  | "task_comment"
   | "deal_stage_changed"
   | "tender_deadline"
   | "low_stock"

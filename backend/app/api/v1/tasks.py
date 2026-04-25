@@ -899,6 +899,21 @@ async def create_comment(
             select(Comment).options(selectinload(Comment.author)).where(Comment.id == comment.id),
         )
     ).scalar_one()
+    task_for_notify = (
+        await db.execute(
+            select(Task)
+            .options(selectinload(Task.co_assignees), selectinload(Task.observers))
+            .where(Task.id == task_id),
+        )
+    ).scalar_one()
+    await TaskNotificationService.notify_task_comment_added(
+        db,
+        task_for_notify,
+        author_id=crm_uid,
+        comment_preview=clean_body,
+        comment_id=loaded.id,
+    )
+    await db.flush()
     return CommentResponse.model_validate(loaded)
 
 

@@ -30,6 +30,7 @@ import {
   markInboxNotificationRead,
   markAllInboxNotificationsRead,
 } from "@/lib/api";
+import { playNotificationSound } from "@/lib/notificationSound";
 import type { InboxNotificationItem } from "@/types";
 
 const POLL_MS = 60_000;
@@ -63,10 +64,20 @@ export function Header({ title }: HeaderProps) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
   const [searchShortcutLabel, setSearchShortcutLabel] = useState("Ctrl+K");
+  const prevUnreadRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    prevUnreadRef.current = null;
+  }, [user?.id]);
 
   const refreshUnread = useCallback(async () => {
     try {
       const { unread_count } = await fetchUnreadNotificationCount();
+      const prev = prevUnreadRef.current;
+      if (prev !== null && unread_count > prev) {
+        playNotificationSound();
+      }
+      prevUnreadRef.current = unread_count;
       setUnreadCount(unread_count);
     } catch {
       /* not authenticated or offline */

@@ -731,6 +731,20 @@ export async function createClient(
   });
 }
 
+export async function updateClient(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<ClientResponse> {
+  return request(`/clients/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteClient(id: string): Promise<void> {
+  return request(`/clients/${id}`, { method: "DELETE" });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Deals                                                              */
 /* ------------------------------------------------------------------ */

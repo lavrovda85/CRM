@@ -11,23 +11,23 @@ import {
   User,
   X,
   Briefcase,
+  Pencil,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { fetchClients, createClient } from "@/lib/api";
+import { fetchClients, createClient, updateClient, deleteClient } from "@/lib/api";
 import type { ClientResponse } from "@/types";
+import { cn } from "@/lib/utils";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-surface-200 ${className}`} />;
 }
 
-export default function ClientsPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [clients, setClients] = useState<ClientResponse[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
+function emptyForm() {
+  return {
     name: "",
     client_type: "individual",
     phone: "",
@@ -41,102 +41,224 @@ export default function ClientsPage() {
     bank_account: "",
     corr_account: "",
     bank_name: "",
-  });
-  const [creating, setCreating] = useState(false);
+    notes: "",
+  };
+}
+
+function primaryContactLabel(c: ClientResponse): string {
+  const p = c.contacts.find((x) => x.is_primary);
+  return (p?.full_name ?? c.contacts[0]?.full_name ?? "").trim();
+}
+
+function clientToForm(c: ClientResponse) {
+  return {
+    name: c.name,
+    client_type: c.client_type,
+    phone: c.phone ?? "",
+    email: c.email ?? "",
+    address: c.address ?? "",
+    primary_contact_name: primaryContactLabel(c),
+    inn: c.inn ?? "",
+    kpp: c.kpp ?? "",
+    ogrn: c.ogrn ?? "",
+    bik: c.bik ?? "",
+    bank_account: c.bank_account ?? "",
+    corr_account: c.corr_account ?? "",
+    bank_name: c.bank_name ?? "",
+    notes: c.notes ?? "",
+  };
+}
+
+export default function ClientsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [clients, setClients] = useState<ClientResponse[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  const [dialogMode, setDialogMode] = useState<"closed" | "create" | "edit">("closed");
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [debouncedSearch, pageSize]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchClients({ search: search || undefined, limit: 50 });
+      const res = await fetchClients({
+        search: debouncedSearch || undefined,
+        limit: pageSize,
+        offset,
+      });
       setClients(res.items);
       setTotal(res.total);
     } catch {
-      /* empty state */
+      setClients([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [debouncedSearch, offset, pageSize]);
 
   useEffect(() => {
-    const t = setTimeout(load, 300);
-    return () => clearTimeout(t);
+    void load();
   }, [load]);
 
   useEffect(() => {
     if (searchParams.get("create") !== "1") return;
-    setShowCreate(true);
+    setDialogMode("create");
+    setEditingClientId(null);
+    setForm(emptyForm());
     router.replace("/clients", { scroll: false });
   }, [searchParams, router]);
 
+  function openCreate() {
+    setDialogMode("create");
+    setEditingClientId(null);
+    setForm(emptyForm());
+  }
+
+  function openEdit(c: ClientResponse) {
+    setDialogMode("edit");
+    setEditingClientId(c.id);
+    setForm(clientToForm(c));
+  }
+
+  function closeDialog() {
+    setDialogMode("closed");
+    setEditingClientId(null);
+    setForm(emptyForm());
+  }
+
+  function buildPayloadFromForm(): Record<string, unknown> {
+    const payload: Record<string, unknown> = {
+      name: form.name.trim(),
+      address: form.address.trim() || null,
+      phone: form.phone.trim() || null,
+      email: form.email.trim() || null,
+      notes: form.notes.trim() || null,
+    };
+    if (form.client_type === "organization") {
+      payload.inn = form.inn.trim() || null;
+      payload.kpp = form.kpp.trim() || null;
+      payload.ogrn = form.ogrn.trim() || null;
+      payload.bik = form.bik.trim() || null;
+      payload.bank_account = form.bank_account.trim() || null;
+      payload.corr_account = form.corr_account.trim() || null;
+      payload.bank_name = form.bank_name.trim() || null;
+    }
+    return payload;
+  }
+
   async function handleCreate() {
-    if (!form.name.trim() || creating) return;
-    setCreating(true);
+    if (!form.name.trim() || submitting) return;
+    setSubmitting(true);
     try {
-      const payload: Record<string, unknown> = {
-        name: form.name.trim(),
-        client_type: form.client_type,
-        phone: form.phone.trim() || undefined,
-        email: form.email.trim() || undefined,
-        address: form.address.trim() || undefined,
-        primary_contact_name: form.primary_contact_name.trim() || undefined,
-      };
-      if (form.client_type === "organization") {
-        payload.inn = form.inn.trim() || undefined;
-        payload.kpp = form.kpp.trim() || undefined;
-        payload.ogrn = form.ogrn.trim() || undefined;
-        payload.bik = form.bik.trim() || undefined;
-        payload.bank_account = form.bank_account.trim() || undefined;
-        payload.corr_account = form.corr_account.trim() || undefined;
-        payload.bank_name = form.bank_name.trim() || undefined;
+      const payload = buildPayloadFromForm();
+      payload.client_type = form.client_type;
+      if (form.primary_contact_name.trim()) {
+        payload.primary_contact_name = form.primary_contact_name.trim();
       }
       await createClient(payload);
-      setShowCreate(false);
-      setForm({
-        name: "",
-        client_type: "individual",
-        phone: "",
-        email: "",
-        address: "",
-        primary_contact_name: "",
-        inn: "",
-        kpp: "",
-        ogrn: "",
-        bik: "",
-        bank_account: "",
-        corr_account: "",
-        bank_name: "",
-      });
-      load();
+      closeDialog();
+      void load();
     } catch {
       /* silent */
     } finally {
-      setCreating(false);
+      setSubmitting(false);
     }
   }
 
+  async function handleSaveEdit() {
+    if (!editingClientId || !form.name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await updateClient(editingClientId, buildPayloadFromForm());
+      closeDialog();
+      void load();
+    } catch {
+      /* silent */
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteClient(client: ClientResponse) {
+    if (deletingClientId || submitting) return;
+    const ok = window.confirm(`Удалить клиента «${client.name}»? Это действие нельзя отменить.`);
+    if (!ok) return;
+    setDeletingClientId(client.id);
+    try {
+      await deleteClient(client.id);
+      const isLastOnPage = clients.length === 1;
+      if (isLastOnPage && offset > 0) {
+        setOffset((prev) => Math.max(0, prev - pageSize));
+      } else {
+        void load();
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setDeletingClientId(null);
+    }
+  }
+
+  const page = Math.floor(offset / pageSize) + 1;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const canPrev = offset > 0;
+  const canNext = offset + pageSize < total;
+
+  const dialogOpen = dialogMode !== "closed";
+
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Клиенты</h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary gap-1.5">
+        <button type="button" onClick={openCreate} className="btn-primary gap-1.5">
           <Plus className="h-4 w-4" /> Добавить клиента
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
-        <input
-          type="text"
-          placeholder="Поиск клиентов по имени, телефону или email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input pl-10"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-[min(100%,280px)] flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
+          <input
+            type="text"
+            placeholder="Поиск по имени, телефону или email…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input pl-10"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-surface-600">
+          <span className="whitespace-nowrap">На странице</span>
+          <select
+            className="input w-24 py-1.5"
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      {/* Table */}
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -155,6 +277,7 @@ export default function ClientsPage() {
                   <th className="hidden px-4 py-3 font-medium md:table-cell">Email</th>
                   <th className="hidden px-4 py-3 font-medium lg:table-cell">Контакты</th>
                   <th className="px-4 py-3 font-medium">Создан</th>
+                  <th className="w-24 px-2 py-3 font-medium text-right"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-50">
@@ -171,9 +294,13 @@ export default function ClientsPage() {
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <span className="badge bg-surface-100 text-surface-600 gap-1">
                         {client.client_type === "organization" ? (
-                          <><Building2 className="h-3 w-3" /> Организация</>
+                          <>
+                            <Building2 className="h-3 w-3" /> Организация
+                          </>
                         ) : (
-                          <><User className="h-3 w-3" /> Физ. лицо</>
+                          <>
+                            <User className="h-3 w-3" /> Физ. лицо
+                          </>
                         )}
                       </span>
                     </td>
@@ -204,36 +331,85 @@ export default function ClientsPage() {
                     <td className="px-4 py-3 text-surface-500">
                       {new Date(client.created_at).toLocaleDateString("ru-RU")}
                     </td>
+                    <td className="px-2 py-3 text-right">
+                      <div className="inline-flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(client)}
+                          className="inline-flex rounded-lg p-2 text-surface-400 hover:bg-primary-50 hover:text-primary-700"
+                          title="Редактировать"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteClient(client)}
+                          disabled={deletingClientId === client.id}
+                          className={cn(
+                            "inline-flex rounded-lg p-2 text-surface-400 hover:bg-red-50 hover:text-red-700",
+                            deletingClientId === client.id && "cursor-not-allowed opacity-50",
+                          )}
+                          title="Удалить"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {clients.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
-                      {search ? "Клиенты не найдены" : "Клиентов пока нет"}
+                    <td colSpan={7} className="px-4 py-12 text-center text-surface-400">
+                      {debouncedSearch ? "Клиенты не найдены" : "Клиентов пока нет"}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          {total > clients.length && (
-            <div className="border-t border-surface-100 p-3 text-center text-sm text-surface-400">
-              Показано {clients.length} из {total}
+
+          {total > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-100 px-4 py-3 text-sm text-surface-600">
+              <span>
+                Всего: {total} · стр. {page} / {pageCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canPrev || loading}
+                  onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
+                  className={cn("btn-ghost btn-sm inline-flex items-center gap-1", !canPrev && "opacity-40")}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Назад
+                </button>
+                <button
+                  type="button"
+                  disabled={!canNext || loading}
+                  onClick={() => setOffset((o) => o + pageSize)}
+                  className={cn("btn-ghost btn-sm inline-flex items-center gap-1", !canNext && "opacity-40")}
+                >
+                  Вперёд <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Create Client Sheet */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setShowCreate(false)}>
+      {dialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+          onClick={closeDialog}
+        >
           <div
-            className="w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-2xl sm:rounded-2xl"
+            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">Новый клиент</h2>
-              <button onClick={() => setShowCreate(false)} className="btn-ghost p-1.5">
+              <h2 className="text-lg font-bold">
+                {dialogMode === "edit" ? "Редактировать клиента" : "Новый клиент"}
+              </h2>
+              <button type="button" onClick={closeDialog} className="btn-ghost p-1.5">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -254,6 +430,8 @@ export default function ClientsPage() {
                   className="input"
                   value={form.client_type}
                   onChange={(e) => setForm({ ...form, client_type: e.target.value })}
+                  disabled={dialogMode === "edit"}
+                  title={dialogMode === "edit" ? "Тип нельзя сменить в этом окне" : undefined}
                 >
                   <option value="individual">Физ. лицо</option>
                   <option value="organization">Организация</option>
@@ -270,15 +448,19 @@ export default function ClientsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-surface-700">
-                  Контактное лицо
-                </label>
+                <label className="mb-1 block text-sm font-medium text-surface-700">Контактное лицо</label>
                 <input
                   type="text"
                   className="input"
                   value={form.primary_contact_name}
                   onChange={(e) => setForm({ ...form, primary_contact_name: e.target.value })}
                   placeholder="ФИО"
+                  disabled={dialogMode === "edit"}
+                  title={
+                    dialogMode === "edit"
+                      ? "Редактирование контактов — через карточку клиента (API контактов)"
+                      : undefined
+                  }
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -302,6 +484,16 @@ export default function ClientsPage() {
                     placeholder="email@example.com"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-surface-700">Заметки</label>
+                <textarea
+                  className="input min-h-[64px] resize-y"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Внутренние заметки менеджера"
+                  rows={2}
+                />
               </div>
               {form.client_type === "organization" && (
                 <div className="space-y-3 rounded-lg border border-surface-100 bg-surface-50/80 p-3">
@@ -384,10 +576,28 @@ export default function ClientsPage() {
               )}
             </div>
             <div className="mt-6 flex gap-3">
-              <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Отмена</button>
-              <button onClick={handleCreate} disabled={creating || !form.name.trim()} className="btn-primary flex-1">
-                {creating ? "Создание..." : "Создать клиента"}
+              <button type="button" onClick={closeDialog} className="btn-secondary flex-1">
+                Отмена
               </button>
+              {dialogMode === "create" ? (
+                <button
+                  type="button"
+                  onClick={() => void handleCreate()}
+                  disabled={submitting || !form.name.trim()}
+                  className="btn-primary flex-1"
+                >
+                  {submitting ? "Создание…" : "Создать клиента"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={submitting || !form.name.trim()}
+                  className="btn-primary flex-1"
+                >
+                  {submitting ? "Сохранение…" : "Сохранить"}
+                </button>
+              )}
             </div>
           </div>
         </div>

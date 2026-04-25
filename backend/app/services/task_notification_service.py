@@ -254,6 +254,41 @@ class TaskNotificationService:
             )
 
     @staticmethod
+    async def notify_task_comment_added(
+        db: AsyncSession,
+        task: Task,
+        *,
+        author_id: uuid.UUID,
+        comment_preview: str,
+        comment_id: uuid.UUID,
+    ) -> None:
+        """Notify task participants (except author) about a new comment."""
+        recipients = [u for u in TaskNotificationService.participant_user_ids(task) if u != author_id]
+        if not recipients:
+            return
+        tid = str(task.id)
+        cid = task.company_id
+        preview = (comment_preview or "").strip().replace("\n", " ").replace("\r", "")
+        if len(preview) > 220:
+            preview = preview[:217] + "…"
+        body = f"«{task.title}»: {preview}" if preview else f"«{task.title}»"
+        for uid in await TaskNotificationService.filter_active_user_ids(db, recipients):
+            await TaskNotificationService._insert(
+                db,
+                company_id=cid,
+                user_id=uid,
+                event_type="task_comment",
+                title="Новый комментарий к задаче",
+                body=body,
+                data={
+                    "task_id": tid,
+                    "comment_id": str(comment_id),
+                    "kind": "task_comment",
+                    "author_id": str(author_id),
+                },
+            )
+
+    @staticmethod
     async def notify_observers_status_changed(
         db: AsyncSession,
         task: Task,
