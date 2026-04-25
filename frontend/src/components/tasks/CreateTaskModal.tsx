@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -32,6 +32,11 @@ interface CreateTaskModalProps {
   fixedBoardId?: string;
   /** When true, template cannot be changed (default template locked). */
   lockTemplate?: boolean;
+  /**
+   * For field-work: if non-empty, only these template UUIDs appear in the template dropdown;
+   * omit or null/empty → all company templates.
+   */
+  fieldWorkTemplateAllowlist?: string[] | null;
 }
 
 /**
@@ -54,6 +59,7 @@ export function CreateTaskModal({
   defaultTemplateId,
   fixedBoardId,
   lockTemplate = false,
+  fieldWorkTemplateAllowlist = null,
 }: CreateTaskModalProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -72,6 +78,13 @@ export function CreateTaskModal({
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(false);
+
+  const visibleTemplates = useMemo(() => {
+    const allow = fieldWorkTemplateAllowlist?.filter((x) => x?.trim()) ?? [];
+    if (allow.length === 0) return templates;
+    const allowSet = new Set(allow);
+    return templates.filter((t) => allowSet.has(t.id));
+  }, [templates, fieldWorkTemplateAllowlist]);
 
   const loadReferences = useCallback(async () => {
     setLoadingRefs(true);
@@ -113,6 +126,13 @@ export function CreateTaskModal({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loadReferences, defaultTemplateId]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!templateId) return;
+    if (visibleTemplates.some((t) => t.id === templateId)) return;
+    setTemplateId("");
+  }, [open, templateId, visibleTemplates]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -268,7 +288,7 @@ export function CreateTaskModal({
               disabled={loadingRefs || lockTemplate}
             >
               <option value="">Без шаблона</option>
-              {templates.map((t) => (
+              {visibleTemplates.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>

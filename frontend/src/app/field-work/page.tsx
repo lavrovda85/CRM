@@ -20,6 +20,7 @@ import {
   patchCompanyWorkspaceSettings,
   transitionTask,
 } from "@/lib/api";
+import { FIELD_WORK_BOARD_COLUMNS } from "@/lib/fieldWorkBoard";
 import { isTerminalTaskStatus } from "@/lib/timelineTaskIntervals";
 import type { BoardResponse, TaskResponse, TemplateResponse } from "@/types";
 import { useAuthStore } from "@/stores/auth";
@@ -74,15 +75,21 @@ export default function FieldWorkBoardPage() {
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
   const [refsLoading, setRefsLoading] = useState(false);
   const [creatingBoard, setCreatingBoard] = useState(false);
+  /** Saved allowlist: empty = all templates in create modal; non-empty = restrict dropdown. */
+  const [fieldWorkTemplateIds, setFieldWorkTemplateIds] = useState<string[]>([]);
 
   const refreshCompany = useCallback(async () => {
     const c = await fetchActiveCompany();
     const bid = c.field_work_board_id?.trim() || null;
     const tid = c.default_field_task_template_id?.trim() || null;
+    const ft = c.field_work_template_ids;
+    const filterIds =
+      Array.isArray(ft) && ft.length > 0 ? ft.map((x) => String(x).trim()).filter(Boolean) : [];
     setBoardId(bid);
     setDefaultTemplateId(tid);
     setSettingsBoardDraft(bid ?? "");
     setSettingsTemplateDraft(tid ?? "");
+    setFieldWorkTemplateIds(filterIds);
     return { bid, tid };
   }, []);
 
@@ -185,6 +192,7 @@ export default function FieldWorkBoardPage() {
       await patchCompanyWorkspaceSettings({
         field_work_board_id: settingsBoardDraft.trim() || null,
         default_field_task_template_id: settingsTemplateDraft.trim() || null,
+        field_work_template_ids: fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : [],
       });
       setSettingsMsg("Сохранено");
       await loadTasks();
@@ -202,10 +210,12 @@ export default function FieldWorkBoardPage() {
       const b = await createBoard({
         name: "Выездные работы",
         description: "Канбан выездных бригад (создано из раздела «Выездные работы»).",
+        columns: FIELD_WORK_BOARD_COLUMNS,
       });
       await patchCompanyWorkspaceSettings({
         field_work_board_id: b.id,
         default_field_task_template_id: settingsTemplateDraft.trim() || null,
+        field_work_template_ids: fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : [],
       });
       setSettingsBoardDraft(b.id);
       setSettingsMsg("Доска создана и привязана к этому разделу.");
@@ -288,9 +298,10 @@ export default function FieldWorkBoardPage() {
         <div className="card space-y-4 p-4">
           <h2 className="text-sm font-semibold text-surface-800">Настройки доски (компания)</h2>
           <p className="text-xs text-surface-500">
-            Доска и шаблон по умолчанию хранятся в настройках компании. Шаблон можно не задавать — тогда при создании
-            задачи шаблон выбирается вручную; для строгих переходов по колонкам лучше задать шаблон с подходящим
-            workflow.
+            Доска и шаблон по умолчанию хранятся в настройках компании. Шаблон по умолчанию лишь подставляется в форме
+            создания — исполнитель может выбрать другой шаблон из списка. Ограничить список шаблонов для выезда можно
+            блоком ниже (пустой выбор = все шаблоны компании). Для согласованных переходов по колонкам задайте
+            workflow со статусами new → dispatched → in_progress → testing → done.
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -338,6 +349,31 @@ export default function FieldWorkBoardPage() {
                 ))}
               </select>
             </label>
+            <label className="block text-xs font-medium text-surface-600 sm:col-span-2">
+              Шаблоны для выезда (необязательно)
+              <span className="mt-0.5 block font-normal text-surface-500">
+                Удерживайте Ctrl (Cmd на Mac) для нескольких. Пусто — в модалке создания задачи доступны все шаблоны
+                компании.
+              </span>
+              <select
+                multiple
+                size={Math.min(10, Math.max(4, templates.length || 4))}
+                className="input mt-1 w-full text-sm"
+                value={fieldWorkTemplateIds}
+                disabled={refsLoading}
+                onChange={(e) =>
+                  setFieldWorkTemplateIds(
+                    Array.from(e.target.selectedOptions, (o) => o.value).filter(Boolean),
+                  )
+                }
+              >
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {settingsMsg && <p className="text-xs text-surface-600">{settingsMsg}</p>}
@@ -359,7 +395,8 @@ export default function FieldWorkBoardPage() {
         variant="field_work"
         fixedBoardId={boardId ?? undefined}
         defaultTemplateId={defaultTemplateId ?? undefined}
-        lockTemplate={Boolean(defaultTemplateId?.trim())}
+        lockTemplate={false}
+        fieldWorkTemplateAllowlist={fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : null}
         onCreated={() => {
           void loadTasks();
         }}

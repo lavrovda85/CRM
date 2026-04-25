@@ -271,6 +271,31 @@ async def patch_company_workspace_settings(
                 raise ValidationError("default_field_task_template_id", "Task template not found in this company")
             settings["default_field_task_template_id"] = str(tid)
 
+    if "field_work_template_ids" in patch:
+        raw_ids = patch["field_work_template_ids"]
+        if raw_ids is None:
+            settings.pop("field_work_template_ids", None)
+        elif isinstance(raw_ids, list):
+            if len(raw_ids) == 0:
+                settings.pop("field_work_template_ids", None)
+            else:
+                validated_ids: list[str] = []
+                for item in raw_ids:
+                    try:
+                        tid = uuid.UUID(str(item).strip())
+                    except ValueError as exc:
+                        raise ValidationError("field_work_template_ids", "Each entry must be a valid UUID") from exc
+                    tpl = await db.get(TaskTemplate, tid)
+                    if tpl is None or tpl.company_id != company_id:
+                        raise ValidationError(
+                            "field_work_template_ids",
+                            "Task template not found in this company",
+                        )
+                    validated_ids.append(str(tid))
+                settings["field_work_template_ids"] = validated_ids
+        else:
+            raise ValidationError("field_work_template_ids", "Must be a list of UUID strings or null")
+
     co.settings = settings
     await db.flush()
     await db.refresh(co)

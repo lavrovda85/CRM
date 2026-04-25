@@ -63,6 +63,8 @@ export interface CompanyResponse {
   field_work_board_id?: string | null;
   /** Default task template UUID for new field-work tasks. */
   default_field_task_template_id?: string | null;
+  /** If set, only these template UUIDs are shown when creating a field-work task; omit or empty = all templates. */
+  field_work_template_ids?: string[] | null;
 }
 
 export interface CompanyMembershipItem {

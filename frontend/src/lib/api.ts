@@ -582,6 +582,8 @@ export async function fetchActiveCompany(): Promise<CompanyResponse> {
 export async function patchCompanyWorkspaceSettings(body: {
   field_work_board_id?: string | null;
   default_field_task_template_id?: string | null;
+  /** Empty array clears the filter (all templates on field board). */
+  field_work_template_ids?: string[] | null;
 }): Promise<CompanyResponse> {
   return request<CompanyResponse>("/companies/active/workspace", {
     method: "PATCH",
@@ -703,6 +705,7 @@ export async function createBoard(body: {
   name: string;
   description?: string | null;
   board_type?: string;
+  /** Kanban column metadata (e.g. field-work statuses). */
   columns?: unknown[];
 }): Promise<BoardResponse> {
   return request("/boards", {
