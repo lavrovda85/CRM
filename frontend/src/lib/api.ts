@@ -34,6 +34,7 @@ import type {
   InboxNotificationItem,
   CompanyLoginOption,
   CompanyResponse,
+  BoardResponse,
 } from "@/types";
 
 /**
@@ -685,6 +686,32 @@ export async function transitionTask(
   return request(`/tasks/${id}/transition`, {
     method: "POST",
     body: JSON.stringify({ to_status, reason }),
+  });
+}
+
+export async function fetchBoards(params: { limit?: number; offset?: number } = {}): Promise<
+  PaginatedResponse<BoardResponse>
+> {
+  const q = new URLSearchParams();
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  const suffix = q.toString() ? `?${q}` : "";
+  return request(`/boards${suffix}`);
+}
+
+export async function createBoard(body: {
+  name: string;
+  description?: string | null;
+  board_type?: string;
+  columns?: unknown[];
+}): Promise<BoardResponse> {
+  return request("/boards", {
+    method: "POST",
+    body: JSON.stringify({
+      board_type: "kanban",
+      columns: [],
+      ...body,
+    }),
   });
 }
 

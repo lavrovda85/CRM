@@ -277,7 +277,6 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          {variant !== "field_work" && (
           <div>
             <label htmlFor="task-client" className="mb-1 block text-sm font-medium text-surface-700">
               Клиент
@@ -304,7 +303,6 @@ export function CreateTaskModal({
               ))}
             </select>
           </div>
-          )}
         </div>
 
         <div>

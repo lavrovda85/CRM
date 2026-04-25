@@ -12,10 +12,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.dependencies import PaginationParams, get_crm_user_id, get_current_user, get_db
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PaginatedResponse
-from app.core.permissions import user_sees_all_company_tasks
+from app.core.permissions import MANAGE_TASKS, READ_TASKS, user_sees_all_company_tasks
 from app.core.security import CurrentUser
 from app.models import Board, Task
 from app.schemas.board import (
@@ -35,7 +36,8 @@ router = APIRouter(prefix="/boards")
 async def create_board(
     body: BoardCreate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(MANAGE_TASKS),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> BoardResponse:
     """Create a new board.
 
@@ -52,6 +54,7 @@ async def create_board(
     """
     owner_id = await resolve_users_table_id(db, user)
     board = Board(
+        company_id=ctx.company_id,
         name=body.name,
         description=body.description,
         board_type=body.board_type,
@@ -68,12 +71,10 @@ async def create_board(
 async def list_boards(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(READ_TASKS),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> PaginatedResponse[BoardResponse]:
-    """List all boards.
-
-    Возвращает постраничный список всех досок,
-    не включая архивированные по умолчанию.
+    """List boards for the active company (non-archived).
 
     Аргументы:
         pagination: Параметры пагинации.
@@ -83,12 +84,15 @@ async def list_boards(
     Возвращает:
         Постраничный ответ со списком досок.
     """
-    count_query = select(func.count(Board.id)).where(Board.is_archived.is_(False))
+    count_query = (
+        select(func.count(Board.id))
+        .where(Board.company_id == ctx.company_id, Board.is_archived.is_(False))
+    )
     total = (await db.execute(count_query)).scalar() or 0
 
     result = await db.execute(
         select(Board)
-        .where(Board.is_archived.is_(False))
+        .where(Board.company_id == ctx.company_id, Board.is_archived.is_(False))
         .order_by(Board.name)
         .offset(pagination.offset)
         .limit(pagination.limit)
@@ -107,8 +111,9 @@ async def list_boards(
 async def get_board(
     board_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(READ_TASKS),
     crm_uid: uuid.UUID = Depends(get_crm_user_id),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> BoardDetailResponse:
     """Get board detail with tasks grouped by status.
 
@@ -133,7 +138,7 @@ async def get_board(
             selectinload(Board.tasks).selectinload(Task.co_assignees),
             selectinload(Board.tasks).selectinload(Task.observers),
         )
-        .where(Board.id == board_id)
+        .where(Board.id == board_id, Board.company_id == ctx.company_id)
     )
     board = result.scalar_one_or_none()
     if not board:
@@ -163,7 +168,8 @@ async def update_board(
     board_id: uuid.UUID,
     body: BoardUpdate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(MANAGE_TASKS),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> BoardResponse:
     """Update board fields.
 
@@ -179,7 +185,9 @@ async def update_board(
     Возвращает:
         Обновлённую доску.
     """
-    result = await db.execute(select(Board).where(Board.id == board_id))
+    result = await db.execute(
+        select(Board).where(Board.id == board_id, Board.company_id == ctx.company_id),
+    )
     board = result.scalar_one_or_none()
     if not board:
         raise NotFoundError("Board", str(board_id))
@@ -199,7 +207,8 @@ async def update_board(
 async def delete_board(
     board_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(MANAGE_TASKS),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> None:
     """Delete a board.
 
@@ -211,13 +220,15 @@ async def delete_board(
         db: Асинхронная сессия БД.
         user: Текущий аутентифицированный пользователь.
     """
-    result = await db.execute(select(Board).where(Board.id == board_id))
+    result = await db.execute(
+        select(Board).where(Board.id == board_id, Board.company_id == ctx.company_id),
+    )
     board = result.scalar_one_or_none()
     if not board:
         raise NotFoundError("Board", str(board_id))
 
     await db.execute(
-        update(Task).where(Task.board_id == board_id).values(board_id=None)
+        update(Task).where(Task.board_id == board_id, Task.company_id == ctx.company_id).values(board_id=None)
     )
     await db.delete(board)
     await db.flush()

@@ -17,6 +17,7 @@ from app.core.exceptions import NotFoundError, ValidationError
 from app.mcp.actor_context import current_mcp_user_sub
 from app.mcp.server import mcp
 from app.models import Board, Task
+from app.services import company_service
 from app.schemas.board import BoardDetailResponse, BoardResponse
 from app.schemas.task import TaskResponse
 
@@ -36,10 +37,12 @@ async def list_boards(limit: int = 50) -> list[dict]:
         Board list as JSON dicts (``BoardResponse`` shape).
     """
     lim = max(1, min(int(limit), 200))
+    owner = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
+        company_id = await company_service.get_default_or_first_company_id(session, owner)
         result = await session.execute(
             select(Board)
-            .where(Board.is_archived.is_(False))
+            .where(Board.company_id == company_id, Board.is_archived.is_(False))
             .order_by(Board.name)
             .limit(lim)
         )
@@ -60,7 +63,9 @@ async def create_board(
 
     owner = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
+        company_id = await company_service.get_default_or_first_company_id(session, owner)
         board = Board(
+            company_id=company_id,
             name=clean,
             description=description,
             board_type=(board_type or "kanban").strip() or "kanban",

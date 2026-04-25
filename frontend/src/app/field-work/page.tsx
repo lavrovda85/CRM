@@ -7,18 +7,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { HardHat, Plus, Save } from "lucide-react";
+import { HardHat, Plus, Save, Sparkles } from "lucide-react";
 import { KanbanBoard, type KanbanCard, type KanbanColumn } from "@/components/boards/KanbanBoard";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import {
   ApiError,
+  createBoard,
   fetchActiveCompany,
+  fetchBoards,
   fetchTasks,
+  fetchTemplates,
   patchCompanyWorkspaceSettings,
   transitionTask,
 } from "@/lib/api";
 import { isTerminalTaskStatus } from "@/lib/timelineTaskIntervals";
-import type { TaskResponse } from "@/types";
+import type { BoardResponse, TaskResponse, TemplateResponse } from "@/types";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "next/navigation";
 
@@ -67,6 +70,10 @@ export default function FieldWorkBoardPage() {
   const [settingsTemplateDraft, setSettingsTemplateDraft] = useState("");
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [boards, setBoards] = useState<BoardResponse[]>([]);
+  const [templates, setTemplates] = useState<TemplateResponse[]>([]);
+  const [refsLoading, setRefsLoading] = useState(false);
+  const [creatingBoard, setCreatingBoard] = useState(false);
 
   const refreshCompany = useCallback(async () => {
     const c = await fetchActiveCompany();
@@ -78,6 +85,28 @@ export default function FieldWorkBoardPage() {
     setSettingsTemplateDraft(tid ?? "");
     return { bid, tid };
   }, []);
+
+  const loadSettingsRefs = useCallback(async () => {
+    if (!canConfigure) return;
+    setRefsLoading(true);
+    try {
+      const [br, tr] = await Promise.all([
+        fetchBoards({ limit: 100, offset: 0 }),
+        fetchTemplates({ limit: 100, offset: 0 }),
+      ]);
+      setBoards(br.items);
+      setTemplates(tr.items);
+    } catch {
+      setBoards([]);
+      setTemplates([]);
+    } finally {
+      setRefsLoading(false);
+    }
+  }, [canConfigure]);
+
+  useEffect(() => {
+    void loadSettingsRefs();
+  }, [loadSettingsRefs]);
 
   const loadTasks = useCallback(async () => {
     const { bid } = await refreshCompany();
@@ -166,6 +195,30 @@ export default function FieldWorkBoardPage() {
     }
   }
 
+  async function quickCreateFieldWorkBoard() {
+    setCreatingBoard(true);
+    setSettingsMsg(null);
+    try {
+      const b = await createBoard({
+        name: "Выездные работы",
+        description: "Канбан выездных бригад (создано из раздела «Выездные работы»).",
+      });
+      await patchCompanyWorkspaceSettings({
+        field_work_board_id: b.id,
+        default_field_task_template_id: settingsTemplateDraft.trim() || null,
+      });
+      setSettingsBoardDraft(b.id);
+      setSettingsMsg("Доска создана и привязана к этому разделу.");
+      const br = await fetchBoards({ limit: 100, offset: 0 });
+      setBoards(br.items);
+      await loadTasks();
+    } catch (e) {
+      setSettingsMsg(e instanceof ApiError ? e.message : "Не удалось создать доску");
+    } finally {
+      setCreatingBoard(false);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[100rem] space-y-4 overflow-x-hidden p-3 sm:p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -198,11 +251,20 @@ export default function FieldWorkBoardPage() {
       {!boardId && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-medium">Доска не настроена</p>
-          <p className="mt-1">
-            Создайте доску в компании (через API{" "}
-            <code className="rounded bg-white/60 px-1">POST /boards</code>) и укажите её UUID ниже вместе с UUID
-            шаблона задачи по умолчанию для этого канбана.
-          </p>
+          {canConfigure ? (
+            <p className="mt-1">
+              Ниже выберите существующую доску Kanban или нажмите «Создать доску» — UUID вручную больше не нужен.
+              Рекомендуется указать шаблон задачи, в workflow которого есть статусы:{" "}
+              <code className="rounded bg-white/60 px-1">new</code>,{" "}
+              <code className="rounded bg-white/60 px-1">dispatched</code>,{" "}
+              <code className="rounded bg-white/60 px-1">in_progress</code>,{" "}
+              <code className="rounded bg-white/60 px-1">testing</code>,{" "}
+              <code className="rounded bg-white/60 px-1">done</code> — тогда перетаскивание между колонками будет
+              согласовано с проверками на сервере.
+            </p>
+          ) : (
+            <p className="mt-1">Попросите администратора или руководителя назначить доску для выездных работ.</p>
+          )}
         </div>
       )}
 
@@ -214,41 +276,70 @@ export default function FieldWorkBoardPage() {
         <>
           {loading && <p className="text-sm text-surface-500">Загрузка…</p>}
           <KanbanBoard
-          columns={columns}
-          cards={cards}
-          onCardMove={handleCardMove}
-          onCardClick={(id) => router.push(`/tasks/${id}`)}
+            columns={columns}
+            cards={cards}
+            onCardMove={handleCardMove}
+            onCardClick={(id) => router.push(`/tasks/${id}`)}
           />
         </>
       )}
 
       {canConfigure && (
-        <div className="card space-y-3 p-4">
+        <div className="card space-y-4 p-4">
           <h2 className="text-sm font-semibold text-surface-800">Настройки доски (компания)</h2>
           <p className="text-xs text-surface-500">
-            UUID доски Kanban для выездных задач и UUID шаблона, который подставляется при создании задачи на этой
-            странице.
+            Доска и шаблон по умолчанию хранятся в настройках компании. Шаблон можно не задавать — тогда при создании
+            задачи шаблон выбирается вручную; для строгих переходов по колонкам лучше задать шаблон с подходящим
+            workflow.
           </p>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={creatingBoard || settingsSaving}
+              onClick={() => void quickCreateFieldWorkBoard()}
+              className="btn-primary inline-flex items-center gap-2 text-sm"
+            >
+              <Sparkles className="h-4 w-4" />
+              {creatingBoard ? "Создание…" : "Создать доску «Выездные работы»"}
+            </button>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-medium text-surface-600">
-              ID доски (board_id)
-              <input
-                className="input mt-1 w-full font-mono text-sm"
+              Доска Kanban
+              <select
+                className="input mt-1 w-full text-sm"
                 value={settingsBoardDraft}
+                disabled={refsLoading}
                 onChange={(e) => setSettingsBoardDraft(e.target.value)}
-                placeholder="uuid…"
-              />
+              >
+                <option value="">— не выбрана —</option>
+                {boards.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block text-xs font-medium text-surface-600">
-              ID шаблона по умолчанию
-              <input
-                className="input mt-1 w-full font-mono text-sm"
+              Шаблон по умолчанию (необязательно)
+              <select
+                className="input mt-1 w-full text-sm"
                 value={settingsTemplateDraft}
+                disabled={refsLoading}
                 onChange={(e) => setSettingsTemplateDraft(e.target.value)}
-                placeholder="uuid…"
-              />
+              >
+                <option value="">— без шаблона по умолчанию —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
+
           {settingsMsg && <p className="text-xs text-surface-600">{settingsMsg}</p>}
           <button
             type="button"
