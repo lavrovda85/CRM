@@ -104,6 +104,26 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
         )
     )
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url varchar(1000) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS kpp varchar(20) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS ogrn varchar(20) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS ogrnip varchar(20) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bik varchar(20) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank_account varchar(50) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS corr_account varchar(50) NULL"))
+    await conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bank_name varchar(500) NULL"))
+    await conn.execute(
+        text(
+            "UPDATE clients SET "
+            "kpp = COALESCE(kpp, NULLIF(extra_data->>'kpp','')), "
+            "ogrn = COALESCE(ogrn, NULLIF(extra_data->>'ogrn','')), "
+            "ogrnip = COALESCE(ogrnip, NULLIF(extra_data->>'ogrnip','')), "
+            "bik = COALESCE(bik, NULLIF(extra_data->>'bik','')), "
+            "bank_account = COALESCE(bank_account, NULLIF(extra_data->>'bank_account','')), "
+            "corr_account = COALESCE(corr_account, NULLIF(extra_data->>'corr_account','')), "
+            "bank_name = COALESCE(bank_name, NULLIF(extra_data->>'bank_name','')) "
+            "WHERE extra_data IS NOT NULL"
+        )
+    )
     _dc = "00000000-0000-4000-8000-000000000001"
     await conn.execute(
         text(

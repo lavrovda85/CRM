@@ -240,6 +240,9 @@ def row_to_client_create(
 
     contact_person = get("contact_person") if "contact_person" in col else ""
     primary_contact_name = contact_person.strip()[:255] if contact_person.strip() else None
+    if ctype == "individual" and isinstance(primary_contact_name, str):
+        # For physical persons, keep client display name equal to the contact person.
+        name = primary_contact_name[:500]
 
     inn = get("inn").strip()[:20] if get("inn") else None
     kpp = get("kpp").strip()[:20] if get("kpp") else None

@@ -1,4 +1,4 @@
-"""Helpers for client legal fields stored in ``Client.extra_data`` JSON."""
+"""Helpers for client payload normalization and backward compatibility."""
 
 from __future__ import annotations
 
@@ -103,9 +103,23 @@ def legal_fields_from_extra(extra: dict[str, Any] | None) -> dict[str, str | Non
     }
 
 
+def legal_fields_from_client(client: Any) -> dict[str, str | None]:
+    """Read legal fields from dedicated columns with fallback to ``extra_data``."""
+    legacy = legal_fields_from_extra(client.extra_data)
+    return {
+        "kpp": client.kpp or legacy.get("kpp"),
+        "ogrn": client.ogrn or legacy.get("ogrn"),
+        "ogrnip": client.ogrnip or legacy.get("ogrnip"),
+        "bik": client.bik or legacy.get("bik"),
+        "bank_account": client.bank_account or legacy.get("bank_account"),
+        "corr_account": client.corr_account or legacy.get("corr_account"),
+        "bank_name": client.bank_name or legacy.get("bank_name"),
+    }
+
+
 def build_client_response(client: Any) -> ClientResponse:
-    """Map ORM client to API response including legal fields from ``extra_data``."""
-    leg = legal_fields_from_extra(client.extra_data)
+    """Map ORM client to API response with legal fields from columns + fallback."""
+    leg = legal_fields_from_client(client)
     contacts = list(client.contacts) if client.contacts is not None else []
     return ClientResponse(
         id=client.id,

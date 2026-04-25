@@ -23,18 +23,9 @@ from app.schemas.client import (
     ClientResponse,
     ClientUpdate,
 )
-from app.services.client_payload import (
-    build_client_response,
-    extra_data_for_create,
-    extra_data_for_update,
-)
+from app.services.client_payload import build_client_response, extra_data_for_create
 
 router = APIRouter(prefix="/clients")
-
-_LEGAL_UPDATE_KEYS = frozenset(
-    {"kpp", "ogrn", "ogrnip", "bik", "bank_account", "corr_account", "bank_name"}
-)
-
 
 @router.post("", response_model=ClientResponse, status_code=201)
 async def create_client(
@@ -64,6 +55,13 @@ async def create_client(
         phone=body.phone,
         email=body.email,
         inn=body.inn,
+        kpp=body.kpp,
+        ogrn=body.ogrn,
+        ogrnip=body.ogrnip,
+        bik=body.bik,
+        bank_account=body.bank_account,
+        corr_account=body.corr_account,
+        bank_name=body.bank_name,
         extra_data=extra,
         notes=body.notes,
     )
@@ -195,11 +193,9 @@ async def update_client(
         raise NotFoundError("Client", str(client_id))
 
     update_data = body.model_dump(exclude_unset=True)
-    for k in _LEGAL_UPDATE_KEYS:
-        update_data.pop(k, None)
-
-    merged_extra = extra_data_for_update(client.extra_data, body)
-    if merged_extra is not None:
+    if body.extra_data is not None:
+        merged_extra = dict(client.extra_data or {})
+        merged_extra.update(body.extra_data)
         update_data["extra_data"] = merged_extra
 
     if update_data:

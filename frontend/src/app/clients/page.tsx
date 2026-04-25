@@ -37,6 +37,7 @@ function emptyForm() {
     inn: "",
     kpp: "",
     ogrn: "",
+    ogrnip: "",
     bik: "",
     bank_account: "",
     corr_account: "",
@@ -61,6 +62,7 @@ function clientToForm(c: ClientResponse) {
     inn: c.inn ?? "",
     kpp: c.kpp ?? "",
     ogrn: c.ogrn ?? "",
+    ogrnip: c.ogrnip ?? "",
     bik: c.bik ?? "",
     bank_account: c.bank_account ?? "",
     corr_account: c.corr_account ?? "",
@@ -155,6 +157,7 @@ export default function ClientsPage() {
       payload.inn = form.inn.trim() || null;
       payload.kpp = form.kpp.trim() || null;
       payload.ogrn = form.ogrn.trim() || null;
+      payload.ogrnip = form.ogrnip.trim() || null;
       payload.bik = form.bik.trim() || null;
       payload.bank_account = form.bank_account.trim() || null;
       payload.corr_account = form.corr_account.trim() || null;
@@ -271,11 +274,14 @@ export default function ClientsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-100 text-left text-surface-500">
-                  <th className="px-4 py-3 font-medium">Имя</th>
+                  <th className="px-4 py-3 font-medium">Клиент</th>
+                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Контакт</th>
+                  <th className="hidden px-4 py-3 font-medium xl:table-cell">Адрес</th>
                   <th className="hidden px-4 py-3 font-medium sm:table-cell">Тип</th>
                   <th className="hidden px-4 py-3 font-medium md:table-cell">Телефон</th>
                   <th className="hidden px-4 py-3 font-medium md:table-cell">Email</th>
-                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Контакты</th>
+                  <th className="hidden px-4 py-3 font-medium xl:table-cell">Реквизиты</th>
+                  <th className="hidden px-4 py-3 font-medium 2xl:table-cell">Комментарий</th>
                   <th className="px-4 py-3 font-medium">Создан</th>
                   <th className="w-24 px-2 py-3 font-medium text-right"> </th>
                 </tr>
@@ -290,6 +296,12 @@ export default function ClientsPage() {
                         </div>
                         <span className="font-medium">{client.name}</span>
                       </div>
+                    </td>
+                    <td className="hidden px-4 py-3 text-surface-600 lg:table-cell">
+                      {primaryContactLabel(client) || <span className="text-surface-300">—</span>}
+                    </td>
+                    <td className="hidden max-w-[18rem] truncate px-4 py-3 text-surface-600 xl:table-cell">
+                      {client.address || <span className="text-surface-300">—</span>}
                     </td>
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <span className="badge bg-surface-100 text-surface-600 gap-1">
@@ -322,11 +334,18 @@ export default function ClientsPage() {
                         <span className="text-surface-300">—</span>
                       )}
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
-                      <span className="flex items-center gap-1 text-surface-500">
-                        <Briefcase className="h-3.5 w-3.5 text-surface-400" />
-                        {client.contacts.length}
-                      </span>
+                    <td className="hidden px-4 py-3 text-surface-600 xl:table-cell">
+                      {client.client_type === "organization" ? (
+                        <span className="flex items-center gap-1">
+                          <Briefcase className="h-3.5 w-3.5 text-surface-400" />
+                          {client.inn || client.kpp || client.ogrn ? "Заполнены" : "—"}
+                        </span>
+                      ) : (
+                        <span className="text-surface-300">—</span>
+                      )}
+                    </td>
+                    <td className="hidden max-w-[16rem] truncate px-4 py-3 text-surface-600 2xl:table-cell">
+                      {client.notes || <span className="text-surface-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-surface-500">
                       {new Date(client.created_at).toLocaleDateString("ru-RU")}
@@ -359,7 +378,7 @@ export default function ClientsPage() {
                 ))}
                 {clients.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-surface-400">
+                    <td colSpan={11} className="px-4 py-12 text-center text-surface-400">
                       {debouncedSearch ? "Клиенты не найдены" : "Клиентов пока нет"}
                     </td>
                   </tr>
@@ -520,15 +539,27 @@ export default function ClientsPage() {
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-surface-700">ОГРН / ОГРНИП</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={form.ogrn}
-                      onChange={(e) => setForm({ ...form, ogrn: e.target.value })}
-                      inputMode="numeric"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">ОГРН</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.ogrn}
+                        onChange={(e) => setForm({ ...form, ogrn: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-surface-700">ОГРНИП</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.ogrnip}
+                        onChange={(e) => setForm({ ...form, ogrnip: e.target.value })}
+                        inputMode="numeric"
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

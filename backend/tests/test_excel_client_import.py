@@ -54,3 +54,22 @@ def test_ogrnip_before_ogrn_headers() -> None:
     col = map_client_columns(headers)
     assert col.get("ogrnip") == 0
     assert col.get("ogrn") == 1
+
+
+def test_individual_uses_contact_as_name() -> None:
+    headers = [
+        "Компания (auto)",
+        "Контактное лицо (auto)",
+        "Вид клиента физ/юр",
+    ]
+    col = map_client_columns(headers)
+    row = (
+        "Случайное имя из файла",
+        "Петров П.П.",
+        "физ",
+    )
+    body = row_to_client_create(row, col)
+    assert body is not None
+    assert body.client_type == "individual"
+    assert body.name == "Петров П.П."
+    assert body.primary_contact_name == "Петров П.П."

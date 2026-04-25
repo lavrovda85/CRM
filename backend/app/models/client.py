@@ -37,6 +37,13 @@ class Client(TenantMixin, BaseModel):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     inn: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    kpp: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ogrn: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ogrnip: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bik: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bank_account: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    corr_account: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     extra_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
