@@ -7,7 +7,7 @@ CRUD операции над клиентами (физ. лица / органи
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -85,7 +85,10 @@ async def create_client(
 
 @router.get("", response_model=PaginatedResponse[ClientResponse])
 async def list_clients(
-    search: str | None = Query(default=None, description="Search by name, phone or email"),
+    search: str | None = Query(
+        default=None,
+        description="Search across name, contacts, phone, email, address, INN, bank, notes",
+    ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     ctx: ActiveCompanyContext = Depends(get_active_company),
@@ -93,7 +96,7 @@ async def list_clients(
     """List or search clients.
 
     Возвращает постраничный список клиентов с возможностью
-    поиска по имени, телефону или email.
+    поиска по основным полям и ФИО контактных лиц.
 
     Аргументы:
         search: Строка поиска.
@@ -114,10 +117,27 @@ async def list_clients(
 
     if search:
         pattern = f"%{search}%"
+        contact_name_match = exists(
+            select(1).where(
+                ClientContact.client_id == Client.id,
+                ClientContact.full_name.ilike(pattern),
+            )
+        )
         search_filter = or_(
             Client.name.ilike(pattern),
             Client.phone.ilike(pattern),
             Client.email.ilike(pattern),
+            Client.address.ilike(pattern),
+            Client.inn.ilike(pattern),
+            Client.kpp.ilike(pattern),
+            Client.ogrn.ilike(pattern),
+            Client.ogrnip.ilike(pattern),
+            Client.bik.ilike(pattern),
+            Client.bank_account.ilike(pattern),
+            Client.corr_account.ilike(pattern),
+            Client.bank_name.ilike(pattern),
+            Client.notes.ilike(pattern),
+            contact_name_match,
         )
         query = query.where(search_filter)
         count_query = count_query.where(search_filter)

@@ -771,6 +771,10 @@ export async function fetchClients(
   return request(`/clients${qs(params)}`);
 }
 
+export async function fetchClient(id: string): Promise<ClientResponse> {
+  return request(`/clients/${id}`);
+}
+
 export async function createClient(
   data: Record<string, unknown>,
 ): Promise<ClientResponse> {

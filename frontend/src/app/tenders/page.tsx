@@ -20,9 +20,10 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { ApiError, createClient, createTender, deleteTender, fetchClients, fetchTenders, transitionTender } from "@/lib/api";
+import { ApiError, createClient, createTender, deleteTender, fetchTenders, transitionTender } from "@/lib/api";
+import { ClientSearchSelect } from "@/components/clients/ClientSearchSelect";
 import { tenderStatusLabel } from "@/lib/tenderPipeline";
-import type { ClientResponse, TenderResponse, TenderStatus } from "@/types";
+import type { TenderResponse, TenderStatus } from "@/types";
 
 const COLUMNS: { key: TenderStatus; label: string; color: string }[] = [
   { key: "search", label: "Поиск", color: "bg-surface-400" },
@@ -47,10 +48,6 @@ export default function TendersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-
-  const [clients, setClients] = useState<ClientResponse[]>([]);
-  const [clientsBusy, setClientsBusy] = useState(false);
-  const [clientsLoaded, setClientsLoaded] = useState(false);
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingTenderId, setDeletingTenderId] = useState<string | null>(null);
@@ -93,20 +90,6 @@ export default function TendersPage() {
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    if (!createOpen) return;
-    if (clientsLoaded) return;
-
-    setClientsBusy(true);
-    fetchClients({ limit: 200 })
-      .then((res) => setClients(res.items))
-      .catch(() => {})
-      .finally(() => {
-        setClientsBusy(false);
-        setClientsLoaded(true);
-      });
-  }, [createOpen, clientsLoaded]);
 
   async function handleTenderDragEnd(result: DropResult) {
     const { destination, source, draggableId } = result;
@@ -424,30 +407,16 @@ export default function TendersPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-medium text-surface-700">Заказчик *</label>
-                </div>
-                {clientsBusy ? (
-                  <p className="text-xs text-surface-500">Загрузка клиентов...</p>
-                ) : clients.length > 0 ? (
-                  <select
-                    className="input w-full"
-                    value={form.customer_id}
-                    onChange={(e) => setForm((p) => ({ ...p, customer_id: e.target.value }))}
-                  >
-                    <option value="">Выберите клиента</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                    <option value="__new__">Создать нового</option>
-                  </select>
-                ) : (
-                  <p className="text-xs text-surface-500">Список клиентов пуст. Создайте нового.</p>
-                )}
+                <ClientSearchSelect
+                  label="Заказчик *"
+                  selectId="tender-customer"
+                  value={form.customer_id}
+                  onChange={(id) => setForm((p) => ({ ...p, customer_id: id }))}
+                  newOptionValue="__new__"
+                  newOptionLabel="Создать нового заказчика…"
+                />
 
-                {clients.length === 0 || form.customer_id === "__new__" ? (
+                {form.customer_id === "__new__" ? (
                   <div className="space-y-2">
                     <input
                       className="input w-full"
@@ -564,9 +533,8 @@ export default function TendersPage() {
                     let customerId: string | null = null;
                     if (form.customer_id && form.customer_id !== "__new__") {
                       customerId = form.customer_id;
-                    } else if (form.customer_id === "__new__" || clients.length === 0) {
-                      // Create new customer when explicit "new" selected
-                      // or when we have no clients in the system yet.
+                    } else if (form.customer_id === "__new__") {
+                      // Create new customer when explicit "new" selected.
                       if (!form.new_customer_name.trim()) {
                         throw new Error("Укажите имя заказчика (для создания нового)");
                       }

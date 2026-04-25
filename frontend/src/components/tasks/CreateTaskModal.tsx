@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
-import { createTask, fetchTemplates, fetchClients, fetchUsers, type UserListItem } from "@/lib/api";
-import type { TemplateResponse, ClientResponse, TaskResponse } from "@/types";
+import { createTask, fetchTemplates, fetchUsers, type UserListItem } from "@/lib/api";
+import { ClientSearchSelect } from "@/components/clients/ClientSearchSelect";
+import type { TemplateResponse, TaskResponse } from "@/types";
 
 const NEW_CLIENT_VALUE = "__new_client__";
 
@@ -69,7 +70,6 @@ export function CreateTaskModal({
   const [error, setError] = useState<string | null>(null);
 
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
-  const [clients, setClients] = useState<ClientResponse[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(false);
 
@@ -77,21 +77,18 @@ export function CreateTaskModal({
     setLoadingRefs(true);
     setError(null);
     try {
-      const [tmplRes, clientRes, usersRes] = await Promise.all([
+      const [tmplRes, usersRes] = await Promise.all([
         fetchTemplates({ limit: 100 }),
-        fetchClients({ limit: 200 }),
         fetchUsers({ is_active: true, limit: 100 }),
       ]);
       setTemplates(tmplRes.items);
-      setClients(clientRes.items);
       setUsers(usersRes.items);
     } catch (e) {
       setUsers([]);
       setTemplates([]);
-      setClients([]);
       setError(
         e instanceof Error
-          ? `Не удалось загрузить справочники (шаблоны, клиенты, пользователи): ${e.message}. Убедитесь, что запросы идут на тот же хост и порт, что и страница (например :9000 → /api/v1 через Next.js), и что backend/nginx доступны.`
+          ? `Не удалось загрузить справочники (шаблоны, пользователи): ${e.message}. Убедитесь, что запросы идут на тот же хост и порт, что и страница (например :9000 → /api/v1 через Next.js), и что backend/nginx доступны.`
           : "Не удалось загрузить справочники",
       );
     } finally {
@@ -277,32 +274,19 @@ export function CreateTaskModal({
             </select>
           </div>
 
-          <div>
-            <label htmlFor="task-client" className="mb-1 block text-sm font-medium text-surface-700">
-              Клиент
-            </label>
-            <select
-              id="task-client"
-              value={clientId}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === NEW_CLIENT_VALUE) {
-                  onClose();
-                  router.push("/clients?create=1");
-                  return;
-                }
-                setClientId(v);
-              }}
-              className="input"
-              disabled={loadingRefs}
-            >
-              <option value="">Не выбран</option>
-              <option value={NEW_CLIENT_VALUE}>+ Создать клиента…</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          <ClientSearchSelect
+            label="Клиент"
+            selectId="task-client"
+            value={clientId}
+            onChange={(id) => setClientId(id)}
+            disabled={loadingRefs}
+            newOptionValue={NEW_CLIENT_VALUE}
+            newOptionLabel="+ Создать клиента…"
+            onPickCreateNew={() => {
+              onClose();
+              router.push("/clients?create=1");
+            }}
+          />
         </div>
 
         <div>
