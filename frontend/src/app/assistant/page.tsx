@@ -301,8 +301,11 @@ export default function AssistantPage() {
           <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-xs text-emerald-950">
             <p>
               Клиентов создано: <strong>{excelImportResult.clients_created}</strong>, пропущено:{" "}
-              {excelImportResult.clients_skipped}. Склад: +{excelImportResult.warehouse_created} новых,{" "}
-              {excelImportResult.warehouse_updated} обновлено.
+              {excelImportResult.clients_skipped}
+              {" "}
+              (пусто: {excelImportResult.clients_skipped_empty ?? 0}, дубликат:{" "}
+              {excelImportResult.clients_skipped_duplicate ?? 0}, ошибка: {excelImportResult.clients_skipped_error ?? 0}
+              ). Склад: +{excelImportResult.warehouse_created} новых, {excelImportResult.warehouse_updated} обновлено.
             </p>
             {excelImportResult.sheets.length > 0 && (
               <ul className="mt-1 list-inside list-disc text-emerald-900/90">

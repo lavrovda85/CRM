@@ -614,6 +614,9 @@ export interface ExcelUnifiedImportSheetSummary {
 export interface ExcelUnifiedImportResponse {
   clients_created: number;
   clients_skipped: number;
+  clients_skipped_empty?: number;
+  clients_skipped_duplicate?: number;
+  clients_skipped_error?: number;
   warehouse_created: number;
   warehouse_updated: number;
   warehouse_skipped: number;

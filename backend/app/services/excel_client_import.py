@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -183,6 +184,21 @@ def _extract_email_only(blob: str) -> str | None:
     return em.group(0) if em else None
 
 
+@dataclass
+class ClientSheetImportStats:
+    """Aggregated statistics for a single client worksheet import run."""
+
+    created: int = 0
+    skipped_empty: int = 0
+    skipped_duplicate: int = 0
+    skipped_error: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def skipped(self) -> int:
+        return self.skipped_empty + self.skipped_duplicate + self.skipped_error
+
+
 def _client_type_from_cell(raw: str) -> str:
     s = raw.lower().strip()
     if any(x in s for x in ("юр", "ооо", "организац", "company", "organization", "legal")):
@@ -199,26 +215,48 @@ def row_to_client_create(
     col: dict[str, int],
 ) -> ClientCreate | None:
     """Build ClientCreate from a data row; return None to skip."""
-    def get(field: str) -> str:
-        i = col.get(field)
+    def get(col_key: str) -> str:
+        i = col.get(col_key)
         if i is None or i >= len(row):
             return ""
         return _norm_cell(row[i])
 
     name_raw = get("name")
-    if not name_raw:
-        return None
-    lines = [ln.strip() for ln in name_raw.splitlines() if ln.strip()]
-    name = lines[0][:500] if lines else ""
+    name = ""
     address = ""
-    if "address_only" in col:
-        address = get("address_only")[:4000]
-    elif len(lines) > 1:
-        address = "\n".join(lines[1:])[:4000]
-    elif len(name_raw) > 200:
-        name = name_raw[:500]
+    name_from_address_no_company = False
+
+    if name_raw.strip():
+        lines = [ln.strip() for ln in name_raw.splitlines() if ln.strip()]
+        name = lines[0][:500] if lines else ""
+        if "address_only" in col:
+            address = get("address_only")[:4000]
+        elif len(lines) > 1:
+            address = "\n".join(lines[1:])[:4000]
+        elif len(name_raw) > 200:
+            name = name_raw[:500]
+    else:
+        # No company: copy address text into name (physical person), else contact, else skip.
+        if "address_only" in col:
+            addr_raw = get("address_only")
+            if addr_raw.strip():
+                addr_norm = _norm_cell(addr_raw)
+                name = re.sub(r"\s+", " ", addr_norm).strip()[:500]
+                address = addr_norm[:4000]
+                name_from_address_no_company = True
+        if not name.strip():
+            c = (get("contact_person") or "").strip()
+            if c:
+                name = c[:500]
+                name_from_address_no_company = False
+                if "address_only" in col and not (address or "").strip():
+                    address = get("address_only")[:4000]
+        if not name.strip():
+            return None
 
     ctype = _client_type_from_cell(get("client_type")) if "client_type" in col else "individual"
+    if name_from_address_no_company:
+        ctype = "individual"
 
     phone: str | None = None
     email: str | None = None
@@ -241,7 +279,7 @@ def row_to_client_create(
 
     contact_person = get("contact_person") if "contact_person" in col else ""
     primary_contact_name = contact_person.strip()[:255] if contact_person.strip() else None
-    if ctype == "individual" and isinstance(primary_contact_name, str):
+    if ctype == "individual" and primary_contact_name and not name_from_address_no_company:
         # For physical persons, keep client display name equal to the contact person.
         name = primary_contact_name[:500]
 
@@ -271,6 +309,11 @@ def row_to_client_create(
     if get("equipment"):
         extra["equipment"] = get("equipment")[:500]
 
+    if email:
+        email = email[:255]
+    if phone:
+        phone = phone[:50]
+
     return ClientCreate(
         name=name or "Без названия",
         client_type=ctype,
@@ -297,16 +340,18 @@ async def import_clients_from_sheet(
     company_id: uuid.UUID,
     rows: list[tuple[Any, ...]],
     sheet_name: str,
-) -> tuple[int, int, list[str]]:
-    """Import client rows from one worksheet. Returns (created, skipped, errors)."""
+) -> ClientSheetImportStats:
+    """Import client rows from one worksheet. Returns per-reason skip counts and error notes."""
     from app.models import Client, ClientContact
 
     if not rows:
-        return 0, 0, []
+        return ClientSheetImportStats()
 
     header_idx = find_client_header_row(rows)
     if header_idx is None:
-        return 0, 0, [f"Sheet {sheet_name!r}: no client header row detected"]
+        return ClientSheetImportStats(
+            errors=[f"Sheet {sheet_name!r}: no client header row detected"],
+        )
 
     header_cells = rows[header_idx]
     headers = [_norm_cell(c) for c in header_cells]
@@ -327,19 +372,19 @@ async def import_clients_from_sheet(
             col["name"] = best_j
 
     if "name" not in col:
-        return 0, 0, [f"Sheet {sheet_name!r}: could not detect name column"]
+        return ClientSheetImportStats(
+            errors=[f"Sheet {sheet_name!r}: could not detect name column"],
+        )
 
     await ensure_client_legal_columns(db)
 
-    created = 0
-    skipped = 0
-    errors: list[str] = []
+    stats = ClientSheetImportStats()
 
     for ridx, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
         try:
             body = row_to_client_create(row, col)
             if body is None:
-                skipped += 1
+                stats.skipped_empty += 1
                 continue
 
             dup = False
@@ -369,7 +414,7 @@ async def import_clients_from_sheet(
                 dup = q.scalar_one_or_none() is not None
 
             if dup:
-                skipped += 1
+                stats.skipped_duplicate += 1
                 continue
 
             extra_merged = extra_data_for_create(body)
@@ -396,9 +441,9 @@ async def import_clients_from_sheet(
                         is_primary=True,
                     )
                 )
-            created += 1
+            stats.created += 1
         except Exception as exc:
-            errors.append(f"{sheet_name} row {ridx}: {exc}")
-            skipped += 1
+            stats.errors.append(f"{sheet_name} row {ridx}: {exc}")
+            stats.skipped_error += 1
 
-    return created, skipped, errors
+    return stats

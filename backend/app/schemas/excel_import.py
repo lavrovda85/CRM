@@ -19,6 +19,9 @@ class ExcelUnifiedImportResponse(BaseModel):
 
     clients_created: int = 0
     clients_skipped: int = 0
+    clients_skipped_empty: int = 0
+    clients_skipped_duplicate: int = 0
+    clients_skipped_error: int = 0
     warehouse_created: int = 0
     warehouse_updated: int = 0
     warehouse_skipped: int = 0

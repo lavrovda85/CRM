@@ -256,7 +256,7 @@ export default function ClientsPage() {
   const dialogOpen = dialogMode !== "closed";
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-4 p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Клиенты</h1>
         <button type="button" onClick={openCreate} className="btn-primary gap-1.5">
@@ -298,88 +298,96 @@ export default function ClientsPage() {
           ))}
         </div>
       ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className="card min-w-0 overflow-hidden">
+          <div className="min-w-0 overflow-hidden">
+            <table className="w-full min-w-0 table-fixed border-collapse text-sm">
               <thead>
                 <tr className="border-b border-surface-100 text-left text-surface-500">
-                  <th className="px-4 py-3 font-medium">Клиент</th>
-                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Контакт</th>
-                  <th className="hidden px-4 py-3 font-medium xl:table-cell">Адрес</th>
-                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Тип</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Телефон</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Email</th>
-                  <th className="hidden px-4 py-3 font-medium xl:table-cell">Реквизиты</th>
-                  <th className="hidden px-4 py-3 font-medium 2xl:table-cell">Комментарий</th>
-                  <th className="px-4 py-3 font-medium">Создан</th>
-                  <th className="w-24 px-2 py-3 font-medium text-right"> </th>
+                  <th className="min-w-0 px-3 py-3 font-medium xl:w-[18%]">Клиент</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium lg:table-cell lg:w-[14%]">Контакт</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium xl:table-cell xl:w-[16%]">Адрес</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium sm:table-cell sm:w-[9rem]">Тип</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium md:table-cell md:w-[11%]">Телефон</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium md:table-cell md:w-[14%]">Email</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium xl:table-cell xl:w-[7rem]">Реквизиты</th>
+                  <th className="hidden min-w-0 px-3 py-3 font-medium 2xl:table-cell 2xl:w-[12%]">Комментарий</th>
+                  <th className="min-w-0 whitespace-nowrap px-3 py-3 font-medium xl:w-[5.5rem]">Создан</th>
+                  <th className="w-20 min-w-0 shrink-0 px-2 py-3 text-right font-medium sm:w-24"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-50">
                 {clients.map((client) => (
                   <tr key={client.id} className="hover:bg-surface-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="min-w-0 px-3 py-3 align-top">
+                      <div className="flex min-w-0 items-start gap-2">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-medium text-primary-700">
                           {client.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium">{client.name}</span>
+                        <span className="min-w-0 break-words font-medium" title={client.name}>
+                          {client.name}
+                        </span>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3 text-surface-600 lg:table-cell">
+                    <td className="hidden min-w-0 break-words px-3 py-3 text-surface-600 lg:table-cell">
                       {primaryContactLabel(client) || <span className="text-surface-300">—</span>}
                     </td>
-                    <td className="hidden max-w-[18rem] truncate px-4 py-3 text-surface-600 xl:table-cell">
+                    <td className="hidden min-w-0 break-words px-3 py-3 text-surface-600 xl:table-cell">
                       {client.address || <span className="text-surface-300">—</span>}
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <span className="badge bg-surface-100 text-surface-600 gap-1">
+                    <td className="hidden min-w-0 px-3 py-3 sm:table-cell">
+                      <span className="badge inline-flex max-w-full flex-wrap items-center gap-1 bg-surface-100 text-surface-600">
                         {client.client_type === "organization" ? (
                           <>
-                            <Building2 className="h-3 w-3" /> Организация
+                            <Building2 className="h-3 w-3 shrink-0" /> Организация
                           </>
                         ) : (
                           <>
-                            <User className="h-3 w-3" /> Физ. лицо
+                            <User className="h-3 w-3 shrink-0" /> Физ. лицо
                           </>
                         )}
                       </span>
                     </td>
-                    <td className="hidden px-4 py-3 text-surface-600 md:table-cell">
+                    <td className="hidden min-w-0 px-3 py-3 text-surface-600 md:table-cell">
                       {client.phone ? (
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5 text-surface-400" /> {client.phone}
+                        <span className="flex min-w-0 items-start gap-1">
+                          <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-surface-400" />
+                          <span className="min-w-0 break-words">{client.phone}</span>
                         </span>
                       ) : (
                         <span className="text-surface-300">—</span>
                       )}
                     </td>
-                    <td className="hidden px-4 py-3 text-surface-600 md:table-cell">
+                    <td className="hidden min-w-0 px-3 py-3 text-surface-600 md:table-cell">
                       {client.email ? (
-                        <span className="flex items-center gap-1">
-                          <Mail className="h-3.5 w-3.5 text-surface-400" /> {client.email}
+                        <span className="flex min-w-0 items-start gap-1">
+                          <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-surface-400" />
+                          <span className="min-w-0 break-all" title={client.email}>
+                            {client.email}
+                          </span>
                         </span>
                       ) : (
                         <span className="text-surface-300">—</span>
                       )}
                     </td>
-                    <td className="hidden px-4 py-3 text-surface-600 xl:table-cell">
+                    <td className="hidden min-w-0 px-3 py-3 text-surface-600 xl:table-cell">
                       {client.client_type === "organization" ? (
-                        <span className="flex items-center gap-1">
-                          <Briefcase className="h-3.5 w-3.5 text-surface-400" />
-                          {client.inn || client.kpp || client.ogrn ? "Заполнены" : "—"}
+                        <span className="flex min-w-0 items-center gap-1">
+                          <Briefcase className="h-3.5 w-3.5 shrink-0 text-surface-400" />
+                          <span className="min-w-0 truncate">
+                            {client.inn || client.kpp || client.ogrn ? "Заполнены" : "—"}
+                          </span>
                         </span>
                       ) : (
                         <span className="text-surface-300">—</span>
                       )}
                     </td>
-                    <td className="hidden max-w-[16rem] truncate px-4 py-3 text-surface-600 2xl:table-cell">
+                    <td className="hidden min-w-0 break-words px-3 py-3 text-surface-600 2xl:table-cell">
                       {client.notes || <span className="text-surface-300">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-surface-500">
+                    <td className="min-w-0 whitespace-nowrap px-3 py-3 text-surface-500">
                       {new Date(client.created_at).toLocaleDateString("ru-RU")}
                     </td>
-                    <td className="px-2 py-3 text-right">
+                    <td className="min-w-0 shrink-0 px-2 py-3 text-right">
                       <div className="inline-flex items-center">
                         <button
                           type="button"
@@ -407,7 +415,7 @@ export default function ClientsPage() {
                 ))}
                 {clients.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-12 text-center text-surface-400">
+                    <td colSpan={10} className="px-4 py-12 text-center text-surface-400">
                       {debouncedSearch ? "Клиенты не найдены" : "Клиентов пока нет"}
                     </td>
                   </tr>

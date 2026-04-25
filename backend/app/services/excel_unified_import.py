@@ -106,6 +106,9 @@ async def import_excel_workbook(
 
     total_cc = 0
     total_cs = 0
+    total_se = 0
+    total_sd = 0
+    total_sx = 0
     total_wc = 0
     total_wu = 0
     total_ws = 0
@@ -137,42 +140,54 @@ async def import_excel_workbook(
                 )
             )
         elif kind == "clients":
-            cc, cs, errs = await import_clients_from_sheet(
+            st = await import_clients_from_sheet(
                 db,
                 company_id=company_id,
                 rows=rows,
                 sheet_name=sheet_name,
             )
-            total_cc += cc
-            total_cs += cs
-            all_errors.extend(errs)
+            total_cc += st.created
+            total_cs += st.skipped
+            total_se += st.skipped_empty
+            total_sd += st.skipped_duplicate
+            total_sx += st.skipped_error
+            all_errors.extend(st.errors)
             sheets_out.append(
                 SheetImportSummary(
                     sheet_name=sheet_name,
                     kind="clients",
-                    rows_processed=cc + cs,
-                    message=f"{cc} created, {cs} skipped",
+                    rows_processed=st.created + st.skipped,
+                    message=(
+                        f"{st.created} created, {st.skipped} skipped "
+                        f"(empty {st.skipped_empty}, duplicate {st.skipped_duplicate}, error {st.skipped_error})"
+                    ),
                 )
             )
         else:
             # Try client import anyway if any row looks like data
             idx = find_client_header_row(rows)
             if idx is not None:
-                cc, cs, errs = await import_clients_from_sheet(
+                st = await import_clients_from_sheet(
                     db,
                     company_id=company_id,
                     rows=rows,
                     sheet_name=sheet_name,
                 )
-                total_cc += cc
-                total_cs += cs
-                all_errors.extend(errs)
+                total_cc += st.created
+                total_cs += st.skipped
+                total_se += st.skipped_empty
+                total_sd += st.skipped_duplicate
+                total_sx += st.skipped_error
+                all_errors.extend(st.errors)
                 sheets_out.append(
                     SheetImportSummary(
                         sheet_name=sheet_name,
                         kind="clients",
-                        rows_processed=cc + cs,
-                        message=f"low-confidence mapping: {cc} created, {cs} skipped",
+                        rows_processed=st.created + st.skipped,
+                        message=(
+                            f"low-confidence mapping: {st.created} created, {st.skipped} skipped "
+                            f"(empty {st.skipped_empty}, duplicate {st.skipped_duplicate}, error {st.skipped_error})"
+                        ),
                     )
                 )
             else:
@@ -188,6 +203,9 @@ async def import_excel_workbook(
     return ExcelUnifiedImportResponse(
         clients_created=total_cc,
         clients_skipped=total_cs,
+        clients_skipped_empty=total_se,
+        clients_skipped_duplicate=total_sd,
+        clients_skipped_error=total_sx,
         warehouse_created=total_wc,
         warehouse_updated=total_wu,
         warehouse_skipped=total_ws,

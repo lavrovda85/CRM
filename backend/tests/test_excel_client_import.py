@@ -73,3 +73,56 @@ def test_individual_uses_contact_as_name() -> None:
     assert body.client_type == "individual"
     assert body.name == "Петров П.П."
     assert body.primary_contact_name == "Петров П.П."
+
+
+def test_empty_company_uses_address_as_name_individual() -> None:
+    """No company + address: physical person, name is the address text (collapsed)."""
+    headers = [
+        "Компания (auto)",
+        "Контактное лицо (auto)",
+        "Адрес (auto)",
+        "Телефоны (auto)",
+        "Email (auto)",
+        "Вид клиента физ/юр",
+    ]
+    col = map_client_columns(headers)
+    row = (
+        "",
+        "Игнор",
+        "ул. Ленина 1, офис 2\nдоп. строка",
+        "+7 900 000-00-00",
+        "",
+        "юр",
+    )
+    body = row_to_client_create(row, col)
+    assert body is not None
+    assert body.name == "ул. Ленина 1, офис 2 доп. строка"
+    assert "доп. строка" in (body.address or "")
+    assert body.client_type == "individual"
+    assert body.primary_contact_name == "Игнор"
+
+
+def test_empty_company_and_address_use_contact_name() -> None:
+    """When company and address are empty, use the contact person column as the client name."""
+    headers = [
+        "Компания (auto)",
+        "Контактное лицо (auto)",
+        "Адрес (auto)",
+        "Телефоны (auto)",
+        "Email (auto)",
+        "Вид клиента физ/юр",
+    ]
+    col = map_client_columns(headers)
+    row = (
+        "",
+        "Сидоров С.С.",
+        "",
+        "+7 900 111-22-33",
+        "",
+        "юр",
+    )
+    body = row_to_client_create(row, col)
+    assert body is not None
+    assert body.name == "Сидоров С.С."
+    assert body.client_type == "organization"
+    assert body.primary_contact_name == "Сидоров С.С."
