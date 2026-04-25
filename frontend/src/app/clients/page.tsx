@@ -22,8 +22,34 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
+type ExtraDataRow = { key: string; value: string };
+
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-surface-200 ${className}`} />;
+}
+
+function extraDataToRows(extra: Record<string, unknown> | null | undefined): ExtraDataRow[] {
+  if (!extra || typeof extra !== "object") return [];
+  return Object.entries(extra).map(([key, value]) => ({
+    key,
+    value: typeof value === "string" ? value : JSON.stringify(value),
+  }));
+}
+
+function rowsToExtraData(rows: ExtraDataRow[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    const raw = row.value.trim();
+    if (!raw) continue;
+    try {
+      out[key] = JSON.parse(raw);
+    } catch {
+      out[key] = raw;
+    }
+  }
+  return out;
 }
 
 function emptyForm() {
@@ -43,6 +69,7 @@ function emptyForm() {
     corr_account: "",
     bank_name: "",
     notes: "",
+    extra_data_items: [] as ExtraDataRow[],
   };
 }
 
@@ -68,6 +95,7 @@ function clientToForm(c: ClientResponse) {
     corr_account: c.corr_account ?? "",
     bank_name: c.bank_name ?? "",
     notes: c.notes ?? "",
+    extra_data_items: extraDataToRows(c.extra_data),
   };
 }
 
@@ -163,6 +191,7 @@ export default function ClientsPage() {
       payload.corr_account = form.corr_account.trim() || null;
       payload.bank_name = form.bank_name.trim() || null;
     }
+    payload.extra_data = rowsToExtraData(form.extra_data_items);
     return payload;
   }
 
@@ -513,6 +542,76 @@ export default function ClientsPage() {
                   placeholder="Внутренние заметки менеджера"
                   rows={2}
                 />
+              </div>
+              <div className="space-y-2 rounded-lg border border-surface-100 bg-surface-50/60 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-surface-600">
+                    Дополнительные данные (JSON ключ-значение)
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        extra_data_items: [...prev.extra_data_items, { key: "", value: "" }],
+                      }))
+                    }
+                  >
+                    <Plus className="h-4 w-4" /> Добавить поле
+                  </button>
+                </div>
+                {form.extra_data_items.length === 0 ? (
+                  <p className="text-xs text-surface-400">
+                    Например: `telegram`, `whatsapp`, `instagram`, `vk`, `utm_source`, `паспорт`.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.extra_data_items.map((item, idx) => (
+                      <div key={`${idx}-${item.key}`} className="grid grid-cols-1 gap-2 md:grid-cols-12">
+                        <input
+                          type="text"
+                          className="input md:col-span-4"
+                          placeholder="Ключ, напр. telegram"
+                          value={item.key}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              const next = [...prev.extra_data_items];
+                              next[idx] = { ...next[idx], key: e.target.value };
+                              return { ...prev, extra_data_items: next };
+                            })
+                          }
+                        />
+                        <input
+                          type="text"
+                          className="input md:col-span-7"
+                          placeholder="Значение, напр. @client_handle"
+                          value={item.value}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              const next = [...prev.extra_data_items];
+                              next[idx] = { ...next[idx], value: e.target.value };
+                              return { ...prev, extra_data_items: next };
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="btn-ghost md:col-span-1"
+                          title="Удалить поле"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              extra_data_items: prev.extra_data_items.filter((_, i) => i !== idx),
+                            }))
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {form.client_type === "organization" && (
                 <div className="space-y-3 rounded-lg border border-surface-100 bg-surface-50/80 p-3">

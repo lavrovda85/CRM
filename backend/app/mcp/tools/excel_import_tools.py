@@ -19,7 +19,7 @@ _MAX_BYTES = 6 * 1024 * 1024
 
 @mcp.tool()
 async def import_excel_workbook_base64(
-    file_base64: str,
+    file_base64: str | None = None,
     filename: str = "upload.xlsx",
     use_ai_mapping: bool = False,
     __confirm: str | None = None,
@@ -48,7 +48,14 @@ async def import_excel_workbook_base64(
 
     raw = (file_base64 or "").strip()
     if not raw:
-        raise ValidationError("file_base64", "Non-empty base64 string required")
+        return {
+            "ok": False,
+            "code": "FILE_CONTENT_REQUIRED",
+            "message": (
+                "Missing Excel file content. Attach an .xlsx file and call the tool again; "
+                "the sidecar will inject file_base64 automatically."
+            ),
+        }
 
     try:
         data = base64.b64decode(raw, validate=True)
