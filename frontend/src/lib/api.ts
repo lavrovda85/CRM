@@ -88,6 +88,8 @@ function tunnelInterstitialBypassHeaders(): Record<string, string> {
 const API_REQUEST_TIMEOUT_MS = 45_000;
 /** AI assistant: OpenAI + many tool rounds can exceed 45s; keep below nginx 600s where used. */
 const API_AI_ASSISTANT_TIMEOUT_MS = 600_000;
+/** Admin deploy can run for several minutes while compose rebuilds/restarts. */
+const API_DEPLOY_TIMEOUT_MS = 600_000;
 
 /** Normalize timeout / abort detection across browsers (DOMException vs Error). */
 function isAbortErrorLike(e: unknown): boolean {
@@ -100,6 +102,14 @@ function isAbortErrorLike(e: unknown): boolean {
 
 function apiTimeoutMsForPath(path: string): number {
   const p = (path.split("?")[0] ?? path).trim();
+  if (
+    p === "/admin/deploy/run" ||
+    p.startsWith("/admin/deploy/run/") ||
+    p === "/admin/deploy/logs/project" ||
+    p.startsWith("/admin/deploy/logs/project")
+  ) {
+    return API_DEPLOY_TIMEOUT_MS;
+  }
   if (
     p.startsWith("/ai-assistant/chat") ||
     p === "/ai-assistant/clear"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import uuid
+from pathlib import Path
 
 from app.core.database import async_session_factory
 from app.core.destructive_confirm import is_destructive_action_confirmed
@@ -21,6 +22,7 @@ _MAX_BYTES = 6 * 1024 * 1024
 async def import_excel_workbook_base64(
     file_base64: str | None = None,
     filename: str = "upload.xlsx",
+    file_path: str | None = None,
     use_ai_mapping: bool = False,
     __confirm: str | None = None,
 ) -> dict:
@@ -32,6 +34,7 @@ async def import_excel_workbook_base64(
     Args:
         file_base64: XLSX file content encoded as base64 (max ~6 MB).
         filename: Original name (for logs only).
+        file_path: Optional absolute/relative path to local .xlsx file (fallback when attachment was not uploaded).
         use_ai_mapping: Reserved for future AI column mapping.
         __confirm: Explicit confirmation (e.g. \"yes\", \"подтверждаю\", \"да\") for bulk import safety.
 
@@ -47,26 +50,40 @@ async def import_excel_workbook_base64(
         }
 
     raw = (file_base64 or "").strip()
-    if not raw:
-        return {
-            "ok": False,
-            "code": "FILE_CONTENT_REQUIRED",
-            "message": (
-                "Missing Excel file content. Attach an .xlsx file and call the tool again; "
-                "the sidecar will inject file_base64 automatically."
-            ),
-        }
+    data: bytes | None = None
+    if raw:
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except binascii.Error as exc:
+            raise ValidationError("file_base64", "Invalid base64") from exc
+    else:
+        fp = (file_path or "").strip()
+        if fp:
+            try:
+                p = Path(fp).expanduser()
+                data = p.read_bytes()
+                if not filename or filename == "upload.xlsx":
+                    filename = p.name
+            except OSError as exc:
+                raise ValidationError("file_path", f"Cannot read file: {exc}") from exc
+        else:
+            return {
+                "ok": False,
+                "code": "FILE_CONTENT_REQUIRED",
+                "message": (
+                    "Missing Excel file content. Attach an .xlsx file, or pass file_path "
+                    "(e.g. C:\\projects\\SPECSTROY\\Клиенты__ВСЕ.xlsx), and call again."
+                ),
+            }
 
-    try:
-        data = base64.b64decode(raw, validate=True)
-    except binascii.Error as exc:
-        raise ValidationError("file_base64", "Invalid base64") from exc
+    if data is None:
+        raise ValidationError("file_base64", "Unable to resolve file content")
 
     if len(data) > _MAX_BYTES:
-        raise ValidationError("file_base64", f"File too large (max {_MAX_BYTES} bytes)")
+        raise ValidationError("file", f"File too large (max {_MAX_BYTES} bytes)")
 
     if len(data) < 64:
-        raise ValidationError("file_base64", "File too small to be a valid XLSX")
+        raise ValidationError("file", "File too small to be a valid XLSX")
 
     sub = current_mcp_user_sub()
     try:
