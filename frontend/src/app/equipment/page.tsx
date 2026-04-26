@@ -234,7 +234,7 @@ export default function EquipmentPage() {
         service_life_months: Number(formServiceLifeMonths || 60),
         status: formStatus,
         hourly_rate: formHourlyRate.trim() ? Number(formHourlyRate) : null,
-        purchase_date: formPurchaseDate ? new Date(`${formPurchaseDate}T00:00:00`).toISOString() : new Date().toISOString(),
+        purchase_date: formPurchaseDate || new Date().toISOString().slice(0, 10),
         location: formLocation.trim() || null,
         notes: formNotes.trim() || null,
       };
