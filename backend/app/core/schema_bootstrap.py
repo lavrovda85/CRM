@@ -32,11 +32,68 @@ async def apply_deploy_jobs_ddl(conn: AsyncConnection) -> None:
 
 
 async def ensure_deploy_jobs_table() -> None:
-    """Ensure ``deploy_jobs`` exists for admin deploy UI (runs on every app startup)."""
+    """Ensure ``deploy_jobs`` exists for admin deploy UI (runs on every API startup)."""
     from app.core.database import engine
 
     async with engine.begin() as conn:
         await apply_deploy_jobs_ddl(conn)
+
+
+async def ensure_minimal_equipment_tenant_ddl() -> None:
+    """Idempotent: ``equipment`` / ``depreciation_records`` table shell + tenant columns and indexes.
+
+    Runs on every API startup (see ``main.lifespan``) so production stacks that set
+    ``SCHEMA_BOOTSTRAP_ON_STARTUP=false`` still get ``company_id``, ``hourly_rate``,
+    and the per-company serial unique index required by the ORM and POST /equipment.
+    Reuses the same pg advisory lock as the full schema patch to avoid cross-worker
+    races with ``ensure_application_schema``.
+    """
+    from app.core.database import Base, engine
+    from app.models.company import Company
+    from app.models.equipment import Equipment
+    from app.models.depreciation_record import DepreciationRecord
+
+    _dc = "00000000-0000-4000-8000-000000000001"
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT pg_advisory_xact_lock(872364531)"))
+        await conn.run_sync(
+            lambda sync_conn: Base.metadata.create_all(
+                sync_conn,
+                tables=[Company.__table__, Equipment.__table__, DepreciationRecord.__table__],
+            )
+        )
+        await conn.execute(
+            text(
+                f"INSERT INTO companies (id, name, slug, is_active, settings, created_at, updated_at) "
+                f"VALUES ('{_dc}'::uuid, 'Default organization', 'default', true, '{{}}'::jsonb, now(), now()) "
+                f"ON CONFLICT (id) DO NOTHING"
+            )
+        )
+        await conn.execute(text("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS company_id uuid"))
+        await conn.execute(text("ALTER TABLE depreciation_records ADD COLUMN IF NOT EXISTS company_id uuid"))
+        await conn.execute(
+            text(f"UPDATE equipment SET company_id = '{_dc}'::uuid WHERE company_id IS NULL")
+        )
+        await conn.execute(
+            text(
+                f"UPDATE depreciation_records SET company_id = '{_dc}'::uuid "
+                f"WHERE company_id IS NULL"
+            )
+        )
+        await conn.execute(text("ALTER TABLE equipment ALTER COLUMN company_id SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE depreciation_records ALTER COLUMN company_id SET NOT NULL"))
+        await conn.execute(
+            text("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS hourly_rate numeric(12, 2) NULL")
+        )
+        await conn.execute(
+            text("ALTER TABLE equipment DROP CONSTRAINT IF EXISTS equipment_serial_number_key")
+        )
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_company_serial "
+                "ON equipment (company_id, serial_number)"
+            )
+        )
 
 
 async def ensure_application_schema() -> None:

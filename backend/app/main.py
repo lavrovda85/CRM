@@ -60,6 +60,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("ensure_deploy_jobs_table failed: %s", exc)
 
+    try:
+        from app.core.schema_bootstrap import ensure_minimal_equipment_tenant_ddl
+
+        await ensure_minimal_equipment_tenant_ddl()
+        logger.info("ensure_minimal_equipment_tenant_ddl completed")
+    except Exception as exc:
+        logger.error("ensure_minimal_equipment_tenant_ddl failed: %s", exc)
+
     if settings.debug or settings.schema_bootstrap_on_startup:
         from app.core.schema_bootstrap import ensure_application_schema
 
