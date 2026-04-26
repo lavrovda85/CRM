@@ -20,7 +20,7 @@ class Equipment(TenantMixin, BaseModel):
     Атрибуты:
         name: Название оборудования.
         serial_number: Серийный номер (уникальный).
-        category: Категория (power_tool, measuring, hand_tool, safety, vehicle).
+        category: Категория (power_tool, measuring, hand_tool, instrument, safety, vehicle, automobile, crew).
         purchase_price: Цена покупки.
         purchase_date: Дата покупки.
         service_life_months: Расчётный срок службы в месяцах.

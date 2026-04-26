@@ -18,7 +18,7 @@ class EquipmentCreate(BaseModel):
     Атрибуты:
         name (str): Название оборудования.
         serial_number (str): Серийный номер.
-        category (str): Категория — power_tool, measuring, hand_tool, safety, vehicle, crew.
+        category (str): Категория — power_tool, measuring, hand_tool, instrument, safety, vehicle, automobile, crew.
         purchase_price (Decimal): Цена покупки.
         purchase_date (date): Дата покупки.
         service_life_months (int): Расчётный срок службы в месяцах.

@@ -17,6 +17,11 @@ import {
   Save,
 } from "lucide-react";
 import { ApiError, createEquipment, fetchActiveCompany, fetchEquipment, fetchTasks, updateEquipment } from "@/lib/api";
+import {
+  EQUIPMENT_CATEGORY_KEYS,
+  EQUIPMENT_CATEGORY_LABELS,
+  isMileageEquipmentCategory,
+} from "@/lib/equipmentCategories";
 import { Modal } from "@/components/ui/Modal";
 import { isTerminalTaskStatus } from "@/lib/timelineTaskIntervals";
 import type { EquipmentResponse, EquipmentStatus, TaskResponse } from "@/types";
@@ -30,15 +35,6 @@ const statusConfig: Record<EquipmentStatus, { label: string; classes: string }> 
   maintenance: { label: "На обслуживании", classes: "bg-amber-50 text-amber-700" },
   written_off: { label: "Списано", classes: "bg-surface-100 text-surface-500" },
   lost: { label: "Утеряно", classes: "bg-red-50 text-red-700" },
-};
-
-const categoryLabels: Record<string, string> = {
-  power_tool: "Электроинструмент",
-  measuring: "Измерительное",
-  hand_tool: "Ручной инструмент",
-  safety: "Безопасность",
-  vehicle: "Транспорт",
-  crew: "Бригада / подряд (почасовая)",
 };
 
 export default function EquipmentPage() {
@@ -170,7 +166,7 @@ export default function EquipmentPage() {
 
       for (const equipmentId of equipmentIds) {
         const eq = equipment.find((x) => x.id === equipmentId);
-        if (!eq || eq.category !== "vehicle") continue;
+        if (!eq || !isMileageEquipmentCategory(eq.category)) continue;
         if (!out[equipmentId]) out[equipmentId] = { busyNow: false, monthMileageKm: 0 };
         if (isBusyNow) out[equipmentId].busyNow = true;
         if (inCurrentMonth) {
@@ -310,8 +306,8 @@ export default function EquipmentPage() {
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
             <option value="">Все категории</option>
-            {Object.entries(categoryLabels).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+            {EQUIPMENT_CATEGORY_KEYS.map((k) => (
+              <option key={k} value={k}>{EQUIPMENT_CATEGORY_LABELS[k]}</option>
             ))}
           </select>
           {(statusFilter || categoryFilter) && (
@@ -355,7 +351,7 @@ export default function EquipmentPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-surface-500">Категория</span>
                   <span className="badge bg-surface-100 text-surface-600">
-                    {categoryLabels[eq.category] ?? eq.category}
+                    {EQUIPMENT_CATEGORY_LABELS[eq.category] ?? eq.category}
                   </span>
                 </div>
 
@@ -404,7 +400,7 @@ export default function EquipmentPage() {
                     </div>
                   </>
                 )}
-                {eq.category === "vehicle" && (
+                {isMileageEquipmentCategory(eq.category) && (
                   <>
                     <div className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-1 text-surface-500">
@@ -512,7 +508,18 @@ export default function EquipmentPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-surface-700">Категория</label>
-              <input className="input" value={formCategory} onChange={(e) => setFormCategory(e.target.value)} />
+              <select
+                className="input"
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value)}
+              >
+                {EQUIPMENT_CATEGORY_KEYS.map((k) => (
+                  <option key={k} value={k}>{EQUIPMENT_CATEGORY_LABELS[k]}</option>
+                ))}
+                {formCategory && !EQUIPMENT_CATEGORY_LABELS[formCategory] && (
+                  <option value={formCategory}>Другое: {formCategory}</option>
+                )}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

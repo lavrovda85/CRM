@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import { createTask, fetchEquipment, fetchTemplates, fetchUsers, type UserListItem } from "@/lib/api";
+import { isMileageEquipmentCategory } from "@/lib/equipmentCategories";
 import { ClientSearchSelect } from "@/components/clients/ClientSearchSelect";
 import type { EquipmentResponse, TemplateResponse, TaskResponse } from "@/types";
 
@@ -204,7 +205,7 @@ export function CreateTaskModal({
       if (variant === "field_work") {
         const selectedWorkers = equipment.filter((item) => workerEquipmentIds.includes(item.id));
         const selectedExtraEquipment = equipment.filter((item) => extraEquipmentIds.includes(item.id));
-        const selectedVehicles = selectedExtraEquipment.filter((item) => item.category === "vehicle");
+        const selectedVehicles = selectedExtraEquipment.filter((item) => isMileageEquipmentCategory(item.category));
         const normalizedMileageByEquipment: Record<string, number> = {};
         for (const vehicle of selectedVehicles) {
           const raw = vehicleMileageByEquipmentId[vehicle.id] ?? "";
@@ -421,7 +422,7 @@ export function CreateTaskModal({
                 ) : (
                   extraEquipment.map((item) => {
                     const selected = extraEquipmentIds.includes(item.id);
-                    const isVehicle = item.category === "vehicle";
+                    const isVehicle = isMileageEquipmentCategory(item.category);
                     return (
                       <div key={item.id} className="space-y-1">
                         <label className="flex cursor-pointer items-center gap-2 text-sm">

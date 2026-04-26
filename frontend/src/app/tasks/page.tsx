@@ -862,7 +862,7 @@ function TasksPageInner() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl space-y-4 p-4 lg:p-6">
+      <div className="w-full min-w-0 space-y-4 px-3 py-4 sm:px-5 lg:px-8 xl:px-12 2xl:px-16">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton key={i} className="h-64" />
@@ -873,7 +873,7 @@ function TasksPageInner() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[100rem] space-y-4 overflow-x-hidden p-3 sm:p-4 lg:p-6">
+    <div className="w-full min-w-0 space-y-4 overflow-x-hidden px-3 py-4 sm:px-5 lg:px-8 xl:px-12 2xl:px-16">
       {loadError && (
         <div
           className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"

@@ -134,7 +134,7 @@ export function KanbanBoard({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex flex-col gap-4 pb-4 md:h-[min(70vh,calc(100vh-14rem))] md:flex-row md:w-full md:min-w-0 md:overflow-hidden md:gap-3">
+      <div className="flex flex-col gap-4 pb-4 md:h-[min(92dvh,calc(100dvh-8.5rem))] md:flex-row md:w-full md:min-w-0 md:overflow-hidden md:gap-3 lg:gap-4">
         {columns.map((col) => {
           const colCards = cards[col.id] ?? [];
           return (

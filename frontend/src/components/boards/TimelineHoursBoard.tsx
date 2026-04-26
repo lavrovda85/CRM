@@ -1,6 +1,16 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef, useEffect, type DragEvent, type TouchEvent, type CSSProperties } from "react";
+import {
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  type DragEvent,
+  type TouchEvent,
+  type CSSProperties,
+} from "react";
 import Link from "next/link";
 import { Check, GripVertical } from "lucide-react";
 import type { TaskResponse } from "@/types";
@@ -19,7 +29,10 @@ const DUE_SOON_MINUTES = Math.max(
   Number.parseInt(process.env.NEXT_PUBLIC_TASK_DUE_SOON_MINUTES ?? "180", 10) || 180,
 );
 
-const SLOT_PX = 72;                 // Hour row height — NEVER expands
+/** Default hour-row height; actual row height scales with viewport (see ``hourSlotPx``). */
+const SLOT_PX = 72;
+const SLOT_MIN_PX = 52;
+const SLOT_MAX_PX = 140;
 const TIMELINE_COLUMN_WIDTH_PX = 170;
 const TIMELINE_CARD_HEIGHT_PX = 52; // Height of a card when it is the only one in the slot
 const CASCADE_MIN_H = 14;           // Min visible height of each card in cascade
@@ -215,6 +228,23 @@ export function TimelineHoursBoard({
     return () => el.removeEventListener("touchmove", onMove);
   }, []);
 
+  const [hourSlotPx, setHourSlotPx] = useState(SLOT_PX);
+
+  useLayoutEffect(() => {
+    const hourCount = Math.max(1, hourEndExclusive - hourStart);
+    const update = () => {
+      if (typeof window === "undefined") return;
+      const vh = window.innerHeight;
+      const reserved = 220;
+      const avail = Math.max(hourCount * SLOT_MIN_PX, vh - reserved);
+      const slot = Math.floor(avail / hourCount);
+      setHourSlotPx(Math.min(SLOT_MAX_PX, Math.max(SLOT_MIN_PX, slot)));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [hourStart, hourEndExclusive]);
+
   const { hourList, columnKeys, columnLabels, tasksByStartHourByColumn } = useMemo(() => {
     const hours: number[] = [];
     for (let h = hourStart; h < hourEndExclusive; h += 1) hours.push(h);
@@ -317,12 +347,12 @@ export function TimelineHoursBoard({
 
   const effectiveColumns = columnKeys.length > 0 ? columnKeys : ["none"];
 
-  // Row height is always fixed — tasks cascade within the slot, never expand the row.
+  /** Per-hour row height in px (scales with viewport so large monitors avoid empty space below). */
   const hourRowHeight = useMemo(() => {
     const out: Record<number, number> = {};
-    for (const h of hourList) out[h] = SLOT_PX;
+    for (const h of hourList) out[h] = hourSlotPx;
     return out;
-  }, [hourList]);
+  }, [hourList, hourSlotPx]);
 
   const assigneeAvatarById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -412,7 +442,7 @@ export function TimelineHoursBoard({
 
           {/* Hour rows */}
           {hourList.map((h) => {
-            const rowH = hourRowHeight[h] ?? SLOT_PX;
+            const rowH = hourRowHeight[h] ?? hourSlotPx;
             return (
               <div key={`hour-row-${h}`} style={{ display: "contents" }}>
                 <div
@@ -428,7 +458,7 @@ export function TimelineHoursBoard({
                   const isDropTarget = dropTargetId === cellId;
 
                   // Cascade layout calculations:
-                  //  • rowH is always SLOT_PX (fixed)
+                  //  • rowH scales with viewport (hourSlotPx)
                   //  • visibleItems: first CASCADE_MAX_VISIBLE tasks
                   //  • cardH: full height for solo card, distributed height for cascade
                   //  • step: vertical distance between consecutive card tops, so every card
@@ -439,7 +469,7 @@ export function TimelineHoursBoard({
                   const isSolo = n === 1 && overflowCount === 0;
 
                   const cardH = isSolo
-                    ? TIMELINE_CARD_HEIGHT_PX
+                    ? Math.min(TIMELINE_CARD_HEIGHT_PX, Math.max(CASCADE_MIN_H + 4, rowH - 12))
                     : Math.max(CASCADE_MIN_H, Math.floor((rowH - 8) / n));
 
                   // Distribute tops so all n cards fit: first at y=4, last at y= rowH-4-cardH
