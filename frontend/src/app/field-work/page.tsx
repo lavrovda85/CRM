@@ -169,6 +169,41 @@ export default function FieldWorkBoardPage() {
             : kanbanBoardColumnId(t.status) === col.id,
         )
         .map((task) => ({
+          ...(function () {
+            const totalKmRaw = task.custom_fields?.["vehicle_mileage_total_km"];
+            const totalKm = Number(totalKmRaw);
+            const extraIdsRaw = task.custom_fields?.["extra_equipment_ids"];
+            const vehicleCount = Array.isArray(extraIdsRaw) ? extraIdsRaw.length : 0;
+            const workerIdsRaw = task.custom_fields?.["worker_equipment_ids"];
+            const workerCount = Array.isArray(workerIdsRaw)
+              ? workerIdsRaw.length
+              : (() => {
+                  const one = task.custom_fields?.["worker_equipment_id"];
+                  return typeof one === "string" && one.trim() ? 1 : 0;
+                })();
+            const badges = [
+              {
+                label: priorityLabel[task.priority] ?? task.priority,
+                color: priorityColor[task.priority] ?? "#94a3b8",
+              },
+            ];
+            if (workerCount > 0) {
+              badges.push({
+                label: `Рабочие: ${workerCount}`,
+                color: "#0f766e",
+              });
+            }
+            if (vehicleCount > 0 || (Number.isFinite(totalKm) && totalKm > 0)) {
+              const kmLabel = Number.isFinite(totalKm) && totalKm > 0 ? ` · ${totalKm.toFixed(1)} км` : "";
+              badges.push({
+                label: `Авто: ${vehicleCount}${kmLabel}`,
+                color: "#475569",
+              });
+            }
+            return {
+              badges,
+            };
+          })(),
           id: task.id,
           title: task.title,
           subtitle: (() => {
@@ -183,12 +218,6 @@ export default function FieldWorkBoardPage() {
             }
             return task.assignee?.full_name ?? undefined;
           })(),
-          badges: [
-            {
-              label: priorityLabel[task.priority] ?? task.priority,
-              color: priorityColor[task.priority] ?? "#94a3b8",
-            },
-          ],
           completed: isTerminalTaskStatus(task.status),
         }));
     }

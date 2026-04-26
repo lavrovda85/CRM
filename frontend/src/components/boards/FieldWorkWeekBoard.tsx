@@ -108,10 +108,35 @@ export function FieldWorkWeekBoard({
                             key={task.id}
                             href={`/tasks/${task.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="block truncate rounded border border-surface-200 bg-white px-1.5 py-1 text-[11px] text-surface-800 hover:border-primary-300 hover:text-primary-700"
+                            className="block rounded border border-surface-200 bg-white px-1.5 py-1 text-[11px] text-surface-800 hover:border-primary-300 hover:text-primary-700"
                             title={task.title}
                           >
-                            {task.title}
+                            <div className="truncate">{task.title}</div>
+                            {(() => {
+                              const workerIdsRaw = task.custom_fields?.["worker_equipment_ids"];
+                              const workerCount = Array.isArray(workerIdsRaw)
+                                ? workerIdsRaw.length
+                                : (() => {
+                                    const one = task.custom_fields?.["worker_equipment_id"];
+                                    return typeof one === "string" && one.trim() ? 1 : 0;
+                                  })();
+                              const vehicleIdsRaw = task.custom_fields?.["extra_equipment_ids"];
+                              const vehicleCount = Array.isArray(vehicleIdsRaw) ? vehicleIdsRaw.length : 0;
+                              const totalKm = Number(task.custom_fields?.["vehicle_mileage_total_km"] ?? 0);
+                              if (workerCount <= 0 && vehicleCount <= 0 && (!Number.isFinite(totalKm) || totalKm <= 0)) {
+                                return null;
+                              }
+                              return (
+                                <div className="truncate text-[10px] text-surface-500">
+                                  {workerCount > 0 ? `Рабочие: ${workerCount}` : ""}
+                                  {workerCount > 0 && (vehicleCount > 0 || (Number.isFinite(totalKm) && totalKm > 0))
+                                    ? " · "
+                                    : ""}
+                                  {(vehicleCount > 0 || (Number.isFinite(totalKm) && totalKm > 0)) ? `Авто: ${vehicleCount}` : ""}
+                                  {Number.isFinite(totalKm) && totalKm > 0 ? ` · ${totalKm.toFixed(1)} км` : ""}
+                                </div>
+                              );
+                            })()}
                           </Link>
                         ))}
                         {cellTasks.length > 3 && (
