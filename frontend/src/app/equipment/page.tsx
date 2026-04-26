@@ -225,23 +225,25 @@ export default function EquipmentPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      const payload = {
+      const base = {
         name: formName.trim(),
         serial_number: formSerial.trim() || `EQ-${Date.now()}`,
         category: formCategory.trim() || "crew",
         purchase_price: Number(formPurchasePrice || 0),
-        current_value: Number(formCurrentValue || 0),
         service_life_months: Number(formServiceLifeMonths || 60),
-        status: formStatus,
         hourly_rate: formHourlyRate.trim() ? Number(formHourlyRate) : null,
         purchase_date: formPurchaseDate || new Date().toISOString().slice(0, 10),
         location: formLocation.trim() || null,
         notes: formNotes.trim() || null,
       };
       if (editingId) {
-        await updateEquipment(editingId, payload);
+        await updateEquipment(editingId, {
+          ...base,
+          current_value: Number(formCurrentValue || 0),
+          status: formStatus,
+        });
       } else {
-        await createEquipment(payload);
+        await createEquipment(base);
       }
       setFormOpen(false);
       await load();

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +27,18 @@ from app.schemas.equipment import (
 )
 
 router = APIRouter(prefix="/equipment")
+
+
+def _raise_equipment_integrity_error(exc: IntegrityError) -> None:
+    """Map DB integrity violations to a validation error; re-raise unknown causes."""
+    orig = getattr(exc, "orig", None)
+    det = " ".join(p for p in (str(exc), str(orig) if orig else "") if p)
+    low = det.lower()
+    if "uq_equipment_company_serial" in det or "company_serial" in low:
+        raise ValidationError("serial_number", "This serial number already exists for the company") from exc
+    if "equipment_assigned_to_fkey" in det or ("assigned_to" in low and "foreign key" in low):
+        raise ValidationError("assigned_to", "Invalid user id for assigned_to") from exc
+    raise ValidationError("equipment", "Could not save equipment (database constraint conflict)") from exc
 
 
 @router.post("", response_model=EquipmentResponse, status_code=201)
@@ -63,7 +76,10 @@ async def register_equipment(
         notes=body.notes,
     )
     db.add(equipment)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        _raise_equipment_integrity_error(exc)
     await db.refresh(equipment)
     return EquipmentResponse.model_validate(equipment)
 
@@ -181,12 +197,15 @@ async def update_equipment(
 
     update_data = body.model_dump(exclude_unset=True)
     if update_data:
-        await db.execute(
-            update(Equipment)
-            .where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
-            .values(**update_data)
-        )
-        await db.flush()
+        try:
+            await db.execute(
+                update(Equipment)
+                .where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
+                .values(**update_data)
+            )
+            await db.flush()
+        except IntegrityError as exc:
+            _raise_equipment_integrity_error(exc)
         await db.refresh(equipment)
 
     return EquipmentResponse.model_validate(equipment)
