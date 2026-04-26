@@ -12,10 +12,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.dependencies import PaginationParams, get_current_user, get_db
+from app.core.company_context import ActiveCompanyContext, get_active_company
+from app.core.dependencies import PaginationParams, get_db
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.pagination import PaginatedResponse
-from app.core.security import CurrentUser
 from app.models import DepreciationRecord, Equipment
 from app.schemas.equipment import (
     EquipmentCreate,
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/equipment")
 async def register_equipment(
     body: EquipmentCreate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> EquipmentResponse:
     """Register new equipment.
 
@@ -42,12 +42,13 @@ async def register_equipment(
     Аргументы:
         body: Данные оборудования.
         db: Асинхронная сессия БД.
-        user: Текущий аутентифицированный пользователь.
+        ctx: Активная компания (тенант).
 
     Возвращает:
         Зарегистрированное оборудование.
     """
     equipment = Equipment(
+        company_id=ctx.company_id,
         name=body.name,
         serial_number=body.serial_number,
         category=body.category,
@@ -74,7 +75,7 @@ async def list_equipment(
     assigned_to: uuid.UUID | None = Query(default=None, description="Filter by assigned user"),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> PaginatedResponse[EquipmentResponse]:
     """List equipment with optional filters.
 
@@ -87,13 +88,13 @@ async def list_equipment(
         assigned_to: Фильтр по ID закреплённого сотрудника.
         pagination: Параметры пагинации.
         db: Асинхронная сессия БД.
-        user: Текущий аутентифицированный пользователь.
+        ctx: Активная компания (тенант).
 
     Возвращает:
         Постраничный ответ со списком оборудования.
     """
-    query = select(Equipment)
-    count_query = select(func.count(Equipment.id))
+    query = select(Equipment).where(Equipment.company_id == ctx.company_id)
+    count_query = select(func.count(Equipment.id)).where(Equipment.company_id == ctx.company_id)
 
     if status:
         query = query.where(Equipment.status == status)
@@ -125,7 +126,7 @@ async def list_equipment(
 async def get_equipment(
     equipment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> EquipmentDetailResponse:
     """Get equipment detail with depreciation records.
 
@@ -135,7 +136,7 @@ async def get_equipment(
     Аргументы:
         equipment_id: UUID оборудования.
         db: Асинхронная сессия БД.
-        user: Текущий аутентифицированный пользователь.
+        ctx: Активная компания (тенант).
 
     Возвращает:
         Детальную информацию об оборудовании.
@@ -143,7 +144,7 @@ async def get_equipment(
     result = await db.execute(
         select(Equipment)
         .options(selectinload(Equipment.depreciation_records))
-        .where(Equipment.id == equipment_id)
+        .where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
     )
     equipment = result.scalar_one_or_none()
     if not equipment:
@@ -156,7 +157,7 @@ async def update_equipment(
     equipment_id: uuid.UUID,
     body: EquipmentUpdate,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> EquipmentResponse:
     """Update equipment fields.
 
@@ -166,13 +167,13 @@ async def update_equipment(
         equipment_id: UUID оборудования.
         body: Данные для обновления.
         db: Асинхронная сессия БД.
-        user: Текущий аутентифицированный пользователь.
+        ctx: Активная компания (тенант).
 
     Возвращает:
         Обновлённое оборудование.
     """
     result = await db.execute(
-        select(Equipment).where(Equipment.id == equipment_id)
+        select(Equipment).where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
     )
     equipment = result.scalar_one_or_none()
     if not equipment:
@@ -182,7 +183,7 @@ async def update_equipment(
     if update_data:
         await db.execute(
             update(Equipment)
-            .where(Equipment.id == equipment_id)
+            .where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
             .values(**update_data)
         )
         await db.flush()
@@ -196,7 +197,7 @@ async def write_off_equipment(
     equipment_id: uuid.UUID,
     body: EquipmentWriteOff,
     db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> EquipmentResponse:
     """Write off equipment.
 
@@ -208,13 +209,13 @@ async def write_off_equipment(
         equipment_id: UUID оборудования.
         body: Данные списания (причина).
         db: Асинхронная сессия БД.
-        user: Текущий аутентифицированный пользователь.
+        ctx: Активная компания (тенант).
 
     Возвращает:
         Оборудование с обновлённым статусом.
     """
     result = await db.execute(
-        select(Equipment).where(Equipment.id == equipment_id)
+        select(Equipment).where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
     )
     equipment = result.scalar_one_or_none()
     if not equipment:
@@ -226,12 +227,16 @@ async def write_off_equipment(
     remaining = equipment.current_value
     accumulated_result = await db.execute(
         select(func.sum(DepreciationRecord.amount))
-        .where(DepreciationRecord.equipment_id == equipment_id)
+        .where(
+            DepreciationRecord.equipment_id == equipment_id,
+            DepreciationRecord.company_id == ctx.company_id,
+        )
     )
     accumulated = accumulated_result.scalar() or 0
 
     if remaining > 0:
         db.add(DepreciationRecord(
+            company_id=ctx.company_id,
             equipment_id=equipment_id,
             period_date=datetime.now(timezone.utc).date(),
             amount=remaining,
@@ -243,7 +248,7 @@ async def write_off_equipment(
 
     await db.execute(
         update(Equipment)
-        .where(Equipment.id == equipment_id)
+        .where(Equipment.id == equipment_id, Equipment.company_id == ctx.company_id)
         .values(status="written_off", current_value=0)
     )
     await db.flush()
