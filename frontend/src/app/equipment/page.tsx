@@ -108,20 +108,29 @@ export default function EquipmentPage() {
     const nextMonthStart = new Date(monthStart);
     nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
     for (const t of fieldTasks) {
-      const workerIdRaw = t.custom_fields?.["worker_equipment_id"];
-      const workerId = typeof workerIdRaw === "string" ? workerIdRaw : "";
-      if (!workerId) continue;
-      if (!out[workerId]) out[workerId] = { busyNow: false, monthHours: 0, monthPayout: 0 };
+      const idsRaw = t.custom_fields?.["worker_equipment_ids"];
+      const workerIds =
+        Array.isArray(idsRaw) && idsRaw.length > 0
+          ? idsRaw.map((x) => String(x)).filter(Boolean)
+          : (() => {
+              const one = t.custom_fields?.["worker_equipment_id"];
+              return typeof one === "string" && one.trim() ? [one.trim()] : [];
+            })();
+      if (workerIds.length === 0) continue;
+      for (const workerId of workerIds) {
+        if (!out[workerId]) out[workerId] = { busyNow: false, monthHours: 0, monthPayout: 0 };
+      }
       const startedMs = t.started_at ? new Date(t.started_at).getTime() : NaN;
       const dueMs = t.due_date ? new Date(t.due_date).getTime() : NaN;
       if (Number.isFinite(startedMs) && Number.isFinite(dueMs)) {
         if (!isTerminalTaskStatus(t.status) && startedMs <= now && dueMs >= now) {
-          out[workerId].busyNow = true;
+          for (const workerId of workerIds) out[workerId].busyNow = true;
         }
         const overlapStart = Math.max(startedMs, monthStart.getTime());
         const overlapEnd = Math.min(dueMs, nextMonthStart.getTime());
         if (overlapEnd > overlapStart) {
-          out[workerId].monthHours += (overlapEnd - overlapStart) / (1000 * 60 * 60);
+          const hours = (overlapEnd - overlapStart) / (1000 * 60 * 60);
+          for (const workerId of workerIds) out[workerId].monthHours += hours;
         }
       }
     }
@@ -131,6 +140,46 @@ export default function EquipmentPage() {
       const rate = Number(eq.hourly_rate ?? 0);
       s.monthPayout = rate > 0 ? s.monthHours * rate : 0;
     }
+    return out;
+  }, [fieldTasks, equipment]);
+
+  const vehicleStatsByEquipmentId = useMemo(() => {
+    const out: Record<string, { busyNow: boolean; monthMileageKm: number }> = {};
+    const now = Date.now();
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const nextMonthStart = new Date(monthStart);
+    nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+
+    for (const t of fieldTasks) {
+      const extraIdsRaw = t.custom_fields?.["extra_equipment_ids"];
+      const equipmentIds =
+        Array.isArray(extraIdsRaw) && extraIdsRaw.length > 0
+          ? extraIdsRaw.map((x) => String(x)).filter(Boolean)
+          : [];
+      const mileageMapRaw = t.custom_fields?.["vehicle_mileage_by_equipment"];
+      const mileageMap = mileageMapRaw && typeof mileageMapRaw === "object" ? mileageMapRaw as Record<string, unknown> : {};
+
+      const startedMs = t.started_at ? new Date(t.started_at).getTime() : NaN;
+      const dueMs = t.due_date ? new Date(t.due_date).getTime() : NaN;
+      const hasInterval = Number.isFinite(startedMs) && Number.isFinite(dueMs);
+      const inCurrentMonth =
+        hasInterval && Math.min(dueMs, nextMonthStart.getTime()) > Math.max(startedMs, monthStart.getTime());
+      const isBusyNow = hasInterval && !isTerminalTaskStatus(t.status) && startedMs <= now && dueMs >= now;
+
+      for (const equipmentId of equipmentIds) {
+        const eq = equipment.find((x) => x.id === equipmentId);
+        if (!eq || eq.category !== "vehicle") continue;
+        if (!out[equipmentId]) out[equipmentId] = { busyNow: false, monthMileageKm: 0 };
+        if (isBusyNow) out[equipmentId].busyNow = true;
+        if (inCurrentMonth) {
+          const km = Number(mileageMap[equipmentId] ?? 0);
+          if (Number.isFinite(km) && km > 0) out[equipmentId].monthMileageKm += km;
+        }
+      }
+    }
+
     return out;
   }, [fieldTasks, equipment]);
 
@@ -348,6 +397,32 @@ export default function EquipmentPage() {
                         <span className="text-surface-500">Расчет ЗП (месяц)</span>
                         <span className="font-semibold text-surface-900">
                           ₽{Math.round(workerStatsByEquipmentId[eq.id]?.monthPayout ?? 0).toLocaleString("ru-RU")}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {eq.category === "vehicle" && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1 text-surface-500">
+                        <Clock3 className="h-3.5 w-3.5" /> Занятость сейчас
+                      </span>
+                      <span
+                        className={`badge ${
+                          vehicleStatsByEquipmentId[eq.id]?.busyNow
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {vehicleStatsByEquipmentId[eq.id]?.busyNow ? "Занят" : "Свободен"}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-surface-200 bg-surface-50 px-2.5 py-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-surface-500">Пробег за текущий месяц</span>
+                        <span className="font-semibold text-surface-900">
+                          {(vehicleStatsByEquipmentId[eq.id]?.monthMileageKm ?? 0).toFixed(1)} км
                         </span>
                       </div>
                     </div>

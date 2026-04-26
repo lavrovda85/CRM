@@ -78,7 +78,9 @@ export function CreateTaskModal({
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [equipment, setEquipment] = useState<EquipmentResponse[]>([]);
-  const [workerEquipmentId, setWorkerEquipmentId] = useState("");
+  const [workerEquipmentIds, setWorkerEquipmentIds] = useState<string[]>([]);
+  const [extraEquipmentIds, setExtraEquipmentIds] = useState<string[]>([]);
+  const [vehicleMileageByEquipmentId, setVehicleMileageByEquipmentId] = useState<Record<string, string>>({});
   const [loadingRefs, setLoadingRefs] = useState(false);
 
   const visibleTemplates = useMemo(() => {
@@ -87,6 +89,16 @@ export function CreateTaskModal({
     const allowSet = new Set(allow);
     return templates.filter((t) => allowSet.has(t.id));
   }, [templates, fieldWorkTemplateAllowlist]);
+
+  const workerEquipment = useMemo(
+    () => equipment.filter((item) => Number(item.hourly_rate ?? 0) > 0 || item.category === "crew"),
+    [equipment],
+  );
+
+  const extraEquipment = useMemo(
+    () => equipment.filter((item) => !workerEquipment.some((w) => w.id === item.id)),
+    [equipment, workerEquipment],
+  );
 
   const loadReferences = useCallback(async () => {
     setLoadingRefs(true);
@@ -147,7 +159,9 @@ export function CreateTaskModal({
       setTemplateId(defaultTemplateId?.trim() ? defaultTemplateId.trim() : "");
       setClientId("");
       setAssignedTo(initialValues?.assignedTo ?? "");
-      setWorkerEquipmentId("");
+      setWorkerEquipmentIds([]);
+      setExtraEquipmentIds([]);
+      setVehicleMileageByEquipmentId({});
       setCoAssigneeIds([]);
       setObserverIds([]);
       setStartedAt(initialValues?.startedAt ?? "");
@@ -188,12 +202,33 @@ export function CreateTaskModal({
       if (startedAt) payload.started_at = new Date(startedAt).toISOString();
       if (dueDate) payload.due_date = new Date(dueDate).toISOString();
       if (variant === "field_work") {
-        const selectedWorker = equipment.find((item) => item.id === workerEquipmentId);
+        const selectedWorkers = equipment.filter((item) => workerEquipmentIds.includes(item.id));
+        const selectedExtraEquipment = equipment.filter((item) => extraEquipmentIds.includes(item.id));
+        const selectedVehicles = selectedExtraEquipment.filter((item) => item.category === "vehicle");
+        const normalizedMileageByEquipment: Record<string, number> = {};
+        for (const vehicle of selectedVehicles) {
+          const raw = vehicleMileageByEquipmentId[vehicle.id] ?? "";
+          const km = Number(raw);
+          if (!Number.isFinite(km) || km <= 0) {
+            setError(`Укажите километраж для авто: ${vehicle.name}`);
+            setSubmitting(false);
+            return;
+          }
+          normalizedMileageByEquipment[vehicle.id] = km;
+        }
+        const totalVehicleMileageKm = Object.values(normalizedMileageByEquipment).reduce((acc, v) => acc + v, 0);
         const existingCustomFields = (payload.custom_fields as Record<string, unknown> | undefined) ?? {};
         payload.custom_fields = {
           ...existingCustomFields,
-          worker_equipment_id: workerEquipmentId || null,
-          worker_equipment_name: selectedWorker?.name ?? null,
+          worker_equipment_ids: workerEquipmentIds,
+          worker_equipment_names: selectedWorkers.map((x) => x.name),
+          extra_equipment_ids: extraEquipmentIds,
+          extra_equipment_names: selectedExtraEquipment.map((x) => x.name),
+          vehicle_mileage_by_equipment: normalizedMileageByEquipment,
+          vehicle_mileage_total_km: totalVehicleMileageKm,
+          // Backward-compatible single-value fields for existing UI consumers.
+          worker_equipment_id: workerEquipmentIds[0] ?? null,
+          worker_equipment_name: selectedWorkers[0]?.name ?? null,
         };
       }
 
@@ -349,25 +384,86 @@ export function CreateTaskModal({
         </div>
 
         {variant === "field_work" ? (
-          <div>
-            <label htmlFor="task-worker-equipment" className="mb-1 block text-sm font-medium text-surface-700">
-              Рабочие (оборудование)
-            </label>
-            <select
-              id="task-worker-equipment"
-              value={workerEquipmentId}
-              onChange={(e) => setWorkerEquipmentId(e.target.value)}
-              className="input"
-              disabled={loadingRefs}
-            >
-              <option value="">Не выбраны</option>
-              {equipment.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {item.hourly_rate ? ` · ${item.hourly_rate}/ч` : ""}
-                </option>
-              ))}
-            </select>
+          <div className="space-y-3">
+            <div>
+              <span className="mb-1 block text-sm font-medium text-surface-700">Рабочие (оборудование)</span>
+              <div className="max-h-32 space-y-1.5 overflow-y-auto rounded-lg border border-surface-200 p-2">
+                {workerEquipment.length === 0 ? (
+                  <p className="text-xs text-surface-400">Нет доступных рабочих</p>
+                ) : (
+                  workerEquipment.map((item) => (
+                    <label key={item.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={workerEquipmentIds.includes(item.id)}
+                        onChange={() =>
+                          setWorkerEquipmentIds((prev) =>
+                            prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
+                          )
+                        }
+                        disabled={loadingRefs}
+                        className="rounded border-surface-300"
+                      />
+                      <span>
+                        {item.name}
+                        {item.hourly_rate ? ` · ${item.hourly_rate}/ч` : ""}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+            <div>
+              <span className="mb-1 block text-sm font-medium text-surface-700">Прочее оборудование</span>
+              <div className="max-h-32 space-y-1.5 overflow-y-auto rounded-lg border border-surface-200 p-2">
+                {extraEquipment.length === 0 ? (
+                  <p className="text-xs text-surface-400">Нет доступного оборудования</p>
+                ) : (
+                  extraEquipment.map((item) => {
+                    const selected = extraEquipmentIds.includes(item.id);
+                    const isVehicle = item.category === "vehicle";
+                    return (
+                      <div key={item.id} className="space-y-1">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() =>
+                              setExtraEquipmentIds((prev) =>
+                                prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
+                              )
+                            }
+                            disabled={loadingRefs}
+                            className="rounded border-surface-300"
+                          />
+                          <span>{item.name}</span>
+                          {isVehicle && <span className="text-xs text-surface-500">(авто)</span>}
+                        </label>
+                        {selected && isVehicle && (
+                          <div className="pl-6">
+                            <label className="mb-1 block text-xs text-surface-600">Километраж по задаче (км)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              className="input h-8 text-sm"
+                              value={vehicleMileageByEquipmentId[item.id] ?? ""}
+                              onChange={(e) =>
+                                setVehicleMileageByEquipmentId((prev) => ({
+                                  ...prev,
+                                  [item.id]: e.target.value,
+                                }))
+                              }
+                              placeholder="Например: 24.5"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div>

@@ -171,12 +171,18 @@ export default function FieldWorkBoardPage() {
         .map((task) => ({
           id: task.id,
           title: task.title,
-          subtitle:
-            (typeof task.custom_fields?.["worker_equipment_name"] === "string"
-              ? task.custom_fields["worker_equipment_name"]
-              : undefined) ??
-            task.assignee?.full_name ??
-            undefined,
+          subtitle: (() => {
+            const namesRaw = task.custom_fields?.["worker_equipment_names"];
+            if (Array.isArray(namesRaw) && namesRaw.length > 0) {
+              const names = namesRaw.map((x) => String(x)).filter(Boolean);
+              if (names.length === 1) return names[0];
+              if (names.length > 1) return `${names[0]} +${names.length - 1}`;
+            }
+            if (typeof task.custom_fields?.["worker_equipment_name"] === "string") {
+              return task.custom_fields["worker_equipment_name"];
+            }
+            return task.assignee?.full_name ?? undefined;
+          })(),
           badges: [
             {
               label: priorityLabel[task.priority] ?? task.priority,
