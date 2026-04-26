@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
-import { createTask, fetchTemplates, fetchUsers, type UserListItem } from "@/lib/api";
+import { createTask, fetchEquipment, fetchTemplates, fetchUsers, type UserListItem } from "@/lib/api";
 import { ClientSearchSelect } from "@/components/clients/ClientSearchSelect";
-import type { TemplateResponse, TaskResponse } from "@/types";
+import type { EquipmentResponse, TemplateResponse, TaskResponse } from "@/types";
 
 const NEW_CLIENT_VALUE = "__new_client__";
 
@@ -77,6 +77,8 @@ export function CreateTaskModal({
 
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
+  const [equipment, setEquipment] = useState<EquipmentResponse[]>([]);
+  const [workerEquipmentId, setWorkerEquipmentId] = useState("");
   const [loadingRefs, setLoadingRefs] = useState(false);
 
   const visibleTemplates = useMemo(() => {
@@ -90,15 +92,18 @@ export function CreateTaskModal({
     setLoadingRefs(true);
     setError(null);
     try {
-      const [tmplRes, usersRes] = await Promise.all([
+      const [tmplRes, usersRes, equipmentRes] = await Promise.all([
         fetchTemplates({ limit: 100 }),
         fetchUsers({ is_active: true, limit: 100 }),
+        fetchEquipment({ limit: 200, status: "active" }),
       ]);
       setTemplates(tmplRes.items);
       setUsers(usersRes.items);
+      setEquipment(equipmentRes.items);
     } catch (e) {
       setUsers([]);
       setTemplates([]);
+      setEquipment([]);
       setError(
         e instanceof Error
           ? `Не удалось загрузить справочники (шаблоны, пользователи): ${e.message}. Убедитесь, что запросы идут на тот же хост и порт, что и страница (например :9000 → /api/v1 через Next.js), и что backend/nginx доступны.`
@@ -118,6 +123,7 @@ export function CreateTaskModal({
       setTemplateId(defaultTemplateId?.trim() ? defaultTemplateId.trim() : "");
       setClientId("");
       setAssignedTo(initialValues?.assignedTo ?? "");
+      setWorkerEquipmentId("");
       setCoAssigneeIds([]);
       setObserverIds([]);
       setStartedAt(initialValues?.startedAt ?? "");
@@ -157,6 +163,15 @@ export function CreateTaskModal({
       if (observerIds.length > 0) payload.observer_ids = observerIds;
       if (startedAt) payload.started_at = new Date(startedAt).toISOString();
       if (dueDate) payload.due_date = new Date(dueDate).toISOString();
+      if (variant === "field_work") {
+        const selectedWorker = equipment.find((item) => item.id === workerEquipmentId);
+        const existingCustomFields = (payload.custom_fields as Record<string, unknown> | undefined) ?? {};
+        payload.custom_fields = {
+          ...existingCustomFields,
+          worker_equipment_id: workerEquipmentId || null,
+          worker_equipment_name: selectedWorker?.name ?? null,
+        };
+      }
 
       const created = await createTask(payload);
       onCreated(created);
@@ -309,23 +324,46 @@ export function CreateTaskModal({
           />
         </div>
 
-        <div>
-          <label htmlFor="task-assignee" className="mb-1 block text-sm font-medium text-surface-700">
-            Исполнитель
-          </label>
-          <select
-            id="task-assignee"
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-            className="input"
-            disabled={loadingRefs}
-          >
-            <option value="">Не назначен</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
-            ))}
-          </select>
-        </div>
+        {variant === "field_work" ? (
+          <div>
+            <label htmlFor="task-worker-equipment" className="mb-1 block text-sm font-medium text-surface-700">
+              Рабочие (оборудование)
+            </label>
+            <select
+              id="task-worker-equipment"
+              value={workerEquipmentId}
+              onChange={(e) => setWorkerEquipmentId(e.target.value)}
+              className="input"
+              disabled={loadingRefs}
+            >
+              <option value="">Не выбраны</option>
+              {equipment.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.hourly_rate ? ` · ${item.hourly_rate}/ч` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="task-assignee" className="mb-1 block text-sm font-medium text-surface-700">
+              Исполнитель
+            </label>
+            <select
+              id="task-assignee"
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              className="input"
+              disabled={loadingRefs}
+            >
+              <option value="">Не назначен</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {variant !== "field_work" && (
         <div>

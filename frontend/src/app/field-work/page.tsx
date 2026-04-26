@@ -7,8 +7,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { HardHat, Plus, Save, Sparkles } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, HardHat, LayoutGrid, Plus, Save, Sparkles } from "lucide-react";
 import { KanbanBoard, type KanbanCard, type KanbanColumn } from "@/components/boards/KanbanBoard";
+import { FieldWorkWeekBoard } from "@/components/boards/FieldWorkWeekBoard";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import {
   ApiError,
@@ -67,6 +68,15 @@ export default function FieldWorkBoardPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createPrefill, setCreatePrefill] = useState<{ startedAt?: string; dueDate?: string } | undefined>();
+  const [view, setView] = useState<"kanban" | "week">("kanban");
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  });
   const [settingsBoardDraft, setSettingsBoardDraft] = useState("");
   const [settingsTemplateDraft, setSettingsTemplateDraft] = useState("");
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
@@ -161,7 +171,12 @@ export default function FieldWorkBoardPage() {
         .map((task) => ({
           id: task.id,
           title: task.title,
-          subtitle: task.assignee?.full_name ?? undefined,
+          subtitle:
+            (typeof task.custom_fields?.["worker_equipment_name"] === "string"
+              ? task.custom_fields["worker_equipment_name"]
+              : undefined) ??
+            task.assignee?.full_name ??
+            undefined,
           badges: [
             {
               label: priorityLabel[task.priority] ?? task.priority,
@@ -173,6 +188,24 @@ export default function FieldWorkBoardPage() {
     }
     return out;
   }, [tasks, columns]);
+
+  function setWeekByOffset(days: number) {
+    const d = new Date(`${weekStartDate}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    setWeekStartDate(`${y}-${m}-${day}`);
+  }
+
+  function handleWeekSlotClick(slot: { dayKey: string; hour: number }) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startedAt = `${slot.dayKey}T${pad(slot.hour)}:00`;
+    const dueHour = Math.min(slot.hour + 1, 23);
+    const dueDate = `${slot.dayKey}T${pad(dueHour)}:00`;
+    setCreatePrefill({ startedAt, dueDate });
+    setCreateOpen(true);
+  }
 
   async function handleCardMove(cardId: string, _from: string, toCol: string) {
     if (toCol === "_other") return;
@@ -258,6 +291,38 @@ export default function FieldWorkBoardPage() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg border border-surface-200 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("kanban")}
+            className={`rounded-md px-2 py-1.5 ${view === "kanban" ? "bg-primary-600 text-white" : "text-surface-500"}`}
+            title="Канбан"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("week")}
+            className={`rounded-md px-2 py-1.5 ${view === "week" ? "bg-primary-600 text-white" : "text-surface-500"}`}
+            title="Недельный календарь"
+          >
+            <Calendar className="h-4 w-4" />
+          </button>
+        </div>
+        {view === "week" && (
+          <div className="inline-flex items-center gap-1 rounded-lg border border-surface-200 bg-white p-1">
+            <button type="button" onClick={() => setWeekByOffset(-7)} className="btn-ghost btn-sm">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="px-1 text-xs text-surface-600">Неделя от {weekStartDate}</span>
+            <button type="button" onClick={() => setWeekByOffset(7)} className="btn-ghost btn-sm">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
       {!boardId && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-medium">Доска не настроена</p>
@@ -285,12 +350,22 @@ export default function FieldWorkBoardPage() {
       {boardId && (
         <>
           {loading && <p className="text-sm text-surface-500">Загрузка…</p>}
-          <KanbanBoard
-            columns={columns}
-            cards={cards}
-            onCardMove={handleCardMove}
-            onCardClick={(id) => router.push(`/tasks/${id}`)}
-          />
+          {view === "kanban" ? (
+            <KanbanBoard
+              columns={columns}
+              cards={cards}
+              onCardMove={handleCardMove}
+              onCardClick={(id) => router.push(`/tasks/${id}`)}
+            />
+          ) : (
+            <FieldWorkWeekBoard
+              tasks={tasks}
+              weekStartDate={weekStartDate}
+              hourStart={8}
+              hourEndExclusive={20}
+              onSlotClick={handleWeekSlotClick}
+            />
+          )}
         </>
       )}
 
@@ -391,12 +466,16 @@ export default function FieldWorkBoardPage() {
 
       <CreateTaskModal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setCreatePrefill(undefined);
+        }}
         variant="field_work"
         fixedBoardId={boardId ?? undefined}
         defaultTemplateId={defaultTemplateId ?? undefined}
         lockTemplate={false}
         fieldWorkTemplateAllowlist={fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : null}
+        initialValues={createPrefill}
         onCreated={() => {
           void loadTasks();
         }}
