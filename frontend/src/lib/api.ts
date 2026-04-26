@@ -1060,6 +1060,25 @@ export async function fetchEquipment(
   return request(`/equipment${qs(params)}`);
 }
 
+export async function createEquipment(
+  data: Record<string, unknown>,
+): Promise<EquipmentResponse> {
+  return request("/equipment", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateEquipment(
+  id: string,
+  data: Record<string, unknown>,
+): Promise<EquipmentResponse> {
+  return request(`/equipment/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Templates                                                          */
 /* ------------------------------------------------------------------ */

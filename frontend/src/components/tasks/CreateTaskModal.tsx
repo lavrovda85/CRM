@@ -92,14 +92,38 @@ export function CreateTaskModal({
     setLoadingRefs(true);
     setError(null);
     try {
-      const [tmplRes, usersRes, equipmentRes] = await Promise.all([
+      const [tmplRes, usersRes, equipmentRes] = await Promise.allSettled([
         fetchTemplates({ limit: 100 }),
         fetchUsers({ is_active: true, limit: 100 }),
         fetchEquipment({ limit: 200, status: "active" }),
       ]);
-      setTemplates(tmplRes.items);
-      setUsers(usersRes.items);
-      setEquipment(equipmentRes.items);
+
+      const warnings: string[] = [];
+
+      if (tmplRes.status === "fulfilled") {
+        setTemplates(tmplRes.value.items);
+      } else {
+        setTemplates([]);
+        warnings.push("шаблоны");
+      }
+
+      if (usersRes.status === "fulfilled") {
+        setUsers(usersRes.value.items);
+      } else {
+        setUsers([]);
+        warnings.push("пользователи");
+      }
+
+      if (equipmentRes.status === "fulfilled") {
+        setEquipment(equipmentRes.value.items);
+      } else {
+        setEquipment([]);
+        warnings.push("оборудование");
+      }
+
+      if (warnings.length > 0) {
+        setError(`Часть справочников не загрузилась: ${warnings.join(", ")}. Можно продолжить создание задачи.`);
+      }
     } catch (e) {
       setUsers([]);
       setTemplates([]);
