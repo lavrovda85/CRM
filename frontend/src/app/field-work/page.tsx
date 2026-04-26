@@ -7,23 +7,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Calendar, ChevronLeft, ChevronRight, HardHat, LayoutGrid, Plus, Save, Sparkles } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, HardHat, LayoutGrid, Plus } from "lucide-react";
 import { KanbanBoard, type KanbanCard, type KanbanColumn } from "@/components/boards/KanbanBoard";
 import { FieldWorkWeekBoard } from "@/components/boards/FieldWorkWeekBoard";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import {
   ApiError,
-  createBoard,
   fetchActiveCompany,
-  fetchBoards,
   fetchTasks,
-  fetchTemplates,
-  patchCompanyWorkspaceSettings,
   transitionTask,
 } from "@/lib/api";
-import { FIELD_WORK_BOARD_COLUMNS } from "@/lib/fieldWorkBoard";
 import { isTerminalTaskStatus } from "@/lib/timelineTaskIntervals";
-import type { BoardResponse, TaskResponse, TemplateResponse } from "@/types";
+import type { TaskResponse } from "@/types";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "next/navigation";
 
@@ -77,14 +72,6 @@ export default function FieldWorkBoardPage() {
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   });
-  const [settingsBoardDraft, setSettingsBoardDraft] = useState("");
-  const [settingsTemplateDraft, setSettingsTemplateDraft] = useState("");
-  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [boards, setBoards] = useState<BoardResponse[]>([]);
-  const [templates, setTemplates] = useState<TemplateResponse[]>([]);
-  const [refsLoading, setRefsLoading] = useState(false);
-  const [creatingBoard, setCreatingBoard] = useState(false);
   /** Saved allowlist: empty = all templates in create modal; non-empty = restrict dropdown. */
   const [fieldWorkTemplateIds, setFieldWorkTemplateIds] = useState<string[]>([]);
 
@@ -97,33 +84,9 @@ export default function FieldWorkBoardPage() {
       Array.isArray(ft) && ft.length > 0 ? ft.map((x) => String(x).trim()).filter(Boolean) : [];
     setBoardId(bid);
     setDefaultTemplateId(tid);
-    setSettingsBoardDraft(bid ?? "");
-    setSettingsTemplateDraft(tid ?? "");
     setFieldWorkTemplateIds(filterIds);
     return { bid, tid };
   }, []);
-
-  const loadSettingsRefs = useCallback(async () => {
-    if (!canConfigure) return;
-    setRefsLoading(true);
-    try {
-      const [br, tr] = await Promise.all([
-        fetchBoards({ limit: 100, offset: 0 }),
-        fetchTemplates({ limit: 100, offset: 0 }),
-      ]);
-      setBoards(br.items);
-      setTemplates(tr.items);
-    } catch {
-      setBoards([]);
-      setTemplates([]);
-    } finally {
-      setRefsLoading(false);
-    }
-  }, [canConfigure]);
-
-  useEffect(() => {
-    void loadSettingsRefs();
-  }, [loadSettingsRefs]);
 
   const loadTasks = useCallback(async () => {
     const { bid } = await refreshCompany();
@@ -253,50 +216,6 @@ export default function FieldWorkBoardPage() {
     }
   }
 
-  async function saveWorkspaceSettings() {
-    setSettingsSaving(true);
-    setSettingsMsg(null);
-    try {
-      await patchCompanyWorkspaceSettings({
-        field_work_board_id: settingsBoardDraft.trim() || null,
-        default_field_task_template_id: settingsTemplateDraft.trim() || null,
-        field_work_template_ids: fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : [],
-      });
-      setSettingsMsg("Сохранено");
-      await loadTasks();
-    } catch (e) {
-      setSettingsMsg(e instanceof ApiError ? e.message : "Не удалось сохранить");
-    } finally {
-      setSettingsSaving(false);
-    }
-  }
-
-  async function quickCreateFieldWorkBoard() {
-    setCreatingBoard(true);
-    setSettingsMsg(null);
-    try {
-      const b = await createBoard({
-        name: "Выездные работы",
-        description: "Канбан выездных бригад (создано из раздела «Выездные работы»).",
-        columns: FIELD_WORK_BOARD_COLUMNS,
-      });
-      await patchCompanyWorkspaceSettings({
-        field_work_board_id: b.id,
-        default_field_task_template_id: settingsTemplateDraft.trim() || null,
-        field_work_template_ids: fieldWorkTemplateIds.length > 0 ? fieldWorkTemplateIds : [],
-      });
-      setSettingsBoardDraft(b.id);
-      setSettingsMsg("Доска создана и привязана к этому разделу.");
-      const br = await fetchBoards({ limit: 100, offset: 0 });
-      setBoards(br.items);
-      await loadTasks();
-    } catch (e) {
-      setSettingsMsg(e instanceof ApiError ? e.message : "Не удалось создать доску");
-    } finally {
-      setCreatingBoard(false);
-    }
-  }
-
   return (
     <div className="mx-auto w-full max-w-[100rem] space-y-4 overflow-x-hidden p-3 sm:p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -363,14 +282,10 @@ export default function FieldWorkBoardPage() {
           <p className="font-medium">Доска не настроена</p>
           {canConfigure ? (
             <p className="mt-1">
-              Ниже выберите существующую доску Kanban или нажмите «Создать доску» — UUID вручную больше не нужен.
-              Рекомендуется указать шаблон задачи, в workflow которого есть статусы:{" "}
-              <code className="rounded bg-white/60 px-1">new</code>,{" "}
-              <code className="rounded bg-white/60 px-1">dispatched</code>,{" "}
-              <code className="rounded bg-white/60 px-1">in_progress</code>,{" "}
-              <code className="rounded bg-white/60 px-1">testing</code>,{" "}
-              <code className="rounded bg-white/60 px-1">done</code> — тогда перетаскивание между колонками будет
-              согласовано с проверками на сервере.
+              Настройте доску выездных работ в разделе{" "}
+              <Link href="/settings" className="text-primary-700 underline">
+                Настройки
+              </Link>.
             </p>
           ) : (
             <p className="mt-1">Попросите администратора или руководителя назначить доску для выездных работ.</p>
@@ -402,101 +317,6 @@ export default function FieldWorkBoardPage() {
             />
           )}
         </>
-      )}
-
-      {canConfigure && (
-        <div className="card space-y-4 p-4">
-          <h2 className="text-sm font-semibold text-surface-800">Настройки доски (компания)</h2>
-          <p className="text-xs text-surface-500">
-            Доска и шаблон по умолчанию хранятся в настройках компании. Шаблон по умолчанию лишь подставляется в форме
-            создания — исполнитель может выбрать другой шаблон из списка. Ограничить список шаблонов для выезда можно
-            блоком ниже (пустой выбор = все шаблоны компании). Для согласованных переходов по колонкам задайте
-            workflow со статусами new → dispatched → in_progress → testing → done.
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={creatingBoard || settingsSaving}
-              onClick={() => void quickCreateFieldWorkBoard()}
-              className="btn-primary inline-flex items-center gap-2 text-sm"
-            >
-              <Sparkles className="h-4 w-4" />
-              {creatingBoard ? "Создание…" : "Создать доску «Выездные работы»"}
-            </button>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-medium text-surface-600">
-              Доска Kanban
-              <select
-                className="input mt-1 w-full text-sm"
-                value={settingsBoardDraft}
-                disabled={refsLoading}
-                onChange={(e) => setSettingsBoardDraft(e.target.value)}
-              >
-                <option value="">— не выбрана —</option>
-                {boards.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs font-medium text-surface-600">
-              Шаблон по умолчанию (необязательно)
-              <select
-                className="input mt-1 w-full text-sm"
-                value={settingsTemplateDraft}
-                disabled={refsLoading}
-                onChange={(e) => setSettingsTemplateDraft(e.target.value)}
-              >
-                <option value="">— без шаблона по умолчанию —</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs font-medium text-surface-600 sm:col-span-2">
-              Шаблоны для выезда (необязательно)
-              <span className="mt-0.5 block font-normal text-surface-500">
-                Удерживайте Ctrl (Cmd на Mac) для нескольких. Пусто — в модалке создания задачи доступны все шаблоны
-                компании.
-              </span>
-              <select
-                multiple
-                size={Math.min(10, Math.max(4, templates.length || 4))}
-                className="input mt-1 w-full text-sm"
-                value={fieldWorkTemplateIds}
-                disabled={refsLoading}
-                onChange={(e) =>
-                  setFieldWorkTemplateIds(
-                    Array.from(e.target.selectedOptions, (o) => o.value).filter(Boolean),
-                  )
-                }
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {settingsMsg && <p className="text-xs text-surface-600">{settingsMsg}</p>}
-          <button
-            type="button"
-            disabled={settingsSaving}
-            onClick={() => void saveWorkspaceSettings()}
-            className="btn-secondary inline-flex items-center gap-2 text-sm"
-          >
-            <Save className="h-4 w-4" />
-            {settingsSaving ? "Сохранение…" : "Сохранить настройки"}
-          </button>
-        </div>
       )}
 
       <CreateTaskModal

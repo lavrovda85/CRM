@@ -12,14 +12,21 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
+  ApiError,
+  createBoard,
+  fetchActiveCompany,
+  fetchBoards,
   fetchReferences,
   fetchReference,
+  fetchTemplates,
   createReferenceItem,
+  patchCompanyWorkspaceSettings,
   updateReferenceItem,
   fetchAdminSettings,
   updateAdminSchedulerSettings,
   fetchUsers,
 } from "@/lib/api";
+import { FIELD_WORK_BOARD_COLUMNS } from "@/lib/fieldWorkBoard";
 import type { ReferenceResponse, ReferenceItemResponse } from "@/types";
 import { useAuthStore } from "@/stores/auth";
 
@@ -30,6 +37,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 export default function SettingsPage() {
   const authUser = useAuthStore((s) => s.user);
   const isAdmin = authUser?.role === "admin";
+  const canConfigureFieldWork = authUser?.role === "admin" || authUser?.role === "manager";
   const [references, setReferences] = useState<ReferenceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeRef, setActiveRef] = useState<ReferenceResponse | null>(null);
@@ -64,6 +72,15 @@ export default function SettingsPage() {
     co_assignee_ids: [] as string[],
     dedup_window_minutes: 180,
   });
+  const [fwBoardDraft, setFwBoardDraft] = useState("");
+  const [fwTemplateDraft, setFwTemplateDraft] = useState("");
+  const [fwTemplateIds, setFwTemplateIds] = useState<string[]>([]);
+  const [fwBoards, setFwBoards] = useState<Array<{ id: string; name: string }>>([]);
+  const [fwTemplates, setFwTemplates] = useState<Array<{ id: string; name: string }>>([]);
+  const [fwLoading, setFwLoading] = useState(false);
+  const [fwSaving, setFwSaving] = useState(false);
+  const [fwCreatingBoard, setFwCreatingBoard] = useState(false);
+  const [fwMsg, setFwMsg] = useState<string | null>(null);
 
   const loadRefs = useCallback(async () => {
     setLoading(true);
@@ -93,6 +110,37 @@ export default function SettingsPage() {
   }
 
   useEffect(() => { loadRefs(); }, [loadRefs]);
+  useEffect(() => {
+    if (!canConfigureFieldWork) return;
+    let cancelled = false;
+    void (async () => {
+      setFwLoading(true);
+      try {
+        const [company, boardsRes, templatesRes] = await Promise.all([
+          fetchActiveCompany(),
+          fetchBoards({ limit: 100, offset: 0 }),
+          fetchTemplates({ limit: 100, offset: 0 }),
+        ]);
+        if (cancelled) return;
+        const boardId = company.field_work_board_id?.trim() || "";
+        const templateId = company.default_field_task_template_id?.trim() || "";
+        const idsRaw = company.field_work_template_ids;
+        const ids = Array.isArray(idsRaw) ? idsRaw.map((x) => String(x).trim()).filter(Boolean) : [];
+        setFwBoardDraft(boardId);
+        setFwTemplateDraft(templateId);
+        setFwTemplateIds(ids);
+        setFwBoards(boardsRes.items.map((b) => ({ id: b.id, name: b.name })));
+        setFwTemplates(templatesRes.items.map((t) => ({ id: t.id, name: t.name })));
+      } catch (e) {
+        if (!cancelled) setFwMsg(e instanceof Error ? e.message : "Не удалось загрузить настройки выезда");
+      } finally {
+        if (!cancelled) setFwLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canConfigureFieldWork]);
   useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
@@ -171,6 +219,50 @@ export default function SettingsPage() {
     }
   }
 
+  async function saveFieldWorkSettings() {
+    setFwSaving(true);
+    setFwMsg(null);
+    try {
+      await patchCompanyWorkspaceSettings({
+        field_work_board_id: fwBoardDraft.trim() || null,
+        default_field_task_template_id: fwTemplateDraft.trim() || null,
+        field_work_template_ids: fwTemplateIds.length > 0 ? fwTemplateIds : [],
+      });
+      setFwMsg("Настройки выездных работ сохранены");
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Не удалось сохранить";
+      setFwMsg(msg);
+    } finally {
+      setFwSaving(false);
+    }
+  }
+
+  async function quickCreateFieldWorkBoard() {
+    setFwCreatingBoard(true);
+    setFwMsg(null);
+    try {
+      const b = await createBoard({
+        name: "Выездные работы",
+        description: "Канбан выездных бригад (создано из раздела «Настройки»).",
+        columns: FIELD_WORK_BOARD_COLUMNS,
+      });
+      setFwBoardDraft(b.id);
+      await patchCompanyWorkspaceSettings({
+        field_work_board_id: b.id,
+        default_field_task_template_id: fwTemplateDraft.trim() || null,
+        field_work_template_ids: fwTemplateIds.length > 0 ? fwTemplateIds : [],
+      });
+      const boardsRes = await fetchBoards({ limit: 100, offset: 0 });
+      setFwBoards(boardsRes.items.map((x) => ({ id: x.id, name: x.name })));
+      setFwMsg("Доска выездных работ создана и назначена");
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Не удалось создать доску";
+      setFwMsg(msg);
+    } finally {
+      setFwCreatingBoard(false);
+    }
+  }
+
   async function handleAddItem() {
     if (!activeRef || !newItem.code || !newItem.name) return;
     try {
@@ -217,6 +309,92 @@ export default function SettingsPage() {
           </Link>
         )}
       </div>
+
+      {canConfigureFieldWork && (
+        <div className="card space-y-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Выездные работы</h2>
+            <button
+              type="button"
+              disabled={fwCreatingBoard || fwSaving || fwLoading}
+              onClick={() => void quickCreateFieldWorkBoard()}
+              className="btn-primary btn-sm"
+            >
+              {fwCreatingBoard ? "Создание..." : "Создать доску «Выездные работы»"}
+            </button>
+          </div>
+          <p className="text-xs text-surface-500">
+            Управление выделенной доской выездных работ и шаблонами, доступными в модалке создания задачи.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-surface-600">
+              Доска Kanban
+              <select
+                className="input mt-1 w-full text-sm"
+                value={fwBoardDraft}
+                disabled={fwLoading}
+                onChange={(e) => setFwBoardDraft(e.target.value)}
+              >
+                <option value="">— не выбрана —</option>
+                {fwBoards.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-surface-600">
+              Шаблон по умолчанию (необязательно)
+              <select
+                className="input mt-1 w-full text-sm"
+                value={fwTemplateDraft}
+                disabled={fwLoading}
+                onChange={(e) => setFwTemplateDraft(e.target.value)}
+              >
+                <option value="">— без шаблона по умолчанию —</option>
+                {fwTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-surface-600 sm:col-span-2">
+              Шаблоны для выезда (необязательно)
+              <span className="mt-0.5 block font-normal text-surface-500">
+                Пусто — доступны все шаблоны компании.
+              </span>
+              <select
+                multiple
+                size={Math.min(10, Math.max(4, fwTemplates.length || 4))}
+                className="input mt-1 w-full text-sm"
+                value={fwTemplateIds}
+                disabled={fwLoading}
+                onChange={(e) =>
+                  setFwTemplateIds(Array.from(e.target.selectedOptions, (o) => o.value).filter(Boolean))
+                }
+              >
+                {fwTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {fwMsg && <p className="text-xs text-surface-600">{fwMsg}</p>}
+          <div>
+            <button
+              type="button"
+              disabled={fwSaving || fwLoading}
+              onClick={() => void saveFieldWorkSettings()}
+              className="btn-secondary btn-sm"
+            >
+              {fwSaving ? "Сохранение..." : "Сохранить настройки выезда"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Reference Tabs */}
