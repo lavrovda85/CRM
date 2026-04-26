@@ -106,7 +106,7 @@ export function FieldWorkWeekBoard({
                         {cellTasks.slice(0, 3).map((task) => (
                           <Link
                             key={task.id}
-                            href={`/tasks/${task.id}`}
+                            href={`/tasks/${task.id}?from=field-work`}
                             onClick={(e) => e.stopPropagation()}
                             className="block rounded border border-surface-200 bg-white px-1.5 py-1 text-[11px] text-surface-800 hover:border-primary-300 hover:text-primary-700"
                             title={task.title}

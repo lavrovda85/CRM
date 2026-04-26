@@ -305,7 +305,7 @@ export default function FieldWorkBoardPage() {
               columns={columns}
               cards={cards}
               onCardMove={handleCardMove}
-              onCardClick={(id) => router.push(`/tasks/${id}`)}
+              onCardClick={(id) => router.push(`/tasks/${id}?from=field-work`)}
             />
           ) : (
             <FieldWorkWeekBoard

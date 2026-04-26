@@ -25,7 +25,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ApiError,
   fetchTask,
@@ -167,6 +167,10 @@ export default function TaskDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromFieldWork = searchParams.get("from") === "field-work";
+  const backHref = fromFieldWork ? "/field-work" : "/tasks";
+  const backLabel = fromFieldWork ? "Назад к выездным работам" : "Назад к задачам";
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -520,7 +524,7 @@ export default function TaskDetailPage({
     setDeleteError(null);
     try {
       await deleteTask(task.id);
-      router.push("/tasks");
+      router.push(backHref);
     } catch (e) {
       setDeleteError(
         e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Ошибка удаления",
@@ -656,8 +660,8 @@ export default function TaskDetailPage({
             >
               Повторить
             </button>
-            <Link href="/tasks" className="btn-ghost">
-              Назад к задачам
+            <Link href={backHref} className="btn-ghost">
+              {backLabel}
             </Link>
           </div>
         </div>
@@ -669,7 +673,7 @@ export default function TaskDetailPage({
           <p className="text-lg font-medium text-surface-500">
             {notFound ? "Задача не найдена" : "Не удалось открыть задачу"}
           </p>
-          <Link href="/tasks" className="mt-2 text-primary-600 hover:underline">Назад к задачам</Link>
+          <Link href={backHref} className="mt-2 text-primary-600 hover:underline">{backLabel}</Link>
         </div>
       </div>
     );
@@ -678,12 +682,34 @@ export default function TaskDetailPage({
   const availableTransitions = TRANSITIONS[task.status] ?? [];
   const completedItems = task.checklists.flatMap((c) => c.items).filter((i) => i.is_completed).length;
   const totalItems = task.checklists.flatMap((c) => c.items).length;
+  const workerNames = Array.isArray(task.custom_fields?.["worker_equipment_names"])
+    ? (task.custom_fields["worker_equipment_names"] as unknown[])
+      .map((v) => String(v).trim())
+      .filter(Boolean)
+    : [];
+  const extraEquipmentNames = Array.isArray(task.custom_fields?.["extra_equipment_names"])
+    ? (task.custom_fields["extra_equipment_names"] as unknown[])
+      .map((v) => String(v).trim())
+      .filter(Boolean)
+    : [];
+  const vehicleMileageByEquipmentRaw = task.custom_fields?.["vehicle_mileage_by_equipment"];
+  const vehicleMileagePairs = vehicleMileageByEquipmentRaw && typeof vehicleMileageByEquipmentRaw === "object"
+    ? Object.entries(vehicleMileageByEquipmentRaw as Record<string, unknown>)
+      .map(([equipmentId, km]) => ({ equipmentId, km: Number(km) }))
+      .filter((row) => Number.isFinite(row.km) && row.km > 0)
+    : [];
+  const totalVehicleMileageKm = Number(task.custom_fields?.["vehicle_mileage_total_km"] ?? 0);
+  const hasFieldWorkMeta =
+    workerNames.length > 0 ||
+    extraEquipmentNames.length > 0 ||
+    vehicleMileagePairs.length > 0 ||
+    (Number.isFinite(totalVehicleMileageKm) && totalVehicleMileageKm > 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 lg:p-6">
       {/* Back */}
-      <Link href="/tasks" className="inline-flex items-center gap-1 text-sm text-surface-500 hover:text-surface-900">
-        <ArrowLeft className="h-4 w-4" /> Назад к задачам
+      <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-surface-500 hover:text-surface-900">
+        <ArrowLeft className="h-4 w-4" /> {backLabel}
       </Link>
 
       {deleteError && (
@@ -960,6 +986,32 @@ export default function TaskDetailPage({
                     </dd>
                   </div>
                 </dl>
+                {hasFieldWorkMeta && (
+                  <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50/40 p-3">
+                    <h3 className="text-sm font-semibold text-primary-800">Поля выездных работ</h3>
+                    <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                      <div className="rounded bg-white/70 px-2.5 py-2">
+                        <dt className="text-xs font-medium text-surface-500">Рабочие/бригады</dt>
+                        <dd className="text-surface-800">{workerNames.length > 0 ? workerNames.join(", ") : "—"}</dd>
+                      </div>
+                      <div className="rounded bg-white/70 px-2.5 py-2">
+                        <dt className="text-xs font-medium text-surface-500">Доп. техника</dt>
+                        <dd className="text-surface-800">{extraEquipmentNames.length > 0 ? extraEquipmentNames.join(", ") : "—"}</dd>
+                      </div>
+                      <div className="rounded bg-white/70 px-2.5 py-2 sm:col-span-2">
+                        <dt className="text-xs font-medium text-surface-500">Пробег транспорта</dt>
+                        <dd className="text-surface-800">
+                          {vehicleMileagePairs.length > 0
+                            ? vehicleMileagePairs.map((row) => `${row.km.toFixed(1)} км`).join(", ")
+                            : "—"}
+                          {Number.isFinite(totalVehicleMileageKm) && totalVehicleMileageKm > 0
+                            ? ` (итого ${totalVehicleMileageKm.toFixed(1)} км)`
+                            : ""}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
               </>
             )}
           </div>

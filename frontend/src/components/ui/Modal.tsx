@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,39 +34,22 @@ export interface ModalProps {
  *     JSX-элемент модала или null, если закрыт.
  */
 export function Modal({ open, onClose, title, children, footer, className }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    },
-    [onClose],
-  );
-
   useEffect(() => {
     if (!open) return;
-    document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [open, handleKeyDown]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <div
-      ref={overlayRef}
       role="dialog"
       aria-modal="true"
       aria-label={title}
       className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
-      onClick={handleBackdropClick}
     >
       <div
         className={cn(
