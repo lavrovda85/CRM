@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -80,6 +80,12 @@ async def register_equipment(
         await db.flush()
     except IntegrityError as exc:
         _raise_equipment_integrity_error(exc)
+    except ProgrammingError as exc:
+        raise ValidationError(
+            "equipment",
+            "Database schema mismatch (e.g. missing equipment columns). "
+            "Set SCHEMA_BOOTSTRAP_ON_STARTUP=true and restart the API, or run migrations.",
+        ) from exc
     await db.refresh(equipment)
     return EquipmentResponse.model_validate(equipment)
 
@@ -206,6 +212,12 @@ async def update_equipment(
             await db.flush()
         except IntegrityError as exc:
             _raise_equipment_integrity_error(exc)
+        except ProgrammingError as exc:
+            raise ValidationError(
+                "equipment",
+                "Database schema mismatch (e.g. missing equipment columns). "
+                "Set SCHEMA_BOOTSTRAP_ON_STARTUP=true and restart the API, or run migrations.",
+            ) from exc
         await db.refresh(equipment)
 
     return EquipmentResponse.model_validate(equipment)

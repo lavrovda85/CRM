@@ -79,9 +79,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = Field(default=False, alias="BACKEND_DEBUG")
     schema_bootstrap_on_startup: bool = Field(
-        default=False,
+        default=True,
         alias="SCHEMA_BOOTSTRAP_ON_STARTUP",
-        description="Run create_all + dev parity DDL on startup (use true once on new prod DB).",
+        description="Run idempotent create_all + DDL on startup. Set false if DB is migrated only by Alembic/ops.",
     )
     secret_key: str = "change-me"
     log_level: str = "INFO"

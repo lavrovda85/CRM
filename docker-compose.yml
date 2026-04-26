@@ -118,7 +118,8 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       BACKEND_DEBUG: ${BACKEND_DEBUG}
-      SCHEMA_BOOTSTRAP_ON_STARTUP: ${SCHEMA_BOOTSTRAP_ON_STARTUP:-false}
+      # Idempotent create_all + DDL; keep true unless you run dedicated migrations only.
+      SCHEMA_BOOTSTRAP_ON_STARTUP: ${SCHEMA_BOOTSTRAP_ON_STARTUP:-true}
       SECRET_KEY: ${SECRET_KEY}
       # Pass through from repo .env so DB-only login works in Docker (Keycloak bypass password).
       DEV_BYPASS_AUTH: ${DEV_BYPASS_AUTH:-false}

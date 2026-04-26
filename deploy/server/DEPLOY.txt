@@ -20,9 +20,9 @@ HVAC CRM — деплой на один сервер (Ubuntu), один IP дл�
   bash deploy/server/03-compose-up.sh /opt/crm
   bash deploy/server/04-migrate.sh /opt/crm   # Alembic (когда появятся revision-файлы в backend/migrations/versions)
 
-Первый запуск на ПУСТОЙ БД (схема как в dev: create_all + патчи):
-  В .env на сервере: SCHEMA_BOOTSTRAP_ON_STARTUP=true, затем перезапуск compose.
-  После успешного старта API верните SCHEMA_BOOTSTRAP_ON_STARTUP=false и снова перезапустите.
+Первая и последующие загрузки: идемпотентная схема (create_all + патчи) по умолчанию включена
+  (в docker-compose и env.template.ip: SCHEMA_BOOTSTRAP_ON_STARTUP=true). При необходимости отключите
+  (false) если БД ведёте только через Alembic/ручные миграции.
 
 Откройте в браузере: http://ВАШ_IP/
 
