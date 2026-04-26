@@ -71,7 +71,7 @@ export default function EquipmentPage() {
     setLoadError(null);
     try {
       const [res, company] = await Promise.all([
-        fetchEquipment({ limit: 300 }),
+        fetchEquipment({ limit: 200 }),
         fetchActiveCompany(),
       ]);
       setEquipment(res.items);
