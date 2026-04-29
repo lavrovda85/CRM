@@ -60,10 +60,25 @@ class SessionRepository(
         CrmSession(base, access, refresh, company, user)
     }
 
-    suspend fun applySessionToHolders() {
-        val s = session.first() ?: return
+    /**
+     * Pushes the given session into [TokenHolder] / [CompanyIdHolder] without re-reading DataStore.
+     * Use this after [session.first()] or from [session] flow to avoid a race where the first
+     * API call runs before holders are populated (symptom: HTTP 401 on dashboard).
+     */
+    fun applyFromSession(s: CrmSession) {
         tokenHolder.accessToken = s.accessToken
         companyHolder.companyId = s.companyId
+    }
+
+    /** Clears in-memory tokens when the persisted session is gone (logout or cleared storage). */
+    fun clearApiHolders() {
+        tokenHolder.accessToken = null
+        companyHolder.companyId = null
+    }
+
+    suspend fun applySessionToHolders() {
+        val s = session.first() ?: return
+        applyFromSession(s)
     }
 
     suspend fun login(apiBaseInput: String, email: String, password: String) {
@@ -78,8 +93,15 @@ class SessionRepository(
             p[ks.company] = res.activeCompanyId
             p[ks.user] = gson.toJson(user)
         }
-        tokenHolder.accessToken = res.tokens.accessToken
-        companyHolder.companyId = res.activeCompanyId
+        applyFromSession(
+            CrmSession(
+                baseUrl = base,
+                accessToken = res.tokens.accessToken,
+                refreshToken = res.tokens.refreshToken,
+                companyId = res.activeCompanyId,
+                user = user,
+            ),
+        )
     }
 
     /**
@@ -89,6 +111,7 @@ class SessionRepository(
         val p = context.dataStore.data.first()
         val base = p[ks.base] ?: return false
         val refresh = p[ks.refresh] ?: return false
+        val companyId = p[ks.company] ?: return false
         return try {
             val api = retrofitFactory.create(base)
             val res = api.refresh(RefreshRequest(refresh))
@@ -98,7 +121,15 @@ class SessionRepository(
                 st[ks.refresh] = res.tokens.refreshToken
                 st[ks.user] = gson.toJson(user)
             }
-            tokenHolder.accessToken = res.tokens.accessToken
+            applyFromSession(
+                CrmSession(
+                    baseUrl = base,
+                    accessToken = res.tokens.accessToken,
+                    refreshToken = res.tokens.refreshToken,
+                    companyId = companyId,
+                    user = user,
+                ),
+            )
             true
         } catch (_: Exception) {
             false
@@ -144,6 +175,9 @@ suspend fun <T> SessionRepository.withTokenRefresh(block: suspend () -> T): T {
         if (e.code() == 401 && refreshTokens()) {
             applySessionToHolders()
             block()
+        } else if (e.code() == 401) {
+            logout()
+            throw e
         } else {
             throw e
         }

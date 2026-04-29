@@ -12,10 +12,12 @@ import com.spec.crm.AppContainer
 import com.spec.crm.MainActivity
 import com.spec.crm.data.withTokenRefresh
 import com.spec.crm.data.remote.dto.InboxNotificationDto
+import com.spec.crm.navigation.NavExtras
 import kotlinx.coroutines.flow.first
 
 /**
- * Pulls unread inbox notifications and shows local task notifications.
+ * Pulls unread inbox notifications and shows local Android notifications with optional task deep link.
+ * Does **not** mark server items as read (inbox stays in sync with the web app).
  */
 class TaskNotificationsWorker(
     appContext: Context,
@@ -30,7 +32,13 @@ class TaskNotificationsWorker(
             container.sessionRepository.applySessionToHolders()
             val api = container.sessionRepository.apiForSession(session)
             val response = container.sessionRepository.withTokenRefresh {
-                api.notifications(mapOf("limit" to "50", "offset" to "0"))
+                api.notifications(
+                    mapOf(
+                        "limit" to "30",
+                        "offset" to "0",
+                        "unread_only" to "true",
+                    ),
+                )
             }
             showNewTaskNotifications(response.items)
             Result.success()
@@ -40,7 +48,7 @@ class TaskNotificationsWorker(
         }
     }
 
-    private suspend fun showNewTaskNotifications(items: List<InboxNotificationDto>) {
+    private fun showNewTaskNotifications(items: List<InboxNotificationDto>) {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val seenIds = prefs.getStringSet(KEY_SEEN_IDS, emptySet()).orEmpty().toMutableSet()
@@ -49,11 +57,15 @@ class TaskNotificationsWorker(
         var changed = false
         for (item in sorted) {
             if (item.isRead || !isTaskEvent(item)) continue
-            val stableId = item.id ?: "${item.eventType}:${item.createdAt}:${item.title.hashCode()}"
+            val stableId = item.id
             if (seenIds.contains(stableId)) continue
 
+            val taskId = extractTaskId(item)
             val intent = Intent(applicationContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                if (taskId != null) {
+                    putExtra(NavExtras.EXTRA_OPEN_TASK_ID, taskId)
+                }
             }
             val pendingIntent = PendingIntent.getActivity(
                 applicationContext,
@@ -63,12 +75,13 @@ class TaskNotificationsWorker(
             )
             val notif = NotificationCompat.Builder(applicationContext, TaskNotifications.channelId())
                 .setSmallIcon(android.R.drawable.stat_notify_more)
-                .setContentTitle(item.title.ifBlank { "Task update" })
+                .setContentTitle(item.title.ifBlank { "SPEC CRM" })
                 .setContentText(item.body.ifBlank { item.eventType })
                 .setStyle(NotificationCompat.BigTextStyle().bigText(item.body))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
+                .setOnlyAlertOnce(false)
                 .build()
             try {
                 manager.notify(stableId.hashCode(), notif)
@@ -78,21 +91,17 @@ class TaskNotificationsWorker(
             }
             seenIds.add(stableId)
             changed = true
-
-            if (!item.id.isNullOrBlank()) {
-                try {
-                    val container = AppContainer(applicationContext)
-                    container.crmRepository.withApi { it.markNotificationRead(item.id) }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to mark notification as read: ${item.id}", e)
-                }
-            }
         }
 
         if (changed) {
             val trimmed = seenIds.toList().takeLast(MAX_SEEN_IDS).toSet()
             prefs.edit().putStringSet(KEY_SEEN_IDS, trimmed).apply()
         }
+    }
+
+    private fun extractTaskId(item: InboxNotificationDto): String? {
+        val raw = item.data["task_id"] ?: return null
+        return raw.toString().trim().takeIf { it.isNotEmpty() }
     }
 
     private fun isTaskEvent(item: InboxNotificationDto): Boolean {

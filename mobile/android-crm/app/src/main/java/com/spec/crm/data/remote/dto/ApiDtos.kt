@@ -1,5 +1,6 @@
 package com.spec.crm.data.remote.dto
 
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 
 /* ---------- Companies ---------- */
@@ -11,6 +12,9 @@ data class CompanyResponseDto(
     val name: String,
     val slug: String?,
     @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("field_work_board_id") val fieldWorkBoardId: String? = null,
+    @SerializedName("default_field_task_template_id") val defaultFieldTaskTemplateId: String? = null,
+    @SerializedName("field_work_template_ids") val fieldWorkTemplateIds: List<String>? = null,
 )
 
 data class CompanyMembershipDto(
@@ -55,12 +59,18 @@ data class WarehouseAnalyticsDto(
 /* ---------- Notifications ---------- */
 
 data class InboxNotificationDto(
-    val id: String? = null,
+    val id: String,
     @SerializedName("event_type") val eventType: String,
     val title: String,
     val body: String,
+    val data: Map<String, @JvmSuppressWildcards Any> = emptyMap(),
     @SerializedName("is_read") val isRead: Boolean,
     @SerializedName("created_at") val createdAt: String,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+)
+
+data class NotificationUnreadCountDto(
+    @SerializedName("unread_count") val unreadCount: Int,
 )
 
 data class PaginatedNotificationsResponse(
@@ -155,7 +165,12 @@ data class TenderDetailDto(
 
 /* ---------- Templates ---------- */
 
-data class TemplateDto(val id: String, val name: String, val category: String?)
+data class TemplateDto(
+    val id: String,
+    val name: String,
+    val category: String?,
+    @SerializedName("workflow_definition") val workflowDefinition: JsonObject? = null,
+)
 data class PaginatedTemplatesResponse(
     val items: List<TemplateDto>,
     val total: Int,
@@ -268,6 +283,19 @@ data class CommentDetailDto(
     @SerializedName("created_at") val createdAt: String,
 )
 
+data class UserSummaryDto(
+    val id: String,
+    @SerializedName("full_name") val fullName: String,
+    val email: String,
+    val role: String,
+)
+
+data class TemplateSummaryDto(
+    val id: String,
+    val name: String,
+    val category: String?,
+)
+
 data class TaskDetailDto(
     val id: String,
     val title: String,
@@ -275,8 +303,23 @@ data class TaskDetailDto(
     val status: String,
     val priority: String,
     @SerializedName("due_date") val dueDate: String?,
+    @SerializedName("template_id") val templateId: String? = null,
+    @SerializedName("board_id") val boardId: String? = null,
+    @SerializedName("assigned_to") val assignedTo: String? = null,
+    @SerializedName("custom_fields") val customFields: JsonObject? = null,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val assignee: UserSummaryDto? = null,
+    val template: TemplateSummaryDto? = null,
+    val visibility: String? = null,
     val checklists: List<ChecklistDetailDto>?,
     val comments: List<CommentDetailDto>?,
+)
+
+data class CommentCreateDto(
+    val body: String,
+    val mentions: List<String> = emptyList(),
 )
 
 /* ---------- References / users / admin ---------- */

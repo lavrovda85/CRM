@@ -6,6 +6,7 @@ package com.spec.crm.navigation
 object Routes {
     const val DASHBOARD = "dashboard"
     const val TASKS = "tasks"
+    const val TASK_CREATE = "task_create/{mode}"
     const val TASK_DETAIL = "task/{taskId}"
     const val TEMPLATES = "templates"
     const val CLIENTS = "clients"
@@ -26,5 +27,8 @@ object Routes {
     const val SETTINGS_ROLES = "settings_roles"
 
     fun taskDetail(taskId: String) = "task/$taskId"
+
+    /** mode: `office` or `field` */
+    fun taskCreate(mode: String) = "task_create/$mode"
     fun tenderDetail(tenderId: String) = "tender/$tenderId"
 }

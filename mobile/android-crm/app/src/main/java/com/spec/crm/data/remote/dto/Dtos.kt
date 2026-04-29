@@ -55,4 +55,8 @@ data class TaskDto(
     val status: String,
     val priority: String,
     @SerializedName("due_date") val dueDate: String?,
+    @SerializedName("board_id") val boardId: String? = null,
+    @SerializedName("template_id") val templateId: String? = null,
+    val assignee: UserSummaryDto? = null,
+    val template: TemplateSummaryDto? = null,
 )

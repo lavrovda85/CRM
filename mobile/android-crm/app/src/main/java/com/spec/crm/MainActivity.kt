@@ -2,6 +2,7 @@ package com.spec.crm
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -37,6 +38,11 @@ class MainActivity : ComponentActivity() {
                 defaultApiBase = DEFAULT_DEV_API_BASE,
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     companion object {

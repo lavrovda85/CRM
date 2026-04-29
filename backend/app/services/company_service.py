@@ -139,6 +139,14 @@ async def ensure_default_company_for_user(db: AsyncSession, user_id: uuid.UUID) 
     Returns:
         A company id the user can use as default context.
     """
+    if await db.get(User, user_id) is None:
+        raise HVACBaseError(
+            message="CRM user row missing; cannot attach company membership",
+            code="USER_NOT_FOUND_FOR_MEMBERSHIP",
+            status_code=400,
+            details={"user_id": str(user_id)},
+        )
+
     cnt_res = await db.execute(
         select(func.count())
         .select_from(UserCompanyMembership)
@@ -200,6 +208,13 @@ async def create_company(
     slug: str | None = None,
 ) -> Company:
     """Create a company and add the creator as member (default)."""
+    if await db.get(User, creator_user_id) is None:
+        raise HVACBaseError(
+            message="Creator user not found in CRM",
+            code="USER_NOT_FOUND_FOR_MEMBERSHIP",
+            status_code=400,
+            details={"user_id": str(creator_user_id)},
+        )
     nm = (name or "").strip()
     if not nm:
         raise ValidationError("name", "Company name is required")

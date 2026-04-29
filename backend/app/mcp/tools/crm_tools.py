@@ -12,7 +12,7 @@ from sqlalchemy import or_, select, update
 
 from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundError, ValidationError
-from app.mcp.actor_context import current_mcp_user_sub
+from app.mcp.actor_context import resolve_mcp_actor_users_table_id
 from app.mcp.server import mcp
 from app.models import Client, ClientContact, Deal, DealStage
 from app.schemas.client import ClientCreate
@@ -62,13 +62,8 @@ async def create_client(
         corr_account=corr_account,
         bank_name=bank_name,
     )
-    sub = current_mcp_user_sub()
-    try:
-        uid = uuid.UUID(sub)
-    except ValueError as exc:
-        raise ValidationError("actor", "Invalid MCP user id") from exc
-
     async with async_session_factory() as session:
+        uid = await resolve_mcp_actor_users_table_id(session)
         company_id = await company_service.get_default_or_first_company_id(session, uid)
         extra = extra_data_for_create(body)
         client = Client(
@@ -112,13 +107,8 @@ async def search_clients(
     lim = max(1, min(int(limit), 100))
     pattern = f"%{q}%"
 
-    sub = current_mcp_user_sub()
-    try:
-        uid = uuid.UUID(sub)
-    except ValueError as exc:
-        raise ValidationError("actor", "Invalid MCP user id") from exc
-
     async with async_session_factory() as session:
+        uid = await resolve_mcp_actor_users_table_id(session)
         company_id = await company_service.get_default_or_first_company_id(session, uid)
         stmt = (
             select(Client)

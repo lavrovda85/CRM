@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundError, ValidationError
-from app.mcp.actor_context import current_mcp_user_sub
+from app.mcp.actor_context import resolve_mcp_actor_users_table_id
 from app.mcp.server import mcp
 from app.models import Board, Task
 from app.services import company_service
@@ -37,9 +37,9 @@ async def list_boards(limit: int = 50) -> list[dict]:
         Board list as JSON dicts (``BoardResponse`` shape).
     """
     lim = max(1, min(int(limit), 200))
-    owner = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
-        company_id = await company_service.get_default_or_first_company_id(session, owner)
+        owner_id = await resolve_mcp_actor_users_table_id(session)
+        company_id = await company_service.get_default_or_first_company_id(session, owner_id)
         result = await session.execute(
             select(Board)
             .where(Board.company_id == company_id, Board.is_archived.is_(False))
@@ -61,15 +61,15 @@ async def create_board(
     if not clean:
         raise ValidationError("name", "Board name must not be empty")
 
-    owner = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
-        company_id = await company_service.get_default_or_first_company_id(session, owner)
+        owner_id = await resolve_mcp_actor_users_table_id(session)
+        company_id = await company_service.get_default_or_first_company_id(session, owner_id)
         board = Board(
             company_id=company_id,
             name=clean,
             description=description,
             board_type=(board_type or "kanban").strip() or "kanban",
-            owner_id=owner,
+            owner_id=owner_id,
             columns=[],
         )
         session.add(board)

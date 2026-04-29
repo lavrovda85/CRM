@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import uuid
 from contextvars import ContextVar, Token
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.config import get_settings
 from app.core.security import CurrentUser, DEV_USER_ID
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 _tool_actor: ContextVar[CurrentUser | None] = ContextVar("mcp_tool_actor", default=None)
 # When set (e.g. by HTTP AI assistant), maps JWT subject to CRM ``users.id`` for FK columns.
@@ -93,3 +96,20 @@ def actor_dict_for_service() -> dict[str, Any]:
         raise ValueError(
             "Cannot map MCP actor sub to users.id; use HTTP assistant or DEV UUID sub."
         ) from exc
+
+
+async def resolve_mcp_actor_users_table_id(db: AsyncSession) -> uuid.UUID:
+    """Resolve CRM ``users.id`` for MCP tools (JWT ``sub`` may differ from PK).
+
+    When the HTTP assistant binds an actor, prefer ``set_resolved_users_id`` — then this
+    returns that id. Otherwise resolves via ``keycloak_id`` / ``users.id`` like REST API.
+
+    Raises:
+        NotFoundError: No matching CRM user row.
+    """
+    rid = _resolved_users_id.get()
+    if rid is not None:
+        return rid
+    from app.services.user_identity import resolve_users_table_id
+
+    return await resolve_users_table_id(db, current_mcp_user())

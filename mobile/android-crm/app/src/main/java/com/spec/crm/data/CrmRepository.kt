@@ -11,7 +11,7 @@ class CrmRepository(
 ) {
     suspend fun <T> withApi(block: suspend (CrmApi) -> T): T {
         val session = sessionRepository.session.first() ?: error("Not logged in")
-        sessionRepository.applySessionToHolders()
+        sessionRepository.applyFromSession(session)
         val api = sessionRepository.apiForSession(session)
         return sessionRepository.withTokenRefresh { block(api) }
     }

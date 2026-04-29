@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import base64
 import binascii
-import uuid
 from pathlib import Path
 
 from app.core.database import async_session_factory
 from app.core.destructive_confirm import is_destructive_action_confirmed
 from app.core.exceptions import ValidationError
-from app.mcp.actor_context import current_mcp_user_sub
+from app.mcp.actor_context import resolve_mcp_actor_users_table_id
 from app.mcp.server import mcp
 from app.services import company_service
 from app.services.excel_unified_import import import_excel_workbook
@@ -85,13 +84,8 @@ async def import_excel_workbook_base64(
     if len(data) < 64:
         raise ValidationError("file", "File too small to be a valid XLSX")
 
-    sub = current_mcp_user_sub()
-    try:
-        uid = uuid.UUID(sub)
-    except ValueError as exc:
-        raise ValidationError("actor", "Invalid MCP user id") from exc
-
     async with async_session_factory() as session:
+        uid = await resolve_mcp_actor_users_table_id(session)
         company_id = await company_service.get_default_or_first_company_id(session, uid)
 
         result = await import_excel_workbook(

@@ -1,9 +1,11 @@
 package com.spec.crm.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -525,30 +527,69 @@ fun AnalyticsScreen(repo: CrmRepository) {
 }
 
 @Composable
-fun NotificationsScreen(repo: CrmRepository) {
+fun NotificationsScreen(repo: CrmRepository, onOpenTask: (String) -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var err by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<com.spec.crm.data.remote.dto.InboxNotificationDto>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        loading = true
-        try {
-            items = repo.withApi { it.notifications(mapOf("limit" to "50")).items }
-        } catch (e: Exception) {
-            err = e.message
-        } finally {
-            loading = false
+    val scope = rememberCoroutineScope()
+    fun reload() {
+        scope.launch {
+            loading = true
+            try {
+                items = repo.withApi { it.notifications(mapOf("limit" to "50")).items }
+                err = null
+            } catch (e: Exception) {
+                err = e.message
+            } finally {
+                loading = false
+            }
         }
     }
+    LaunchedEffect(Unit) { reload() }
     when {
         loading -> ScreenLoading()
         err != null -> Text(err!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { Text("Уведомления", style = MaterialTheme.typography.headlineSmall) }
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Уведомления", style = MaterialTheme.typography.headlineSmall)
+                    Button(onClick = {
+                        scope.launch {
+                            try {
+                                repo.withApi { it.markAllNotificationsRead() }
+                                reload()
+                            } catch (e: Exception) {
+                                err = e.message
+                            }
+                        }
+                    }) { Text("Прочитать все") }
+                }
+            }
             items(items) { n ->
-                Card(Modifier.fillMaxWidth()) {
+                val taskId = n.data["task_id"]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                Card(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch {
+                                try {
+                                    repo.withApi { it.markNotificationRead(n.id) }
+                                } catch (_: Exception) { }
+                                taskId?.let { onOpenTask(it) }
+                                reload()
+                            }
+                        },
+                ) {
                     Column(Modifier.padding(12.dp)) {
                         Text(n.title, style = MaterialTheme.typography.titleMedium)
                         Text(n.body, style = MaterialTheme.typography.bodySmall)
+                        if (taskId != null) {
+                            Text("Открыть задачу", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

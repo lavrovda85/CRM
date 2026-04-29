@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import com.spec.crm.data.CrmRepository
 import com.spec.crm.data.CrmSession
 import com.spec.crm.data.SessionRepository
 import com.spec.crm.data.remote.dto.CompanyMembershipDto
+import com.spec.crm.navigation.NavExtras
 import com.spec.crm.navigation.Routes
 import com.spec.crm.notifications.TaskNotifications
 import com.spec.crm.ui.login.LoginScreen
@@ -62,6 +64,7 @@ import com.spec.crm.ui.screens.TendersListScreen
 import com.spec.crm.ui.screens.TimeScreen
 import com.spec.crm.ui.screens.UsersScreen
 import com.spec.crm.ui.screens.WarehouseScreen
+import com.spec.crm.ui.tasks.TaskCreateScreen
 import com.spec.crm.ui.tasks.TaskDetailScreen
 import com.spec.crm.ui.tasks.TasksListScreen
 import com.spec.crm.ui.tasks.TasksViewModel
@@ -108,10 +111,14 @@ fun CrmRootApp(
         var hydrated by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
-            sessionRepository.session.collect {
-                session = it
+            sessionRepository.session.collect { next ->
+                if (next != null) {
+                    sessionRepository.applyFromSession(next)
+                } else {
+                    sessionRepository.clearApiHolders()
+                }
+                session = next
                 hydrated = true
-                sessionRepository.applySessionToHolders()
             }
         }
 
@@ -164,6 +171,19 @@ private fun LoggedInShell(
         }
     }
 
+    val activeCompany = companies.find { it.company.id == session.companyId }?.company
+    val fieldWorkBoardId = activeCompany?.fieldWorkBoardId
+
+    val activity = LocalContext.current as? ComponentActivity
+    LaunchedEffect(activity?.intent, session.companyId) {
+        val act = activity ?: return@LaunchedEffect
+        val tid = act.intent.getStringExtra(NavExtras.EXTRA_OPEN_TASK_ID)?.trim().orEmpty()
+        if (tid.isNotEmpty()) {
+            nav.navigate(Routes.taskDetail(tid)) { launchSingleTop = true }
+            act.intent.removeExtra(NavExtras.EXTRA_OPEN_TASK_ID)
+        }
+    }
+
     val title = routeTitle(currentRoute)
 
     ModalNavigationDrawer(
@@ -200,7 +220,9 @@ private fun LoggedInShell(
                     NavigationDrawerItem(
                         label = { Text(item.label) },
                         selected = when (item.route) {
-                            Routes.TASKS -> destRoute == Routes.TASKS || destRoute == Routes.TASK_DETAIL
+                            Routes.TASKS -> destRoute == Routes.TASKS ||
+                                destRoute.startsWith("task/") ||
+                                destRoute.startsWith("task_create/")
                             Routes.TENDERS -> destRoute == Routes.TENDERS || destRoute == Routes.TENDER_DETAIL
                             else -> destRoute == item.route || (item.route != Routes.DASHBOARD && destRoute.startsWith(item.route))
                         },
@@ -278,16 +300,45 @@ private fun LoggedInShell(
                     TasksListScreen(
                         tasksViewModel,
                         companyIdKey = session.companyId,
-                    ) { id ->
-                        nav.navigate(Routes.taskDetail(id))
-                    }
+                        currentUserId = session.user.id,
+                        fieldWorkBoardId = fieldWorkBoardId,
+                        onTaskClick = { id -> nav.navigate(Routes.taskDetail(id)) },
+                        onCreateTask = { isField ->
+                            nav.navigate(Routes.taskCreate(if (isField) "field" else "office"))
+                        },
+                    )
+                }
+                composable(
+                    Routes.TASK_CREATE,
+                    arguments = listOf(navArgument("mode") { type = NavType.StringType }),
+                ) { entry ->
+                    val mode = entry.arguments?.getString("mode") ?: "office"
+                    val isField = mode == "field"
+                    TaskCreateScreen(
+                        repo = crmRepository,
+                        isFieldWork = isField,
+                        fieldWorkBoardId = fieldWorkBoardId,
+                        defaultFieldTemplateId = activeCompany?.defaultFieldTaskTemplateId,
+                        fieldTemplateFilter = activeCompany?.fieldWorkTemplateIds,
+                        onCreated = { id ->
+                            nav.navigate(Routes.taskDetail(id)) {
+                                popUpTo(Routes.TASKS) { inclusive = false }
+                            }
+                        },
+                        onBack = { nav.popBackStack() },
+                    )
                 }
                 composable(
                     Routes.TASK_DETAIL,
                     arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
                 ) { entry ->
                     val id = entry.arguments?.getString("taskId") ?: return@composable
-                    TaskDetailScreen(id, crmRepository) { nav.popBackStack() }
+                    TaskDetailScreen(
+                        taskId = id,
+                        crmRepository = crmRepository,
+                        fieldWorkBoardId = fieldWorkBoardId,
+                        onBack = { nav.popBackStack() },
+                    )
                 }
                 composable(Routes.TEMPLATES) { TemplatesScreen(crmRepository) }
                 composable(Routes.CLIENTS) { ClientsScreen(crmRepository) }
@@ -308,7 +359,11 @@ private fun LoggedInShell(
                 composable(Routes.WAREHOUSE) { WarehouseScreen(crmRepository) }
                 composable(Routes.EQUIPMENT) { EquipmentScreen(crmRepository) }
                 composable(Routes.ANALYTICS) { AnalyticsScreen(crmRepository) }
-                composable(Routes.NOTIFICATIONS) { NotificationsScreen(crmRepository) }
+                composable(Routes.NOTIFICATIONS) {
+                    NotificationsScreen(crmRepository) { taskId ->
+                        nav.navigate(Routes.taskDetail(taskId)) { launchSingleTop = true }
+                    }
+                }
                 composable(Routes.PROFILE) { ProfileScreen(crmRepository) }
                 composable(Routes.SETTINGS) { SettingsReferencesScreen(crmRepository) }
                 composable(Routes.SETTINGS_USERS) { UsersScreen(crmRepository) }
@@ -322,6 +377,7 @@ private fun LoggedInShell(
 private fun routeTitle(route: String?): String = when (route?.substringBefore("/")) {
     Routes.DASHBOARD, null -> "Главная"
     Routes.TASKS -> "Задачи"
+    "task_create" -> "Новая задача"
     "task" -> "Задача"
     Routes.TEMPLATES -> "Шаблоны"
     Routes.CLIENTS -> "Клиенты"

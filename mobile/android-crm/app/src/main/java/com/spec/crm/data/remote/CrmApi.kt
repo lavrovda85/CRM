@@ -2,6 +2,8 @@ package com.spec.crm.data.remote
 
 import com.google.gson.JsonObject
 import com.spec.crm.data.remote.dto.AdminSettingsEnvelopeDto
+import com.spec.crm.data.remote.dto.CommentCreateDto
+import com.spec.crm.data.remote.dto.CommentDetailDto
 import com.spec.crm.data.remote.dto.AiAssistantStatusDto
 import com.spec.crm.data.remote.dto.AiChatResponseDto
 import com.spec.crm.data.remote.dto.AiMessageDto
@@ -14,6 +16,7 @@ import com.spec.crm.data.remote.dto.DashboardStatsDto
 import com.spec.crm.data.remote.dto.DealStageDto
 import com.spec.crm.data.remote.dto.DeployStatusDto
 import com.spec.crm.data.remote.dto.InboxNotificationDto
+import com.spec.crm.data.remote.dto.NotificationUnreadCountDto
 import com.spec.crm.data.remote.dto.LoginRequest
 import com.spec.crm.data.remote.dto.LoginResponse
 import com.spec.crm.data.remote.dto.PaginatedChatMessagesResponse
@@ -36,6 +39,7 @@ import com.spec.crm.data.remote.dto.SendChatMessageRequest
 import com.spec.crm.data.remote.dto.TaskDetailDto
 import com.spec.crm.data.remote.dto.TaskDto
 import com.spec.crm.data.remote.dto.TaskTransitionRequest
+import com.spec.crm.data.remote.dto.TemplateDto
 import com.spec.crm.data.remote.dto.TenderAnalyticsDto
 import com.spec.crm.data.remote.dto.TenderDetailDto
 import com.spec.crm.data.remote.dto.TimeSummaryDto
@@ -82,8 +86,17 @@ interface CrmApi {
     @GET("notifications")
     suspend fun notifications(@QueryMap queries: Map<String, String>): PaginatedNotificationsResponse
 
+    @GET("notifications/unread-count")
+    suspend fun unreadNotificationCount(): NotificationUnreadCountDto
+
+    @POST("notifications/mark-all-read")
+    suspend fun markAllNotificationsRead(): NotificationUnreadCountDto
+
     @PATCH("notifications/{id}/read")
     suspend fun markNotificationRead(@Path("id") id: String): InboxNotificationDto
+
+    @POST("tasks")
+    suspend fun createTask(@Body body: JsonObject): TaskDto
 
     @GET("tasks")
     suspend fun tasks(@QueryMap queries: Map<String, String>): PaginatedTasksResponse
@@ -91,11 +104,30 @@ interface CrmApi {
     @GET("tasks/{id}")
     suspend fun taskDetail(@Path("id") id: String): TaskDetailDto
 
+    @PATCH("tasks/{id}")
+    suspend fun patchTask(@Path("id") id: String, @Body body: JsonObject): TaskDto
+
     @POST("tasks/{id}/transition")
     suspend fun taskTransition(
         @Path("id") id: String,
         @Body body: TaskTransitionRequest,
     ): TaskDto
+
+    @POST("tasks/{taskId}/comments")
+    suspend fun createTaskComment(
+        @Path("taskId") taskId: String,
+        @Body body: CommentCreateDto,
+    ): CommentDetailDto
+
+    @POST("tasks/{taskId}/checklists/{checklistId}/items/{itemId}/toggle")
+    suspend fun toggleChecklistItem(
+        @Path("taskId") taskId: String,
+        @Path("checklistId") checklistId: String,
+        @Path("itemId") itemId: String,
+    ): TaskDetailDto
+
+    @GET("templates/{id}")
+    suspend fun templateDetail(@Path("id") id: String): TemplateDto
 
     @GET("clients")
     suspend fun clients(@QueryMap queries: Map<String, String>): PaginatedClientsResponse

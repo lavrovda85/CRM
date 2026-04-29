@@ -23,7 +23,11 @@ from app.mcp.server import mcp
 from app.schemas.document import DocumentResponse
 from app.schemas.task import TaskResponse
 from app.schemas.tender import TenderChecklistResponse, TenderCommentResponse, TenderResponse
-from app.mcp.actor_context import actor_dict_for_service, current_mcp_user, current_mcp_user_sub
+from app.mcp.actor_context import (
+    actor_dict_for_service,
+    current_mcp_user,
+    resolve_mcp_actor_users_table_id,
+)
 from app.services import company_service
 from app.services.tender import tender_pipeline, tender_service
 from app.services.tender.tender_analysis_queue import schedule_tender_analysis
@@ -137,7 +141,7 @@ async def create_tender(
     deadline_d = _parse_mcp_deadline(deadline)
 
     async with async_session_factory() as session:
-        uid = uuid.UUID(current_mcp_user_sub())
+        uid = await resolve_mcp_actor_users_table_id(session)
         company_id = await company_service.get_default_or_first_company_id(session, uid)
         tender = await tender_service.create_tender_mcp_minimal(
             session,
@@ -241,8 +245,8 @@ async def link_tasks_to_tender(
         except ValueError as exc:
             raise ValidationError("task_ids", f"Invalid UUID: {x!r}") from exc
 
-    viewer = uuid.UUID(current_mcp_user_sub())
     async with async_session_factory() as session:
+        viewer = await resolve_mcp_actor_users_table_id(session)
         linked = await tender_service.link_tasks_to_tender(
             session,
             tid,
@@ -449,7 +453,7 @@ async def import_tender_from_url(
         trade_anchor_utc = t_hint
 
     async with async_session_factory() as session:
-        uid = uuid.UUID(current_mcp_user_sub())
+        uid = await resolve_mcp_actor_users_table_id(session)
         company_id = await company_service.get_default_or_first_company_id(session, uid)
         tender = await tender_service.create_tender_mcp_import(
             session,
