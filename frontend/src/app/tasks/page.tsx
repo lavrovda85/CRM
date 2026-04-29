@@ -139,6 +139,10 @@ const priorityLabel: Record<string, string> = {
   high: "Высокий",
   critical: "Критический",
 };
+const TASK_DUE_SOON_MINUTES = Math.max(
+  1,
+  Number.parseInt(process.env.NEXT_PUBLIC_TASK_DUE_SOON_MINUTES ?? "180", 10) || 180,
+);
 const TASKS_VIEW_SESSION_KEY        = "tasks_last_view";
 const TASKS_CAL_DATE_SESSION_KEY    = "tasks_last_calendar_date";
 const TASKS_FILTERS_SESSION_KEY     = "tasks_last_filters";
@@ -193,6 +197,16 @@ const TIMELINE_HOUR_END = Math.max(
   TIMELINE_HOUR_START + 1,
   Math.min(24, Number.parseInt(process.env.NEXT_PUBLIC_TASK_TIMELINE_HOUR_END ?? "20", 10) || 20),
 );
+
+function dueUrgency(dueIso: string | null | undefined, status: string): "overdue" | "soon" | "none" {
+  if (!dueIso || isTerminalTaskStatus(status)) return "none";
+  const due = new Date(dueIso).getTime();
+  if (!Number.isFinite(due)) return "none";
+  const deltaMin = (due - Date.now()) / 60000;
+  if (deltaMin < 0) return "overdue";
+  if (deltaMin <= TASK_DUE_SOON_MINUTES) return "soon";
+  return "none";
+}
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-surface-200 ${className}`} />;
@@ -707,6 +721,10 @@ function TasksPageInner() {
       )
       .map(taskToCard);
   }
+  const taskById = useMemo(
+    () => Object.fromEntries(tasks.map((t) => [t.id, t])),
+    [tasks],
+  );
 
   async function handleCardMove(cardId: string, _fromCol: string, toCol: string) {
     if (toCol === "_other") return;
@@ -1040,6 +1058,8 @@ function TasksPageInner() {
           onCardMove={handleCardMove}
           onCardClick={handleCardClick}
           renderCard={(card) => {
+            const task = taskById[card.id];
+            const urgency = task ? dueUrgency(task.due_date, task.status) : "none";
             const names = card.observerNames ?? [];
             const visible = names.slice(0, 3);
             const rest = Math.max(0, names.length - visible.length);
@@ -1049,7 +1069,14 @@ function TasksPageInner() {
                 tabIndex={0}
                 onClick={() => handleCardClick(card.id)}
                 onKeyDown={(e) => e.key === "Enter" && handleCardClick(card.id)}
-                className="rounded-lg border border-surface-200 bg-white p-3 shadow-sm hover:shadow-md hover:border-primary-200 transition-all cursor-pointer group"
+                className={cn(
+                  "rounded-lg border bg-white p-3 shadow-sm hover:shadow-md transition-all cursor-pointer group",
+                  urgency === "overdue"
+                    ? "border-red-300 bg-red-50/40 hover:border-red-400"
+                    : urgency === "soon"
+                      ? "border-amber-300 bg-amber-50/40 hover:border-amber-400"
+                      : "border-surface-200 hover:border-primary-200",
+                )}
               >
                 <p
                   className={cn(
@@ -1093,6 +1120,20 @@ function TasksPageInner() {
                     ))}
                   </div>
                 )}
+                {urgency !== "none" && (
+                  <div className="mt-2">
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        urgency === "overdue"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700",
+                      )}
+                    >
+                      {urgency === "overdue" ? "Просрочено" : "Срок скоро"}
+                    </span>
+                  </div>
+                )}
 
                 {names.length > 0 && (
                   <div className="mt-2">
@@ -1131,8 +1172,20 @@ function TasksPageInner() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-50">
-                {tasks.map((task) => (
-                  <tr key={task.id} className="hover:bg-surface-50 transition-colors">
+                {tasks.map((task) => {
+                  const urgency = dueUrgency(task.due_date, task.status);
+                  return (
+                  <tr
+                    key={task.id}
+                    className={cn(
+                      "transition-colors",
+                      urgency === "overdue"
+                        ? "bg-red-50/40 hover:bg-red-50"
+                        : urgency === "soon"
+                          ? "bg-amber-50/30 hover:bg-amber-50"
+                          : "hover:bg-surface-50",
+                    )}
+                  >
                     <td className="px-4 py-3">
                       <Link
                         href={`/tasks/${task.id}`}
@@ -1181,11 +1234,27 @@ function TasksPageInner() {
                     </td>
                     <td className="hidden px-4 py-3 lg:table-cell">
                       {task.due_date ? (
-                        <span className="text-surface-500">
+                        <span
+                          className={cn(
+                            "text-surface-500",
+                            urgency === "overdue" && "font-semibold text-red-700",
+                            urgency === "soon" && "font-semibold text-amber-700",
+                          )}
+                        >
                           {new Date(task.due_date).toLocaleDateString("ru-RU")}
                         </span>
                       ) : (
                         <span className="text-surface-300">—</span>
+                      )}
+                      {urgency !== "none" && (
+                        <div
+                          className={cn(
+                            "mt-1 text-[10px] font-semibold",
+                            urgency === "overdue" ? "text-red-700" : "text-amber-700",
+                          )}
+                        >
+                          {urgency === "overdue" ? "Просрочено" : "Срок скоро"}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -1218,7 +1287,7 @@ function TasksPageInner() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                );})}
                 {tasks.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center text-surface-400">

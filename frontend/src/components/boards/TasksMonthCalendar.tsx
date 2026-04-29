@@ -38,6 +38,21 @@ function avatarUrl(seed: string): string {
   return `${base}?seed=${encodeURIComponent(seed)}`;
 }
 
+const TASK_DUE_SOON_MINUTES = Math.max(
+  1,
+  Number.parseInt(process.env.NEXT_PUBLIC_TASK_DUE_SOON_MINUTES ?? "180", 10) || 180,
+);
+
+function dueUrgency(dueIso: string | null | undefined, status: string): "overdue" | "soon" | "none" {
+  if (!dueIso || isTerminalTaskStatus(status)) return "none";
+  const due = new Date(dueIso).getTime();
+  if (!Number.isFinite(due)) return "none";
+  const deltaMin = (due - Date.now()) / 60000;
+  if (deltaMin < 0) return "overdue";
+  if (deltaMin <= TASK_DUE_SOON_MINUTES) return "soon";
+  return "none";
+}
+
 function parseYm(ym: string): { y: number; m: number } | null {
   const p = ym.split("-").map((x) => Number(x));
   if (p.length !== 2 || p.some((n) => Number.isNaN(n))) return null;
@@ -200,6 +215,8 @@ export function TasksMonthCalendar({
           );
           const maxDots = cellMode === "assignees" ? 8 : 6;
           const overflowTasks = Math.max(0, dayTasks.length - maxDots);
+          const overdueCount = dayTasks.filter((t) => dueUrgency(t.due_date, t.status) === "overdue").length;
+          const soonCount = dayTasks.filter((t) => dueUrgency(t.due_date, t.status) === "soon").length;
 
           return (
             <button
@@ -211,17 +228,32 @@ export function TasksMonthCalendar({
                 "flex min-h-[92px] flex-col items-stretch gap-1 bg-white p-1.5 text-left transition-colors sm:min-h-[104px] sm:p-2",
                 !inMonth && "bg-surface-50/80 text-surface-400",
                 isSelected && "ring-2 ring-inset ring-primary-500",
+                overdueCount > 0 && "bg-red-50/40",
+                overdueCount === 0 && soonCount > 0 && "bg-amber-50/30",
                 inMonth && !isSelected && "hover:bg-primary-50/40",
               )}
             >
-              <span
-                className={cn(
-                  "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold sm:h-7 sm:w-7 sm:text-xs",
-                  isSelected ? "bg-primary-600 text-white" : inMonth ? "text-surface-800" : "text-surface-400",
+              <div className="flex items-start justify-between gap-1">
+                <span
+                  className={cn(
+                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold sm:h-7 sm:w-7 sm:text-xs",
+                    isSelected ? "bg-primary-600 text-white" : inMonth ? "text-surface-800" : "text-surface-400",
+                  )}
+                >
+                  {Number(dk.slice(-2))}
+                </span>
+                {(overdueCount > 0 || soonCount > 0) && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                      overdueCount > 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700",
+                    )}
+                    title={overdueCount > 0 ? `Просрочено: ${overdueCount}` : `Срок скоро: ${soonCount}`}
+                  >
+                    {overdueCount > 0 ? `!${overdueCount}` : `~${soonCount}`}
+                  </span>
                 )}
-              >
-                {Number(dk.slice(-2))}
-              </span>
+              </div>
 
               {cellMode === "assignees" ? (
                 <div className="flex flex-1 flex-wrap content-start justify-start gap-0.5">
@@ -279,6 +311,7 @@ export function TasksMonthCalendar({
                   {dayTasks.slice(0, maxDots).map((t) => {
                     const pc = priorityColor[t.priority] ?? "#94a3b8";
                     const done = isTerminalTaskStatus(t.status);
+                    const urgency = dueUrgency(t.due_date, t.status);
                     const letter = (t.title.trim().charAt(0) || "·").toUpperCase();
                     return (
                       <Link
@@ -290,15 +323,21 @@ export function TasksMonthCalendar({
                           "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border text-[9px] font-bold sm:h-6 sm:w-6 sm:text-[10px]",
                           done
                             ? "border-surface-300 bg-surface-100/90 text-surface-500 line-through decoration-surface-400 decoration-2"
-                            : "border-black/10 bg-white text-surface-900 shadow-sm",
+                            : urgency === "overdue"
+                              ? "border-red-300 bg-red-50 text-red-800 shadow-sm"
+                              : urgency === "soon"
+                                ? "border-amber-300 bg-amber-50 text-amber-800 shadow-sm"
+                                : "border-black/10 bg-white text-surface-900 shadow-sm",
                         )}
                         style={
                           done
                             ? undefined
-                            : {
+                            : urgency === "none"
+                              ? {
                                 borderColor: `${pc}99`,
                                 boxShadow: `0 0 0 1px ${pc}40 inset`,
                               }
+                              : undefined
                         }
                       >
                         {letter}

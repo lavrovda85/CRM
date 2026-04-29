@@ -30,10 +30,12 @@ import {
   markInboxNotificationRead,
   markAllInboxNotificationsRead,
 } from "@/lib/api";
-import { playNotificationSound } from "@/lib/notificationSound";
+import { playNotificationSound, primeNotificationAudio } from "@/lib/notificationSound";
 import type { InboxNotificationItem } from "@/types";
 
-const POLL_MS = 60_000;
+/** Poll more often while the tab is visible so new task comments surface with sound sooner. */
+const POLL_VISIBLE_MS = 12_000;
+const POLL_HIDDEN_MS = 90_000;
 
 interface HeaderProps {
   title?: string;
@@ -76,6 +78,29 @@ export function Header({ title }: HeaderProps) {
       const prev = prevUnreadRef.current;
       if (prev !== null && unread_count > prev) {
         playNotificationSound();
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            const res = await fetchInboxNotifications({ limit: 1, offset: 0, unread_only: true });
+            const first = res.items[0];
+            if (first) {
+              const n = new Notification(first.title, {
+                body: first.body,
+                tag: `crm-inbox-${first.id}`,
+                silent: false,
+              });
+              n.onclick = () => {
+                window.focus();
+                n.close();
+              };
+            }
+          } catch {
+            /* ignore */
+          }
+        }
       }
       prevUnreadRef.current = unread_count;
       setUnreadCount(unread_count);
@@ -98,10 +123,43 @@ export function Header({ title }: HeaderProps) {
   }, [refreshUnread]);
 
   useEffect(() => {
-    refreshUnread();
-    const t = setInterval(refreshUnread, POLL_MS);
-    return () => clearInterval(t);
+    function onVisibility() {
+      void refreshUnread();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [refreshUnread]);
+
+  useEffect(() => {
+    refreshUnread();
+    let id: ReturnType<typeof setInterval>;
+    function arm() {
+      clearInterval(id);
+      const ms =
+        typeof document !== "undefined" && document.visibilityState === "visible"
+          ? POLL_VISIBLE_MS
+          : POLL_HIDDEN_MS;
+      id = setInterval(refreshUnread, ms);
+    }
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", arm);
+    };
+  }, [refreshUnread]);
+
+  useEffect(() => {
+    function prime() {
+      primeNotificationAudio();
+    }
+    document.addEventListener("pointerdown", prime, { passive: true });
+    document.addEventListener("keydown", prime);
+    return () => {
+      document.removeEventListener("pointerdown", prime);
+      document.removeEventListener("keydown", prime);
+    };
+  }, []);
 
   useEffect(() => {
     if (user) void loadCompanies();
@@ -289,7 +347,10 @@ export function Header({ title }: HeaderProps) {
       <div className="relative" ref={notifRef}>
         <button
           type="button"
-          onClick={() => setNotifOpen((o) => !o)}
+          onClick={() => {
+            primeNotificationAudio();
+            setNotifOpen((o) => !o);
+          }}
           className="relative rounded-lg p-1.5 text-surface-500 hover:bg-surface-100"
           aria-expanded={notifOpen}
           aria-label="Уведомления"

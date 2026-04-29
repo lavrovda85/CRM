@@ -51,6 +51,33 @@ class TaskNotificationService:
         return ordered
 
     @staticmethod
+    def task_comment_recipient_user_ids(task: Task) -> list[uuid.UUID]:
+        """Users who should receive in-app alerts for new task comments.
+
+        Includes primary assignee, co-assignees, observers, and the requester
+        (``requested_by``) so execution/watch stakeholders and the stakeholder
+        who ordered the work are notified. Omits ``created_by`` unless it
+        duplicates one of the above IDs.
+        """
+        seen: set[uuid.UUID] = set()
+        ordered: list[uuid.UUID] = []
+        if task.assigned_to is not None and task.assigned_to not in seen:
+            seen.add(task.assigned_to)
+            ordered.append(task.assigned_to)
+        for u in task.co_assignees or []:
+            if u.id not in seen:
+                seen.add(u.id)
+                ordered.append(u.id)
+        for u in task.observers or []:
+            if u.id not in seen:
+                seen.add(u.id)
+                ordered.append(u.id)
+        if task.requested_by is not None and task.requested_by not in seen:
+            seen.add(task.requested_by)
+            ordered.append(task.requested_by)
+        return ordered
+
+    @staticmethod
     async def filter_active_user_ids(db: AsyncSession, ids: list[uuid.UUID]) -> list[uuid.UUID]:
         if not ids:
             return []
@@ -262,8 +289,8 @@ class TaskNotificationService:
         comment_preview: str,
         comment_id: uuid.UUID,
     ) -> None:
-        """Notify task participants (except author) about a new comment."""
-        recipients = [u for u in TaskNotificationService.participant_user_ids(task) if u != author_id]
+        """Notify assignees, co-assignees, observers, and requester (except author) about a new comment."""
+        recipients = [u for u in TaskNotificationService.task_comment_recipient_user_ids(task) if u != author_id]
         if not recipients:
             return
         tid = str(task.id)

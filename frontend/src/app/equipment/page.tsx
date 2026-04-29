@@ -74,7 +74,7 @@ export default function EquipmentPage() {
       const boardId = company.field_work_board_id?.trim() || null;
       setFieldBoardId(boardId);
       if (boardId) {
-        const tr = await fetchTasks({ board_id: boardId, limit: 500, status_not_in: "closed,completed" });
+        const tr = await fetchTasks({ board_id: boardId, limit: 200, status_not_in: "closed,completed" });
         setFieldTasks(tr.items);
       } else {
         setFieldTasks([]);
