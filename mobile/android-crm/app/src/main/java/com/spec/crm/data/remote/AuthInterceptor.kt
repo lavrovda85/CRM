@@ -19,10 +19,14 @@ class AuthInterceptor(
             path.endsWith("/auth/login") ||
                 path.endsWith("/auth/refresh") ||
                 path.endsWith("/companies/login-options")
-        val b = req.newBuilder()
+        val b = req.newBuilder().removeHeader("X-Auth-Retry")
         if (!isAuthFree) {
-            tokens.accessToken?.let { b.header("Authorization", "Bearer $it") }
-            company.companyId?.let { b.header("X-Company-Id", it) }
+            val access = tokens.accessToken?.trim()?.takeIf { it.isNotEmpty() }
+            if (access != null) {
+                b.header("Authorization", "Bearer $access")
+            }
+            company.companyId?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { cid -> b.header("X-Company-Id", cid) }
         }
         return chain.proceed(b.build())
     }

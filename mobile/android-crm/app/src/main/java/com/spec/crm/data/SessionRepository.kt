@@ -47,10 +47,13 @@ class SessionRepository(
     }
 
     val session: Flow<CrmSession?> = context.dataStore.data.map { p ->
-        val base = p[ks.base] ?: return@map null
-        val access = p[ks.access] ?: return@map null
-        val refresh = p[ks.refresh] ?: return@map null
-        val company = p[ks.company] ?: return@map null
+        val base = (p[ks.base] ?: return@map null).trim()
+        val access = (p[ks.access] ?: return@map null).trim()
+        val refresh = (p[ks.refresh] ?: return@map null).trim()
+        val company = (p[ks.company] ?: return@map null).trim()
+        if (base.isEmpty() || access.isEmpty() || refresh.isEmpty() || company.isEmpty()) {
+            return@map null
+        }
         val userJson = p[ks.user] ?: return@map null
         val user = try {
             gson.fromJson(userJson, UserDto::class.java)
@@ -66,8 +69,8 @@ class SessionRepository(
      * API call runs before holders are populated (symptom: HTTP 401 on dashboard).
      */
     fun applyFromSession(s: CrmSession) {
-        tokenHolder.accessToken = s.accessToken
-        companyHolder.companyId = s.companyId
+        tokenHolder.accessToken = s.accessToken.trim().takeIf { it.isNotEmpty() }
+        companyHolder.companyId = s.companyId.trim().takeIf { it.isNotEmpty() }
     }
 
     /** Clears in-memory tokens when the persisted session is gone (logout or cleared storage). */
@@ -86,19 +89,22 @@ class SessionRepository(
         val api = retrofitFactory.create(base)
         val res = api.login(LoginRequest(email = email.trim(), password = password))
         val user = res.user
+        val access = res.tokens.accessToken.trim()
+        val refresh = res.tokens.refreshToken.trim()
+        val company = res.activeCompanyId.trim()
         context.dataStore.edit { p ->
             p[ks.base] = base
-            p[ks.access] = res.tokens.accessToken
-            p[ks.refresh] = res.tokens.refreshToken
-            p[ks.company] = res.activeCompanyId
+            p[ks.access] = access
+            p[ks.refresh] = refresh
+            p[ks.company] = company
             p[ks.user] = gson.toJson(user)
         }
         applyFromSession(
             CrmSession(
                 baseUrl = base,
-                accessToken = res.tokens.accessToken,
-                refreshToken = res.tokens.refreshToken,
-                companyId = res.activeCompanyId,
+                accessToken = access,
+                refreshToken = refresh,
+                companyId = company,
                 user = user,
             ),
         )
@@ -110,22 +116,25 @@ class SessionRepository(
     suspend fun refreshTokens(): Boolean {
         val p = context.dataStore.data.first()
         val base = p[ks.base] ?: return false
-        val refresh = p[ks.refresh] ?: return false
-        val companyId = p[ks.company] ?: return false
+        val refresh = (p[ks.refresh] ?: return false).trim()
+        val companyId = (p[ks.company] ?: return false).trim()
+        if (refresh.isEmpty() || companyId.isEmpty()) return false
         return try {
             val api = retrofitFactory.create(base)
             val res = api.refresh(RefreshRequest(refresh))
             val user = res.user
+            val newAccess = res.tokens.accessToken.trim()
+            val newRefresh = res.tokens.refreshToken.trim()
             context.dataStore.edit { st ->
-                st[ks.access] = res.tokens.accessToken
-                st[ks.refresh] = res.tokens.refreshToken
+                st[ks.access] = newAccess
+                st[ks.refresh] = newRefresh
                 st[ks.user] = gson.toJson(user)
             }
             applyFromSession(
                 CrmSession(
                     baseUrl = base,
-                    accessToken = res.tokens.accessToken,
-                    refreshToken = res.tokens.refreshToken,
+                    accessToken = newAccess,
+                    refreshToken = newRefresh,
                     companyId = companyId,
                     user = user,
                 ),
@@ -155,8 +164,9 @@ class SessionRepository(
      * Switch active tenant (`X-Company-Id`). Caller should ensure membership (e.g. from `/companies/mine`).
      */
     suspend fun switchCompany(newCompanyId: String) {
-        context.dataStore.edit { it[ks.company] = newCompanyId }
-        companyHolder.companyId = newCompanyId
+        val cid = newCompanyId.trim()
+        context.dataStore.edit { it[ks.company] = cid }
+        companyHolder.companyId = cid.takeIf { it.isNotEmpty() }
     }
 }
 

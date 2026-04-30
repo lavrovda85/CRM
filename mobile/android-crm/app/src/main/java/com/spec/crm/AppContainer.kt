@@ -9,6 +9,8 @@ import com.spec.crm.data.SessionRepository
 import com.spec.crm.data.remote.AuthInterceptor
 import com.spec.crm.data.remote.CrmApi
 import com.spec.crm.data.remote.RetrofitFactory
+import com.spec.crm.data.remote.SessionRepositoryBridge
+import com.spec.crm.data.remote.TokenRefreshInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
@@ -25,6 +27,7 @@ class AppContainer(context: Context) {
 
     private val tokenHolder = TokenHolder()
     private val companyHolder = CompanyIdHolder()
+    private val sessionRepositoryBridge = SessionRepositoryBridge()
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
@@ -35,6 +38,7 @@ class AppContainer(context: Context) {
         .readTimeout(45, TimeUnit.SECONDS)
         .writeTimeout(45, TimeUnit.SECONDS)
         .addInterceptor(logging)
+        .addInterceptor(TokenRefreshInterceptor(sessionRepositoryBridge, tokenHolder))
         .addInterceptor(AuthInterceptor(tokenHolder, companyHolder))
         .build()
 
@@ -46,7 +50,7 @@ class AppContainer(context: Context) {
         retrofitFactory,
         tokenHolder,
         companyHolder,
-    )
+    ).also { sessionRepositoryBridge.repository = it }
 
     val crmRepository = CrmRepository(sessionRepository)
 }
