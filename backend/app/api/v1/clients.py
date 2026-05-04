@@ -7,7 +7,8 @@ CRUD операции над клиентами (физ. лица / органи
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import exists, func, or_, select, update
+from sqlalchemy import cast, exists, func, or_, select, update
+from sqlalchemy.types import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -87,7 +88,7 @@ async def create_client(
 async def list_clients(
     search: str | None = Query(
         default=None,
-        description="Search across name, contacts, phone, email, address, INN, bank, notes",
+        description="Search name, address, contacts (name/phone/email), extra_data text, INN, bank, notes",
     ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -123,6 +124,28 @@ async def list_clients(
                 ClientContact.full_name.ilike(pattern),
             )
         )
+        contact_phone_match = exists(
+            select(1).where(
+                ClientContact.client_id == Client.id,
+                ClientContact.phone.isnot(None),
+                ClientContact.phone.ilike(pattern),
+            )
+        )
+        contact_email_match = exists(
+            select(1).where(
+                ClientContact.client_id == Client.id,
+                ClientContact.email.isnot(None),
+                ClientContact.email.ilike(pattern),
+            )
+        )
+        contact_position_match = exists(
+            select(1).where(
+                ClientContact.client_id == Client.id,
+                ClientContact.position.isnot(None),
+                ClientContact.position.ilike(pattern),
+            )
+        )
+        extra_data_text = cast(Client.extra_data, Text)
         search_filter = or_(
             Client.name.ilike(pattern),
             Client.phone.ilike(pattern),
@@ -137,7 +160,11 @@ async def list_clients(
             Client.corr_account.ilike(pattern),
             Client.bank_name.ilike(pattern),
             Client.notes.ilike(pattern),
+            extra_data_text.ilike(pattern),
             contact_name_match,
+            contact_phone_match,
+            contact_email_match,
+            contact_position_match,
         )
         query = query.where(search_filter)
         count_query = count_query.where(search_filter)

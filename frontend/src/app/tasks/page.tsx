@@ -979,6 +979,24 @@ function TasksPageInner() {
             <option value="high">Высокий</option>
             <option value="critical">Критический</option>
           </select>
+          {(view === "kanban" || view === "list") && assignees.length > 0 && (
+            <label className="flex min-w-[min(100%,240px)] flex-col gap-1 text-xs text-surface-600 sm:max-w-[240px]">
+              <span className="font-semibold">Исполнитель (канбан / список)</span>
+              <select
+                className="input w-full text-sm"
+                value={filters.assigned_to ?? ""}
+                onChange={(e) => setFilter("assigned_to", e.target.value)}
+                aria-label="Фильтр по исполнителю"
+              >
+                <option value="">Все исполнители</option>
+                {assignees.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {(Object.keys(filters).length > 0 || searchDraft.trim().length > 0 || kanbanStatusFilter.length > 0) && (
             <button
               type="button"

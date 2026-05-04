@@ -4,6 +4,23 @@
  * after a gesture so `playNotificationSound()` works on later polls.
  */
 
+/** When set to `"0"` in localStorage, chime is skipped (in-app list still updates). */
+export const NOTIFICATION_SOUND_ENABLED_KEY = "crm_notification_sound_enabled";
+
+export function isNotificationSoundEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(NOTIFICATION_SOUND_ENABLED_KEY) !== "0";
+}
+
+export function setNotificationSoundEnabled(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(NOTIFICATION_SOUND_ENABLED_KEY, enabled ? "1" : "0");
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 let sharedCtx: AudioContext | null = null;
 
 function getOrCreateContext(): AudioContext | null {
@@ -63,6 +80,7 @@ function playTwoToneChime(ctx: AudioContext): void {
  * Short two-tone chime when unread inbox count increases.
  */
 export function playNotificationSound(): void {
+  if (!isNotificationSoundEnabled()) return;
   const ctx = getOrCreateContext();
   if (!ctx) return;
   try {

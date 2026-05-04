@@ -19,6 +19,8 @@ import {
   Menu,
   Loader2,
   Building2,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
@@ -30,7 +32,12 @@ import {
   markInboxNotificationRead,
   markAllInboxNotificationsRead,
 } from "@/lib/api";
-import { playNotificationSound, primeNotificationAudio } from "@/lib/notificationSound";
+import {
+  isNotificationSoundEnabled,
+  playNotificationSound,
+  primeNotificationAudio,
+  setNotificationSoundEnabled,
+} from "@/lib/notificationSound";
 import type { InboxNotificationItem } from "@/types";
 
 /** Poll more often while the tab is visible so new task comments surface with sound sooner. */
@@ -67,17 +74,23 @@ export function Header({ title }: HeaderProps) {
   const [notifLoading, setNotifLoading] = useState(false);
   const [searchShortcutLabel, setSearchShortcutLabel] = useState("Ctrl+K");
   const prevUnreadRef = useRef<number | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   useEffect(() => {
     prevUnreadRef.current = null;
+  }, [user?.id]);
+
+  useEffect(() => {
+    setSoundEnabled(isNotificationSoundEnabled());
   }, [user?.id]);
 
   const refreshUnread = useCallback(async () => {
     try {
       const { unread_count } = await fetchUnreadNotificationCount();
       const prev = prevUnreadRef.current;
+      const chimeOn = isNotificationSoundEnabled();
       if (prev !== null && unread_count > prev) {
-        playNotificationSound();
+        if (chimeOn) playNotificationSound();
         if (
           typeof window !== "undefined" &&
           "Notification" in window &&
@@ -90,7 +103,7 @@ export function Header({ title }: HeaderProps) {
               const n = new Notification(first.title, {
                 body: first.body,
                 tag: `crm-inbox-${first.id}`,
-                silent: false,
+                silent: !chimeOn,
               });
               n.onclick = () => {
                 window.focus();
@@ -365,17 +378,46 @@ export function Header({ title }: HeaderProps) {
 
         {notifOpen && (
           <div className="absolute right-0 top-full mt-1 w-[min(100vw-2rem,22rem)] rounded-xl border border-surface-100 bg-white py-2 shadow-lg">
-            <div className="flex items-center justify-between border-b border-surface-100 px-3 pb-2">
-              <span className="text-sm font-semibold text-surface-900">Уведомления</span>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={handleMarkAllRead}
-                  className="text-xs font-medium text-primary-600 hover:underline"
+            <div className="border-b border-surface-100 px-3 pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-surface-900">Уведомления</span>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleMarkAllRead}
+                    className="shrink-0 text-xs font-medium text-primary-600 hover:underline"
+                  >
+                    Прочитать все
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !soundEnabled;
+                  setNotificationSoundEnabled(next);
+                  setSoundEnabled(next);
+                }}
+                className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg border border-surface-100 bg-surface-50/80 px-2.5 py-1.5 text-left text-xs text-surface-700 hover:bg-surface-100"
+                title={soundEnabled ? "Отключить звук при новых уведомлениях" : "Включить звук"}
+              >
+                <span className="flex items-center gap-1.5">
+                  {soundEnabled ? (
+                    <Volume2 className="h-3.5 w-3.5 shrink-0 text-surface-600" aria-hidden />
+                  ) : (
+                    <VolumeX className="h-3.5 w-3.5 shrink-0 text-surface-500" aria-hidden />
+                  )}
+                  Звук при новых
+                </span>
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                    soundEnabled ? "bg-emerald-100 text-emerald-800" : "bg-surface-200 text-surface-600",
+                  )}
                 >
-                  Прочитать все
-                </button>
-              )}
+                  {soundEnabled ? "Вкл" : "Выкл"}
+                </span>
+              </button>
             </div>
             <div className="max-h-[min(70vh,20rem)] overflow-y-auto">
               {notifLoading ? (

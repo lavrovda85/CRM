@@ -54,28 +54,11 @@ class TaskNotificationService:
     def task_comment_recipient_user_ids(task: Task) -> list[uuid.UUID]:
         """Users who should receive in-app alerts for new task comments.
 
-        Includes primary assignee, co-assignees, observers, and the requester
-        (``requested_by``) so execution/watch stakeholders and the stakeholder
-        who ordered the work are notified. Omits ``created_by`` unless it
-        duplicates one of the above IDs.
+        Same set as :meth:`participant_user_ids` (assignee, requester, creator,
+        co-assignees, observers). The author is excluded in
+        :meth:`notify_task_comment_added`.
         """
-        seen: set[uuid.UUID] = set()
-        ordered: list[uuid.UUID] = []
-        if task.assigned_to is not None and task.assigned_to not in seen:
-            seen.add(task.assigned_to)
-            ordered.append(task.assigned_to)
-        for u in task.co_assignees or []:
-            if u.id not in seen:
-                seen.add(u.id)
-                ordered.append(u.id)
-        for u in task.observers or []:
-            if u.id not in seen:
-                seen.add(u.id)
-                ordered.append(u.id)
-        if task.requested_by is not None and task.requested_by not in seen:
-            seen.add(task.requested_by)
-            ordered.append(task.requested_by)
-        return ordered
+        return TaskNotificationService.participant_user_ids(task)
 
     @staticmethod
     async def filter_active_user_ids(db: AsyncSession, ids: list[uuid.UUID]) -> list[uuid.UUID]:

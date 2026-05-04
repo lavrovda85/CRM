@@ -269,7 +269,7 @@ export default function ClientsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" />
           <input
             type="text"
-            placeholder="Поиск по имени, телефону или email…"
+            placeholder="Имя, адрес, телефон, email, контакты…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input pl-10"
