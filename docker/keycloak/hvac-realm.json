@@ -5,6 +5,12 @@
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 7200,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 2592000,
+  "ssoSessionMaxLifespan": 7776000,
+  "clientSessionIdleTimeout": 2592000,
+  "clientSessionMaxLifespan": 7776000,
   "roles": {
     "realm": [
       { "name": "admin", "description": "Полный доступ к системе" },

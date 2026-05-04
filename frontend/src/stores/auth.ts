@@ -61,7 +61,8 @@ function scheduleProactiveTokenRefresh(): void {
   if (!refresh || !access) return;
 
   const expMs = readJwtExpMs(access);
-  const skewMs = 90_000;
+  /** Refresh this many ms before `exp` so short access tokens (e.g. Keycloak) do not race with API calls. */
+  const skewMs = 300_000;
   const fallbackDelayMs = 4 * 60 * 1000;
   const minDelayMs = 15_000;
   const delay =

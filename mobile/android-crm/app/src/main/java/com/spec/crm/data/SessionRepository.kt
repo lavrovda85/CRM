@@ -1,6 +1,7 @@
 package com.spec.crm.data
 
 import android.content.Context
+import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -16,9 +17,26 @@ import com.spec.crm.data.remote.dto.UserDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 import retrofit2.HttpException
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "crm_session")
+
+/** JWT `exp` in epoch milliseconds; null if missing or not parseable. */
+internal fun decodeJwtExpEpochMillis(accessToken: String): Long? {
+    val parts = accessToken.split(".")
+    if (parts.size < 2) return null
+    var payload = parts[1]
+    val rem = payload.length % 4
+    if (rem > 0) payload += "=".repeat(4 - rem)
+    return try {
+        val json = String(Base64.decode(payload, Base64.URL_SAFE), Charsets.UTF_8)
+        val exp = JSONObject(json).optLong("exp", 0L)
+        if (exp <= 0L) null else exp * 1000L
+    } catch (_: Exception) {
+        null
+    }
+}
 
 data class CrmSession(
     val baseUrl: String,
@@ -113,6 +131,18 @@ class SessionRepository(
     /**
      * Uses refresh token; on failure caller should send user to login.
      */
+    /**
+     * Refreshes tokens when the access JWT expires within [marginMillis] (e.g. on app resume)
+     * so the user is not logged out after long backgrounding.
+     */
+    suspend fun refreshIfAccessTokenExpiringSoon(marginMillis: Long = 15 * 60_000L): Boolean {
+        val s = session.first() ?: return false
+        val exp = decodeJwtExpEpochMillis(s.accessToken) ?: return true
+        val now = System.currentTimeMillis()
+        if (exp - now > marginMillis) return true
+        return refreshTokens()
+    }
+
     suspend fun refreshTokens(): Boolean {
         val p = context.dataStore.data.first()
         val base = p[ks.base] ?: return false
