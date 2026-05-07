@@ -19,9 +19,10 @@ from sqlalchemy.orm import selectinload
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
+from app.core.company_context import ActiveCompanyContext, get_active_company
 from app.core.config import Settings, get_settings
 from app.core.dependencies import PaginationParams, get_current_user, get_db
-from app.core.exceptions import ExternalServiceError, NotFoundError, ValidationError
+from app.core.exceptions import ExternalServiceError, HVACBaseError, NotFoundError, ValidationError
 from app.core.file_proxy_token import (
     content_disposition_header,
     decode_chat_attachment_token,
@@ -29,7 +30,8 @@ from app.core.file_proxy_token import (
 )
 from app.core.pagination import PaginatedResponse
 from app.core.security import CurrentUser
-from app.models import ChatAttachment, ChatMessage, ChatRoom, User
+from app.models import ChatAttachment, ChatMessage, ChatRoom, UserCompanyMembership
+from app.services.task_chat_room_service import TaskChatRoomService
 from app.services.user_identity import resolve_users_table_id
 from app.schemas.chat import (
     ChatAttachmentResponse,
@@ -37,6 +39,7 @@ from app.schemas.chat import (
     ChatMessageResponse,
     ChatRoomCreate,
     ChatRoomResponse,
+    ChatRoomUpdate,
 )
 
 router = APIRouter(prefix="/chat")
@@ -56,23 +59,119 @@ def _slugify_room_code(name: str) -> str:
     return n.strip("-") or "company"
 
 
+def _normalized_participant_ids(raw_ids: list[uuid.UUID | str] | None) -> list[str]:
+    """Normalize UUID-ish participant IDs to unique non-empty strings."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in raw_ids or []:
+        s = str(raw).strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        out.append(s)
+    return out
+
+
+async def _participant_ids_in_company(
+    db: AsyncSession,
+    *,
+    company_id: uuid.UUID,
+    raw_ids: list[uuid.UUID | str] | None,
+) -> list[str]:
+    """Return only IDs that are members of the room company."""
+    normalized = _normalized_participant_ids(raw_ids)
+    if not normalized:
+        return []
+    uuids: list[uuid.UUID] = []
+    for s in normalized:
+        try:
+            uuids.append(uuid.UUID(s))
+        except ValueError:
+            continue
+    if not uuids:
+        return []
+    res = await db.execute(
+        select(UserCompanyMembership.user_id).where(
+            UserCompanyMembership.company_id == company_id,
+            UserCompanyMembership.user_id.in_(uuids),
+        ),
+    )
+    return sorted({str(x) for x in res.scalars().all()})
+
+
+def _room_has_access(room: ChatRoom, *, viewer_id: uuid.UUID) -> bool:
+    """Return True if viewer can read room content."""
+    if not room.is_private:
+        return True
+    return str(viewer_id) in _normalized_participant_ids(room.participant_user_ids)
+
+
+def _assert_room_access(room: ChatRoom, *, viewer_id: uuid.UUID, write: bool = False) -> None:
+    """Raise 403 when viewer cannot access room (or room is archived for writes)."""
+    if not _room_has_access(room, viewer_id=viewer_id):
+        raise HVACBaseError(
+            message="You are not a participant of this private room",
+            code="CHAT_ROOM_FORBIDDEN",
+            status_code=403,
+        )
+    if write and room.is_archived:
+        raise HVACBaseError(
+            message="Room is archived and read-only",
+            code="CHAT_ROOM_ARCHIVED",
+            status_code=409,
+        )
+
+
+async def _ensure_default_room(db: AsyncSession, *, ctx: ActiveCompanyContext) -> None:
+    """Create default company chat room in tenant scope if absent."""
+    existing = await db.execute(
+        select(ChatRoom.id).where(ChatRoom.company_id == ctx.company_id).limit(1),
+    )
+    if existing.scalar() is not None:
+        return
+    room = ChatRoom(
+        name="Общий чат",
+        code="company",
+        company_id=ctx.company_id,
+        is_private=False,
+        is_archived=False,
+        participant_user_ids=[],
+    )
+    db.add(room)
+    await db.flush()
+
+
+async def _room_by_code(
+    db: AsyncSession,
+    *,
+    ctx: ActiveCompanyContext,
+    room_code: str,
+) -> ChatRoom:
+    """Load room by company + code or raise 404."""
+    res = await db.execute(
+        select(ChatRoom).where(ChatRoom.company_id == ctx.company_id, ChatRoom.code == room_code),
+    )
+    room = res.scalar_one_or_none()
+    if room is None:
+        raise NotFoundError("ChatRoom", room_code)
+    return room
+
+
 @router.get("/rooms", response_model=list[ChatRoomResponse])
 async def list_rooms(
+    include_archived: bool = Query(default=False, description="Include archived groups"),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> list[ChatRoomResponse]:
-    """List available chat rooms (direction groups)."""
+    """List available chat rooms visible to the current user."""
     _ = user.sub
-    res = await db.execute(select(ChatRoom).order_by(ChatRoom.created_at.asc()))
-    rooms = res.scalars().all()
-
-    if not rooms:
-        # Ensure default room exists for backward compatibility.
-        default = ChatRoom(name="Общий чат", code="company")
-        db.add(default)
-        await db.flush()
-        rooms = [default]
-
+    await _ensure_default_room(db, ctx=ctx)
+    query = select(ChatRoom).where(ChatRoom.company_id == ctx.company_id)
+    if not include_archived:
+        query = query.where(ChatRoom.is_archived.is_(False))
+    res = await db.execute(query.order_by(ChatRoom.created_at.asc()))
+    rooms = [r for r in res.scalars().all() if _room_has_access(r, viewer_id=ctx.user_db_id)]
     return [ChatRoomResponse.model_validate(r) for r in rooms]
 
 
@@ -81,21 +180,111 @@ async def create_room(
     body: ChatRoomCreate,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> ChatRoomResponse:
-    """Create new chat room (direction group)."""
+    """Create chat room (public or private) in tenant scope."""
     _ = user.sub
     code = body.code.strip() if body.code else _slugify_room_code(body.name)
+    if code == "company":
+        raise ValidationError("code", "Code 'company' is reserved for the default room")
+    if code.startswith("task-"):
+        raise ValidationError("code", "Codes starting with 'task-' are reserved for task rooms")
 
-    # Simple uniqueness check
-    res = await db.execute(select(ChatRoom).where(ChatRoom.code == code))
+    # Simple uniqueness check per tenant
+    res = await db.execute(
+        select(ChatRoom).where(ChatRoom.company_id == ctx.company_id, ChatRoom.code == code),
+    )
     existing = res.scalar_one_or_none()
     if existing:
         return ChatRoomResponse.model_validate(existing)
 
-    room = ChatRoom(name=body.name.strip(), code=code)
+    participants = await _participant_ids_in_company(
+        db,
+        company_id=ctx.company_id,
+        raw_ids=body.participant_user_ids,
+    )
+    if body.is_private:
+        participants = sorted(set(participants + [str(ctx.user_db_id)]))
+    else:
+        participants = []
+
+    room = ChatRoom(
+        name=body.name.strip(),
+        code=code,
+        company_id=ctx.company_id,
+        is_private=body.is_private,
+        is_archived=False,
+        participant_user_ids=participants,
+    )
     db.add(room)
     await db.flush()
     await db.refresh(room)
+    return ChatRoomResponse.model_validate(room)
+
+
+@router.patch("/rooms/{room_id}", response_model=ChatRoomResponse)
+async def update_room(
+    room_id: uuid.UUID,
+    body: ChatRoomUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
+) -> ChatRoomResponse:
+    """Update room metadata, archive flag, privacy and participant list."""
+    _ = user.sub
+    res = await db.execute(
+        select(ChatRoom).where(ChatRoom.id == room_id, ChatRoom.company_id == ctx.company_id),
+    )
+    room = res.scalar_one_or_none()
+    if room is None:
+        raise NotFoundError("ChatRoom", str(room_id))
+
+    _assert_room_access(room, viewer_id=ctx.user_db_id, write=False)
+
+    if body.name is not None:
+        room.name = body.name.strip()
+    if body.description is not None:
+        room.description = body.description.strip() or None
+    if body.is_archived is not None:
+        if room.code == "company" and body.is_archived:
+            raise ValidationError("is_archived", "Default company room cannot be archived")
+        room.is_archived = bool(body.is_archived)
+    if body.is_private is not None:
+        room.is_private = bool(body.is_private)
+    if body.participant_user_ids is not None:
+        participant_ids = await _participant_ids_in_company(
+            db,
+            company_id=ctx.company_id,
+            raw_ids=body.participant_user_ids,
+        )
+        if room.is_private:
+            room.participant_user_ids = sorted(set(participant_ids + [str(ctx.user_db_id)]))
+        else:
+            room.participant_user_ids = []
+    elif room.is_private:
+        # Keep editor from locking itself out.
+        ids = set(_normalized_participant_ids(room.participant_user_ids))
+        ids.add(str(ctx.user_db_id))
+        room.participant_user_ids = sorted(ids)
+
+    await db.flush()
+    await db.refresh(room)
+    return ChatRoomResponse.model_validate(room)
+
+
+@router.get("/task-room/{task_id}", response_model=ChatRoomResponse)
+async def get_task_room(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
+) -> ChatRoomResponse:
+    """Return task-linked room (if created by first comment)."""
+    _ = user.sub
+    room = await TaskChatRoomService.get_for_task(db, company_id=ctx.company_id, task_id=task_id)
+    if room is None:
+        raise NotFoundError("ChatRoom", f"task:{task_id}")
+    _assert_room_access(room, viewer_id=ctx.user_db_id, write=False)
     return ChatRoomResponse.model_validate(room)
 
 
@@ -178,6 +367,7 @@ async def list_messages(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> PaginatedResponse[ChatMessageResponse]:
     """List chat messages.
 
@@ -191,15 +381,19 @@ async def list_messages(
     Returns:
         Paginated response with messages sorted by ascending creation time.
     """
-    # NOTE: "user" is only used for auth; chat is available to all active employees.
     _ = user.sub
+    room_code = room.strip() or "company"
+    await _ensure_default_room(db, ctx=ctx)
+    room_row = await _room_by_code(db, ctx=ctx, room_code=room_code)
+    _assert_room_access(room_row, viewer_id=ctx.user_db_id, write=False)
+
     base_stmt = (
         select(ChatMessage)
         .options(
             selectinload(ChatMessage.sender),
             selectinload(ChatMessage.attachments),
         )
-        .where(ChatMessage.room == room)
+        .where(ChatMessage.room == room_code)
     )
 
     if after is not None:
@@ -251,6 +445,7 @@ async def create_message(
     body: ChatMessageCreate,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
 ) -> ChatMessageResponse:
     """Create a new chat message.
 
@@ -263,9 +458,13 @@ async def create_message(
         Created message response.
     """
     sender_uuid = await resolve_users_table_id(db, user)
+    room_code = (body.room or "").strip() or "company"
+    await _ensure_default_room(db, ctx=ctx)
+    room_row = await _room_by_code(db, ctx=ctx, room_code=room_code)
+    _assert_room_access(room_row, viewer_id=ctx.user_db_id, write=True)
 
     clean_body = body.body.strip()
-    msg = ChatMessage(room=body.room, sender_id=sender_uuid, body=clean_body)
+    msg = ChatMessage(room=room_code, sender_id=sender_uuid, body=clean_body)
     db.add(msg)
     await db.flush()
 
@@ -295,6 +494,7 @@ async def upload_chat_attachment(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
+    ctx: ActiveCompanyContext = Depends(get_active_company),
     settings: Settings = Depends(get_settings),
 ) -> ChatAttachmentResponse:
     """Upload a file attached to a chat message (including voice recordings)."""
@@ -302,6 +502,10 @@ async def upload_chat_attachment(
     message = message_res.scalar_one_or_none()
     if not message:
         raise NotFoundError("ChatMessage", str(message_id))
+
+    await _ensure_default_room(db, ctx=ctx)
+    room_row = await _room_by_code(db, ctx=ctx, room_code=(message.room or "").strip() or "company")
+    _assert_room_access(room_row, viewer_id=ctx.user_db_id, write=True)
 
     uploader_id = await _resolve_db_user_id(db, user)
 

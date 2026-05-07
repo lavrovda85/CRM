@@ -42,12 +42,14 @@ import {
   fetchWarehouseMovements,
   createWarehouseMovement,
   fetchCurrentUser,
+  fetchTaskChatRoom,
 } from "@/lib/api";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import type {
   TaskDetail,
   UserSummary,
   DocumentResponse,
+  ChatRoomResponse,
   WarehouseItemResponse,
   WarehouseMovementResponse,
 } from "@/types";
@@ -175,6 +177,7 @@ export default function TaskDetailPage({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [taskChatRoom, setTaskChatRoom] = useState<ChatRoomResponse | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -304,6 +307,24 @@ export default function TaskDetailPage({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!task?.id) {
+      setTaskChatRoom(null);
+      return;
+    }
+    let cancelled = false;
+    fetchTaskChatRoom(task.id)
+      .then((room) => {
+        if (!cancelled) setTaskChatRoom(room);
+      })
+      .catch(() => {
+        if (!cancelled) setTaskChatRoom(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [task?.id, task?.comments.length]);
 
   // Load warehouse items when materials dialog is opened
   useEffect(() => {
@@ -1276,10 +1297,25 @@ export default function TaskDetailPage({
           {/* Comments */}
           <div className="card">
             <div className="border-b border-surface-100 p-4">
-              <h2 className="flex items-center gap-2 font-semibold">
-                <MessageSquare className="h-4 w-4 text-primary-500" /> Комментарии
-                <span className="text-sm font-normal text-surface-400">{task.comments.length}</span>
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <MessageSquare className="h-4 w-4 text-primary-500" /> Комментарии
+                  <span className="text-sm font-normal text-surface-400">{task.comments.length}</span>
+                </h2>
+                {taskChatRoom ? (
+                  <Link
+                    href={`/chat?room=${encodeURIComponent(taskChatRoom.code)}&show_archived=1`}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline"
+                  >
+                    Чат задачи
+                    {taskChatRoom.is_archived ? " (архив)" : ""}
+                  </Link>
+                ) : (
+                  <span className="text-xs text-surface-400">
+                    Чат задачи появится после первого комментария
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-3 bg-surface-50/50 p-3 sm:p-4">
               {task.comments.map((comment) => {

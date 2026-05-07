@@ -210,6 +210,25 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
     )
     await conn.execute(text('ALTER TABLE "references" ADD COLUMN IF NOT EXISTS company_id uuid'))
     await conn.execute(text('ALTER TABLE "chat_rooms" ADD COLUMN IF NOT EXISTS company_id uuid'))
+    await conn.execute(
+        text(
+            'ALTER TABLE "chat_rooms" ADD COLUMN IF NOT EXISTS is_private boolean '
+            "NOT NULL DEFAULT false"
+        )
+    )
+    await conn.execute(
+        text(
+            'ALTER TABLE "chat_rooms" ADD COLUMN IF NOT EXISTS is_archived boolean '
+            "NOT NULL DEFAULT false"
+        )
+    )
+    await conn.execute(
+        text(
+            'ALTER TABLE "chat_rooms" ADD COLUMN IF NOT EXISTS participant_user_ids jsonb '
+            "NOT NULL DEFAULT '[]'::jsonb"
+        )
+    )
+    await conn.execute(text('ALTER TABLE "chat_rooms" ADD COLUMN IF NOT EXISTS task_id uuid'))
     for tbl in _tenant_tables:
         await conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS company_id uuid"))
     for tbl in (*_tenant_tables, "references", "chat_rooms"):
@@ -257,6 +276,12 @@ async def _apply_schema_patches(conn: AsyncConnection) -> None:
         text(
             'CREATE UNIQUE INDEX IF NOT EXISTS uq_chat_rooms_company_code '
             'ON "chat_rooms" (company_id, code)'
+        )
+    )
+    await conn.execute(
+        text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_chat_rooms_company_task '
+            'ON "chat_rooms" (company_id, task_id) WHERE task_id IS NOT NULL'
         )
     )
     await apply_deploy_jobs_ddl(conn)

@@ -728,4 +728,8 @@ export interface ChatRoomResponse {
   name: string;
   code: string;
   description: string | null;
+  is_private: boolean;
+  is_archived: boolean;
+  participant_user_ids: string[];
+  task_id: string | null;
 }

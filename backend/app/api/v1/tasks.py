@@ -19,6 +19,7 @@ from app.core.pagination import PaginatedResponse
 from app.core.permissions import MANAGE_TASKS, user_sees_all_company_tasks
 from app.core.security import CurrentUser
 from app.models import (
+    ChatMessage,
     Checklist,
     ChecklistItem,
     Comment,
@@ -29,6 +30,7 @@ from app.models import (
     TimeEntry,
 )
 from app.services.task_notification_service import TaskNotificationService
+from app.services.task_chat_room_service import TaskChatRoomService
 from app.services.task_service import TaskService
 from app.services.user_identity import resolve_users_table_id
 from app.schemas.task import (
@@ -597,6 +599,20 @@ async def update_task(
             changed=notify_changed,
         )
 
+    if task_for_api.status in _TERMINAL_TASK_STATUSES:
+        await TaskChatRoomService.archive_for_task(
+            db,
+            company_id=ctx.company_id,
+            task_id=task_for_api.id,
+        )
+    elif prev_status in _TERMINAL_TASK_STATUSES:
+        await TaskChatRoomService.set_archived_for_task(
+            db,
+            company_id=ctx.company_id,
+            task_id=task_for_api.id,
+            is_archived=False,
+        )
+
     return TaskResponse.model_validate(task_for_api)
 
 
@@ -752,6 +768,19 @@ async def transition_task(
         from_status=from_status,
         to_status=to_status,
     )
+    if to_status in _TERMINAL_TASK_STATUSES:
+        await TaskChatRoomService.archive_for_task(
+            db,
+            company_id=ctx.company_id,
+            task_id=task_for_api.id,
+        )
+    elif from_status in _TERMINAL_TASK_STATUSES:
+        await TaskChatRoomService.set_archived_for_task(
+            db,
+            company_id=ctx.company_id,
+            task_id=task_for_api.id,
+            is_archived=False,
+        )
     return TaskResponse.model_validate(task_for_api)
 
 
@@ -906,6 +935,19 @@ async def create_comment(
             .where(Task.id == task_id),
         )
     ).scalar_one()
+    task_room = await TaskChatRoomService.ensure_for_task(
+        db,
+        task=task_for_notify,
+        extra_user_ids=[crm_uid],
+    )
+    chat_body = clean_body if clean_body else "Добавлен комментарий с вложениями"
+    db.add(
+        ChatMessage(
+            room=task_room.code,
+            sender_id=crm_uid,
+            body=chat_body,
+        )
+    )
     await TaskNotificationService.notify_task_comment_added(
         db,
         task_for_notify,

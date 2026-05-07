@@ -1142,15 +1142,42 @@ export async function uploadChatMessageAttachment(
   return api.uploadFile(`/chat/messages/${messageId}/attachments`, file, {});
 }
 
-export async function fetchChatRooms(): Promise<ChatRoomResponse[]> {
-  return request("/chat/rooms");
+export async function fetchChatRooms(
+  params: { include_archived?: boolean } = {},
+): Promise<ChatRoomResponse[]> {
+  return request(`/chat/rooms${qs(params)}`);
 }
 
-export async function createChatRoom(data: { name: string; code?: string }): Promise<ChatRoomResponse> {
+export async function createChatRoom(data: {
+  name: string;
+  code?: string;
+  is_private?: boolean;
+  participant_user_ids?: string[];
+}): Promise<ChatRoomResponse> {
   return request("/chat/rooms", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function updateChatRoom(
+  roomId: string,
+  data: {
+    name?: string;
+    description?: string | null;
+    is_private?: boolean;
+    is_archived?: boolean;
+    participant_user_ids?: string[];
+  },
+): Promise<ChatRoomResponse> {
+  return request(`/chat/rooms/${roomId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchTaskChatRoom(taskId: string): Promise<ChatRoomResponse> {
+  return request(`/chat/task-room/${taskId}`);
 }
 
 /* ------------------------------------------------------------------ */

@@ -86,6 +86,7 @@ from app.schemas.chat import (
     ChatMessageResponse,
     ChatRoomCreate,
     ChatRoomResponse,
+    ChatRoomUpdate,
 )
 from app.schemas.tender import (
     TenderBillOfWorksPatch,
@@ -135,6 +136,7 @@ __all__ = [
     "ChatMessageResponse",
     "ChatRoomCreate",
     "ChatRoomResponse",
+    "ChatRoomUpdate",
     "CommentResponse",
     "DashboardStats",
     "DealCreate",

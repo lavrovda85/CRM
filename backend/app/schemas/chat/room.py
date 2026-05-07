@@ -18,6 +18,18 @@ class ChatRoomCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     code: str | None = Field(default=None, min_length=1, max_length=100)
+    is_private: bool = False
+    participant_user_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class ChatRoomUpdate(BaseModel):
+    """Partial update payload for room settings and participants."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=3000)
+    is_private: bool | None = None
+    is_archived: bool | None = None
+    participant_user_ids: list[uuid.UUID] | None = None
 
 
 class ChatRoomResponse(BaseModel):
@@ -36,4 +48,8 @@ class ChatRoomResponse(BaseModel):
     name: str
     code: str
     description: str | None = None
+    is_private: bool = False
+    is_archived: bool = False
+    participant_user_ids: list[uuid.UUID] = Field(default_factory=list)
+    task_id: uuid.UUID | None = None
 
