@@ -4,7 +4,7 @@ FROM alpine:3.20
 
 ARG XRAY_VERSION=v26.3.27
 
-RUN apk add --no-cache ca-certificates curl unzip python3 \
+RUN apk add --no-cache ca-certificates curl unzip python3 socat \
     && ARCH="$(uname -m)" \
     && case "$ARCH" in \
          x86_64) XARCH=64 ;; \
@@ -22,6 +22,7 @@ RUN apk add --no-cache ca-certificates curl unzip python3 \
 
 ENV XRAY_LOCATION_ASSET=/usr/local/share/xray
 
+COPY docker/xray/gateway_common.py /opt/xray/
 COPY docker/xray/render_openai_xray_config.py /opt/xray/
 COPY backend/app/services/vless_uri.py /opt/xray/
 COPY docker/xray/entrypoint.sh /entrypoint.sh
