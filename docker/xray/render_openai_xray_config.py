@@ -14,6 +14,7 @@ from gateway_common import (
     VlessUriError,
     gateway_enabled,
     gateway_listen_port,
+    gateway_only,
     gateway_relay_mode,
     resolve_downstream,
     resolve_gateway_uri,
@@ -253,8 +254,31 @@ def _append_gateway(cfg: dict, gateway_uri: str) -> str | None:
 def main() -> int:
     openai_uri = (os.environ.get("OPENAI_VLESS_URI") or "").strip()
     gateway_uri = resolve_gateway_uri() if gateway_enabled() else ""
+    relay_mode = gateway_relay_mode() if gateway_enabled() else ""
 
-    if not openai_uri:
+    if gateway_only() and relay_mode == "socat":
+        if not gateway_uri:
+            print("XRAY_GATEWAY_ONLY requires XRAY_GATEWAY_VLESS_URI or OPENAI_VLESS_URI.", file=sys.stderr)
+            return 1
+        try:
+            downstream = resolve_downstream(gateway_uri)
+        except VlessUriError as exc:
+            print(f"Invalid gateway VLESS URI: {exc}", file=sys.stderr)
+            return 1
+        listen_port = gateway_listen_port(downstream.port)
+        write_gateway_env(downstream, listen_port, relay_mode)
+        print(
+            "Gateway-only socat relay: "
+            f"0.0.0.0:{listen_port} -> {downstream.address}:{downstream.port}.",
+            file=sys.stderr,
+        )
+        return 0
+
+    if not openai_uri and gateway_only():
+        cfg = _direct_only_config()
+        cfg["inbounds"] = []
+        print("Gateway-only xray relay mode (no OpenAI HTTP inbound).", file=sys.stderr)
+    elif not openai_uri:
         cfg = _direct_only_config()
         print(
             "OPENAI_VLESS_URI unset: xray HTTP inbound -> direct only (set OPENAI_HTTP_PROXY only if needed).",

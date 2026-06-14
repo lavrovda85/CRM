@@ -46,8 +46,12 @@ def env_truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def gateway_only() -> bool:
+    return env_truthy("XRAY_GATEWAY_ONLY")
+
+
 def gateway_enabled() -> bool:
-    return env_truthy("XRAY_GATEWAY_ENABLED")
+    return env_truthy("XRAY_GATEWAY_ENABLED") or gateway_only()
 
 
 def resolve_gateway_uri() -> str:

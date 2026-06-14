@@ -37,8 +37,10 @@ services:
 
   xray-openai:
     restart: unless-stopped
-    ports:
-      - "${XRAY_GATEWAY_LISTEN_PORT:-443}:${XRAY_GATEWAY_LISTEN_PORT:-443}"
+
+  xray-gateway:
+    profiles: !reset null
+    restart: unless-stopped
 
   postgres:
     restart: unless-stopped

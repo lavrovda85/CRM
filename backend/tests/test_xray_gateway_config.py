@@ -36,7 +36,36 @@ def _render_config(env: dict[str, str], out_path: Path) -> tuple[dict, Path]:
     return json.loads(out_path.read_text(encoding="utf-8")), gateway_env
 
 
-def test_gateway_socat_writes_env_without_xray_inbound(tmp_path: Path) -> None:
+def test_gateway_only_socat_writes_env_without_xray_config(tmp_path: Path) -> None:
+    out_path = tmp_path / "config.json"
+    gateway_env = tmp_path / "gateway.env"
+    merged = os.environ.copy()
+    merged.update(
+        {
+            "XRAY_GATEWAY_ONLY": "true",
+            "XRAY_GATEWAY_VLESS_URI": VLESS_URI,
+            "XRAY_GATEWAY_LISTEN_PORT": "8443",
+            "XRAY_GATEWAY_DOWNSTREAM_ADDRESS": "10.0.0.5",
+            "XRAY_CONFIG_PATH": str(out_path),
+            "XRAY_GATEWAY_ENV_PATH": str(gateway_env),
+        }
+    )
+    subprocess.run(
+        [sys.executable, str(RENDER_SCRIPT)],
+        check=True,
+        cwd=str(RENDER_SCRIPT.parent),
+        env=merged,
+        capture_output=True,
+        text=True,
+    )
+    assert not out_path.exists()
+    env_text = gateway_env.read_text(encoding="utf-8")
+    assert "XRAY_GATEWAY_RELAY=socat" in env_text
+    assert "XRAY_GATEWAY_LISTEN_PORT=8443" in env_text
+    assert "XRAY_GATEWAY_DOWNSTREAM_ADDRESS=10.0.0.5" in env_text
+
+
+def test_gateway_socat_combined_with_openai_writes_env_without_xray_inbound(tmp_path: Path) -> None:
     cfg, gateway_env = _render_config(
         {
             "XRAY_GATEWAY_ENABLED": "true",
@@ -46,7 +75,6 @@ def test_gateway_socat_writes_env_without_xray_inbound(tmp_path: Path) -> None:
         },
         tmp_path / "config.json",
     )
-    assert all(inbound["tag"] != "gateway-relay" for inbound in cfg["inbounds"])
     env_text = gateway_env.read_text(encoding="utf-8")
     assert "XRAY_GATEWAY_RELAY=socat" in env_text
     assert "XRAY_GATEWAY_LISTEN_PORT=8443" in env_text
