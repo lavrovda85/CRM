@@ -1,6 +1,5 @@
-# OpenAI-only HTTP proxy sidecar: routes matching domains via VLESS+Reality, else direct.
-# Build from repository root: docker compose build xray-openai
-FROM alpine:3.20
+# Xray sidecar: optional VLESS TCP relay gateway + OpenAI HTTP proxy (VLESS+Reality outbound).
+# Build from repository root: docker compose build xray-openaiFROM alpine:3.20
 
 ARG XRAY_VERSION=v26.3.27
 
@@ -28,6 +27,6 @@ COPY docker/xray/entrypoint.sh /entrypoint.sh
 # Strip Windows CRLF so /bin/sh can run the script (BusyBox-safe; avoids "no such file or directory").
 RUN tr -d '\015' < /entrypoint.sh > /tmp/entrypoint.sh && mv /tmp/entrypoint.sh /entrypoint.sh && chmod +x /entrypoint.sh
 
-EXPOSE 10808
+EXPOSE 10808 443
 
 ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write /etc/xray/config.json: HTTP inbound + OpenAI -> VLESS Reality, else direct."""
+"""Write /etc/xray/config.json: optional VLESS TCP relay gateway + OpenAI HTTP proxy."""
 
 from __future__ import annotations
 
@@ -10,7 +10,19 @@ import sys
 from pathlib import Path
 
 _dir = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("vless_uri", _dir / "vless_uri.py")
+
+
+def _vless_uri_module_path() -> Path:
+    for candidate in (
+        _dir / "vless_uri.py",
+        _dir.parents[1] / "backend" / "app" / "services" / "vless_uri.py",
+    ):
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError("Cannot find vless_uri.py")
+
+
+_spec = importlib.util.spec_from_file_location("vless_uri", _vless_uri_module_path())
 if _spec is None or _spec.loader is None:
     raise RuntimeError("Cannot load vless_uri.py")
 _vu = importlib.util.module_from_spec(_spec)
@@ -22,6 +34,54 @@ parse_vless_reality_uri = _vu.parse_vless_reality_uri
 
 
 OUT_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "/etc/xray/config.json"))
+GATEWAY_INBOUND_TAG = "gateway-relay"
+
+
+def _env_truthy(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _gateway_listen_port(default_port: int) -> int:
+    raw = (os.environ.get("XRAY_GATEWAY_LISTEN_PORT") or "").strip()
+    if not raw:
+        return default_port
+    try:
+        port = int(raw)
+    except ValueError:
+        print(f"Invalid XRAY_GATEWAY_LISTEN_PORT={raw!r}, using {default_port}.", file=sys.stderr)
+        return default_port
+    if port < 1 or port > 65535:
+        print(f"XRAY_GATEWAY_LISTEN_PORT out of range ({port}), using {default_port}.", file=sys.stderr)
+        return default_port
+    return port
+
+
+def _gateway_relay_inbound(downstream_address: str, downstream_port: int, listen_port: int) -> dict:
+    """Transparent TCP relay: clients keep the same VLESS URI, only the host IP changes."""
+    return {
+        "tag": GATEWAY_INBOUND_TAG,
+        "listen": "0.0.0.0",
+        "port": listen_port,
+        "protocol": "dokodemo-door",
+        "settings": {
+            "address": downstream_address,
+            "port": downstream_port,
+            "network": "tcp",
+        },
+        "sniffing": {"enabled": False},
+    }
+
+
+def _gateway_routing_rule() -> dict:
+    return {
+        "type": "field",
+        "inboundTag": [GATEWAY_INBOUND_TAG],
+        "outboundTag": "direct",
+    }
+
+
+def _resolve_gateway_uri() -> str:
+    return (os.environ.get("XRAY_GATEWAY_VLESS_URI") or os.environ.get("OPENAI_VLESS_URI") or "").strip()
 
 
 def _direct_only_config() -> dict:
@@ -134,16 +194,58 @@ def _full_config(uri: str) -> dict:
     }
 
 
+def _append_gateway(cfg: dict, gateway_uri: str) -> dict | None:
+    """Add dokodemo-door relay inbound; returns error message or None on success."""
+    try:
+        downstream = parse_vless_reality_uri(gateway_uri)
+    except VlessUriError as exc:
+        return str(exc)
+
+    listen_port = _gateway_listen_port(downstream.port)
+    cfg.setdefault("inbounds", []).insert(0, _gateway_relay_inbound(
+        downstream.address,
+        downstream.port,
+        listen_port,
+    ))
+    routing = cfg.setdefault("routing", {"domainStrategy": "AsIs", "rules": []})
+    routing.setdefault("rules", []).insert(0, _gateway_routing_rule())
+    print(
+        "Gateway relay enabled: "
+        f"0.0.0.0:{listen_port} -> {downstream.address}:{downstream.port} "
+        "(users change only IP in their VLESS link).",
+        file=sys.stderr,
+    )
+    return None
+
+
 def main() -> int:
-    uri = (os.environ.get("OPENAI_VLESS_URI") or "").strip()
-    if not uri:
+    openai_uri = (os.environ.get("OPENAI_VLESS_URI") or "").strip()
+    gateway_enabled = _env_truthy("XRAY_GATEWAY_ENABLED")
+    gateway_uri = _resolve_gateway_uri() if gateway_enabled else ""
+
+    if not openai_uri:
         cfg = _direct_only_config()
-        print("OPENAI_VLESS_URI unset: xray HTTP inbound -> direct only (set OPENAI_HTTP_PROXY only if needed).", file=sys.stderr)
+        print(
+            "OPENAI_VLESS_URI unset: xray HTTP inbound -> direct only (set OPENAI_HTTP_PROXY only if needed).",
+            file=sys.stderr,
+        )
     else:
         try:
-            cfg = _full_config(uri)
-        except VlessUriError as e:
-            print(f"Invalid OPENAI_VLESS_URI: {e}", file=sys.stderr)
+            cfg = _full_config(openai_uri)
+        except VlessUriError as exc:
+            print(f"Invalid OPENAI_VLESS_URI: {exc}", file=sys.stderr)
+            return 1
+
+    if gateway_enabled:
+        if not gateway_uri:
+            print(
+                "XRAY_GATEWAY_ENABLED but no XRAY_GATEWAY_VLESS_URI or OPENAI_VLESS_URI for downstream target.",
+                file=sys.stderr,
+            )
+            return 1
+        gateway_error = _append_gateway(cfg, gateway_uri)
+        if gateway_error:
+            print(f"Invalid gateway VLESS URI: {gateway_error}", file=sys.stderr)
             return 1
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
