@@ -22,6 +22,7 @@ RUN apk add --no-cache ca-certificates curl unzip python3 socat \
 
 ENV XRAY_LOCATION_ASSET=/usr/local/share/xray
 
+COPY docker/xray/check_gateway_port.py /opt/xray/
 COPY docker/xray/gateway_common.py /opt/xray/
 COPY docker/xray/render_openai_xray_config.py /opt/xray/
 COPY backend/app/services/vless_uri.py /opt/xray/

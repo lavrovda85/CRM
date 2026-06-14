@@ -21,3 +21,17 @@ docker compose restart nginx
 
 Ключ можно перенести с хоста `s@192.168.1.89` и положить в `DEPLOY_SSH_KEY` как одну строку с `\n`:
 `ssh -p 2222 s@84.22.153.24 "mkdir -p ~/.ssh && chmod 700 ~/.ssh" && ssh s@192.168.1.89 "cat ~/.ssh/id_ed25519"`.
+
+### VPN gateway (xray-gateway)
+
+Сервис `xray-gateway` слушает **443 на хосте** (`network_mode: host`). Порт должен быть свободен — `xray-openai` его не занимает.
+
+```bash
+docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml down xray-openai xray-gateway
+sudo ss -tlnp | grep ':443'    # должно быть пусто
+docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml up -d --build xray-gateway
+docker compose -f docker-compose.yml -f deploy/server/docker-compose.ip.yml up -d xray-openai
+docker compose logs xray-gateway --tail 5
+```
+
+Если `Address in use` — на 443 висит старый контейнер или другой процесс. Если 443 нужен nginx/другому сервису, в `.env` задайте `XRAY_GATEWAY_LISTEN_PORT=8443` и в клиентских VLESS-ссылках укажите `:8443`.

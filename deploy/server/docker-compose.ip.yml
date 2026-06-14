@@ -40,6 +40,7 @@ services:
 
   xray-gateway:
     profiles: !reset null
+    init: true
     restart: unless-stopped
 
   postgres:

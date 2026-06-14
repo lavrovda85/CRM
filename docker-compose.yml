@@ -47,7 +47,7 @@ services:
       start_period: 15s
 
   # HTTP proxy on 10808: OpenAI hostnames -> VLESS (if OPENAI_VLESS_URI set), else direct.
-  # Optional TCP relay on XRAY_GATEWAY_LISTEN_PORT when XRAY_GATEWAY_ENABLED=true (see .env.example).
+  # Public VLESS relay: separate service xray-gateway (host network, see deploy/server/docker-compose.ip.yml).
   # Backend/Celery set OPENAI_HTTP_PROXY=http://xray-openai:10808 only when using this path.
   xray-openai:
     build:
