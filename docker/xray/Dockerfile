@@ -1,5 +1,6 @@
 # Xray sidecar: optional VLESS TCP relay gateway + OpenAI HTTP proxy (VLESS+Reality outbound).
-# Build from repository root: docker compose build xray-openaiFROM alpine:3.20
+# Build from repository root: docker compose build xray-openai
+FROM alpine:3.20
 
 ARG XRAY_VERSION=v26.3.27
 
