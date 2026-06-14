@@ -72,6 +72,8 @@ services:
       XRAY_GATEWAY_RELAY: ${XRAY_GATEWAY_RELAY:-socat}
       XRAY_GATEWAY_DOWNSTREAM_ADDRESS: ${XRAY_GATEWAY_DOWNSTREAM_ADDRESS:-}
       XRAY_GATEWAY_REALITY_PRIVATE_KEY: ${XRAY_GATEWAY_REALITY_PRIVATE_KEY:-}
+    ports:
+    - "443:443"
     restart: unless-stopped
     profiles:
       - gateway
