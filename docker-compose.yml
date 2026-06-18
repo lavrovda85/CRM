@@ -59,24 +59,8 @@ services:
       - "10808"
     restart: unless-stopped
 
-  # Public VLESS TCP relay (host network — no Docker NAT). Start with deploy/server/docker-compose.ip.yml.
-  xray-gateway:
-    build:
-      context: .
-      dockerfile: docker/xray/Dockerfile
-    network_mode: host
-    environment:
-      XRAY_GATEWAY_ONLY: "true"
-      XRAY_GATEWAY_VLESS_URI: ${XRAY_GATEWAY_VLESS_URI:-}
-      XRAY_GATEWAY_LISTEN_PORT: ${XRAY_GATEWAY_LISTEN_PORT:-443}
-      XRAY_GATEWAY_RELAY: ${XRAY_GATEWAY_RELAY:-socat}
-      XRAY_GATEWAY_DOWNSTREAM_ADDRESS: ${XRAY_GATEWAY_DOWNSTREAM_ADDRESS:-}
-      XRAY_GATEWAY_REALITY_PRIVATE_KEY: ${XRAY_GATEWAY_REALITY_PRIVATE_KEY:-}
-    ports:
-    - "443:443"
-    restart: unless-stopped
-    profiles:
-      - gateway
+  #
+
 
   minio-init:
     image: minio/mc:latest
