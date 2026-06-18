@@ -38,11 +38,6 @@ services:
   xray-openai:
     restart: unless-stopped
 
-  xray-gateway:
-    profiles: !reset null
-    init: true
-    restart: unless-stopped
-
   postgres:
     restart: unless-stopped
     ports: !reset []
